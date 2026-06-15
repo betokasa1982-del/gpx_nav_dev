@@ -1817,6 +1817,8 @@ function markDone(id){
   s.state='done';insideStop.delete(id);
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
   departGateDist=live.dist;          // route-progress baseline for clearing the gate
+  // Resume simulation point advancement if it was paused for this dwell
+  if(simMode&&_simPausedAtStop){_simPausedAtStop=false;clearTimeout(simTimer);simTimer=setTimeout(stepSim,120);}
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -2146,6 +2148,7 @@ let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
 let simMode=false;       // true between startSim and stopSim — blocks real GPS watch
 let simStartedNav=false; // sim auto-started navigation → stop it when sim ends
 let _simLap=0;           // how many times stepSim has replayed the points
+let _simPausedAtStop=false; // sim point advancement held during a stop dwell
 
 function startSim(idx){
   const rec=savedRecs[idx];
@@ -2190,7 +2193,7 @@ function beginSim(idx,laps){
   simStartedNav=!navActive;       // remember if WE turned navigation on
   if(!navActive)startNav(laps);
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
-  simRec=rec;simIdx=0;simStartIdx=0;_simLap=0;
+  simRec=rec;simIdx=0;simStartIdx=0;_simLap=0;_simPausedAtStop=false;
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x${laps>1?' · '+laps+' laps':''}`);
   stepSim();
@@ -2198,6 +2201,7 @@ function beginSim(idx,laps){
 
 function stepSim(){
   if(!simRec)return;
+  if(_simPausedAtStop)return; // held at a stop until its dwell timer completes
   const pts=simRec.points;
   if(simIdx>=pts.length){
     // Multi-lap: the recorded data is ONE lap. The simulation owns the lap
@@ -2534,6 +2538,8 @@ function checkArrival(lat,lng,rawKmh){
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
+      // During simulation, hold point advancement while dwelling at the stop.
+      if(simMode&&next.dur_s>0){_simPausedAtStop=true;clearTimeout(simTimer);}
       speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtSpeak(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
       if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually

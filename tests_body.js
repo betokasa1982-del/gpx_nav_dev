@@ -1,10 +1,35 @@
 // ── test helper: drive the lap modal if startSim/launchNav opened it ──
+function _runSimEventLoop(){
+  // Drive a realistic event loop so accelerated stop timers actually tick and
+  // the sim pause-at-stop can resume. Returns when the sim finishes.
+  let now=0;const queue=[];let nid=1;
+  const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+  global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+  global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+  global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+  global.clearInterval=global.clearTimeout;
+  let it=0;
+  // kick: the sim's first stepSim was scheduled via the patched setTimeout
+  while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+    if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+    if(typeof simRec!=='undefined'&&simRec===null)break;}
+  global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+}
 function _simWithLaps(idx,laps){
-  if(typeof _pendingSimIdx!=='undefined'){ /* state lives in app scope */ }
+  // Patch the loop BEFORE startSim so its scheduled timers land in our queue
+  let now=0;const queue=[];let nid=1;
+  const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+  global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+  global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+  global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+  global.clearInterval=global.clearTimeout;
   startSim(idx);
-  if(el('lap-modal').classList.contains('on')){
-    _lapChoice=laps; el('lap-custom').value=''; confirmLaps();
-  }
+  if(el('lap-modal').classList.contains('on')){_lapChoice=laps;el('lap-custom').value='';confirmLaps();}
+  let it=0;
+  while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+    if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+    if(typeof simRec!=='undefined'&&simRec===null)break;}
+  global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
 }
 // ══ helpers ══
 function gps(lat,lng,kmh){onGPS({coords:{latitude:lat,longitude:lng,accuracy:8,altitude:30,speed:kmh/3.6,heading:0},timestamp:Date.now()});}
@@ -372,11 +397,11 @@ for(let i=0;i<30;i++){s26lat+=10*0.0000090;fake+=1000;s26pts.push({lat:s26lat,ln
 savedRecs.push({name:'AutoNavSim',dist:1,date:new Date(),points:s26pts,stops:[]});
 const s26idx=savedRecs.length-1;
 el('rng-sim').value='15';
-// Capture nav state mid-sim: pause the auto-run by making setTimeout a no-op
-const _st26=global.setTimeout;let firstStep=true;
-global.setTimeout=(fn)=>{if(firstStep){firstStep=false;}return 0;}; // don't auto-advance
-_simWithLaps(s26idx,1);
-// Right after startSim, before sim completes, navigation must be ON
+// Capture nav state right after startSim by neutralizing the scheduler so the
+// sim does NOT auto-run to completion (we want the mid-sim state).
+const _st26=global.setTimeout;
+global.setTimeout=()=>0; // swallow scheduling — sim stays at step 0
+startSim(s26idx); // straight route, no stops → no lap modal, begins immediately
 console.assert(navActive===true,'SIM did not auto-start navigation (navActive false)');
 console.assert(currentLoadedRec===s26idx,'SIM did not auto-load cycle: '+currentLoadedRec);
 console.assert(routePts.length===s26pts.length,'SIM cycle not loaded into routePts');
@@ -713,16 +738,17 @@ el('rng-sim').value='20';el('rng-radius').value='10';
 startSim(idx);
 console.assert(el('lap-modal').classList.contains('on'),'lap modal did not open');
 console.assert(_pendingSimIdx===idx,'pending sim idx not set: '+_pendingSimIdx);
-// Choose 3 laps and confirm → sim begins even though prompt() is dead
+// Choose 3 laps and confirm → sim BEGINS even though prompt() is dead.
+// (We assert the modal-driven start works; completion is covered by test 49.)
 _lapChoice=3;el('lap-custom').value='';
-let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<30000){steps++;fn();}return 0;};
+const rST=global.setTimeout;global.setTimeout=()=>0; // don't auto-run to completion
 confirmLaps();
 global.setTimeout=rST;global.prompt=_p;
-console.assert(simMode===false,'sim did not run to completion');  // finished
 console.assert(totalLaps===3,'laps from modal not applied: '+totalLaps);
+console.assert(simMode===true,'sim did not begin after modal confirm');
 console.assert(!el('lap-modal').classList.contains('on'),'modal still open');
 stopSim(true);navActive=false;
-console.log('43. lap chooser without native prompt OK — 3 laps applied, sim ran');
+console.log('43. lap chooser without native prompt OK — 3 laps applied, sim began');
 })();
 
 console.log('ALL v20-DEV TESTS PASSED');
@@ -816,3 +842,34 @@ console.log('48. departure gate clears by route progress OK');
 })();
 
 console.log('ALL v22-DEV TESTS PASSED');
+
+// ══ TEST 49: sim pauses at stop dwell, resumes on completion (no stuck) ══
+(function(){
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+el('rng-sim').value='20';el('rng-radius').value='10';el('rng-auto').value='1';
+__promptReply='2';
+// realistic event loop
+let now=0;const queue=[];let nid=1;
+const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+global.clearInterval=global.clearTimeout;
+startSim(idx);
+if(el('lap-modal').classList.contains('on')){_lapChoice=2;el('lap-custom').value='';confirmLaps();}
+let it=0;
+while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+  if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+  if(simRec===null)break;}
+global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+const done=stops.filter(s=>s.state==='done').length;
+console.assert(done===stops.length,'SIM STUCK: only '+done+'/'+stops.length+' done');
+console.assert(done===12,'expected 12 stops over 2 laps, got '+done);
+delete global.__promptReply;navActive=false;
+console.log('49. sim 2-lap real-data completes all stops OK — '+done+'/'+stops.length);
+})();
+
+console.log('ALL v23-DEV TESTS PASSED');
