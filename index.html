@@ -1773,6 +1773,11 @@ function updCardState(s){
 function startTimer(id){
   const s=stops.find(s=>s.id===id);if(!s||s.running)return;
   s.running=true;s.state='current';
+  // During simulation the vehicle moves at Nx speed, so the stop dwell timer
+  // must tick at the same rate — otherwise the sim races past the stop while
+  // the real-time timer is still counting, and navigation appears to stall.
+  const simMult=simMode?Math.max(1,+el('rng-sim').value||1):1;
+  const tickMs=Math.max(50,Math.round(1000/simMult));
   s.intervalId=setInterval(()=>{
     s.elapsed++;
     const d=el(`td-${id}`);if(d)d.textContent=fmtTime(s.elapsed);
@@ -1788,7 +1793,7 @@ function startTimer(id){
         speakText('Stop '+s.id+' time complete. Proceed to the next stop.',true);
       },800);
     }
-  },1000);
+  },tickMs);
   const d=el(`td-${id}`);if(d)d.className='sc-time-val running';
   el(`tbgo-${id}`).style.display='none';el(`tbps-${id}`).style.display='';
   updCardState(s);updSummaryBar();
@@ -1811,6 +1816,7 @@ function markDone(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
   s.state='done';insideStop.delete(id);
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
+  departGateDist=live.dist;          // route-progress baseline for clearing the gate
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -2139,6 +2145,7 @@ function onGPSErr(err){
 let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
 let simMode=false;       // true between startSim and stopSim — blocks real GPS watch
 let simStartedNav=false; // sim auto-started navigation → stop it when sim ends
+let _simLap=0;           // how many times stepSim has replayed the points
 
 function startSim(idx){
   const rec=savedRecs[idx];
@@ -2183,7 +2190,7 @@ function beginSim(idx,laps){
   simStartedNav=!navActive;       // remember if WE turned navigation on
   if(!navActive)startNav(laps);
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
-  simRec=rec;simIdx=0;simStartIdx=0;
+  simRec=rec;simIdx=0;simStartIdx=0;_simLap=0;
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x${laps>1?' · '+laps+' laps':''}`);
   stepSim();
@@ -2193,11 +2200,12 @@ function stepSim(){
   if(!simRec)return;
   const pts=simRec.points;
   if(simIdx>=pts.length){
-    // Multi-lap: the recorded data is ONE lap. If navigation still has laps to
-    // run on a circular route, replay the points from the top for the next lap
-    // instead of ending — otherwise the sim stops after lap 1 while the app
-    // waits for data that never comes.
-    if(navActive&&_routeIsCircular&&totalLaps>1&&currentLap<totalLaps){
+    // Multi-lap: the recorded data is ONE lap. The simulation owns the lap
+    // count via _simLap (how many times we've replayed the points), which is
+    // independent of the route-matcher's own wrap. Replay until we've driven
+    // totalLaps laps of data.
+    _simLap++;
+    if(navActive&&_routeIsCircular&&totalLaps>1&&_simLap<totalLaps){
       simIdx=0;
       simTimer=setTimeout(stepSim,200);
       return;
@@ -2214,7 +2222,7 @@ function stepSim(){
   }
   // Each replayed lap needs monotonically increasing timestamps, otherwise the
   // metrics/decimation logic sees a backward jump and stalls. Offset by lap.
-  const tStamp=p.t+ (currentLap-1)*1e7;
+  const tStamp=p.t+ _simLap*1e7;
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
     altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:tStamp});
   setGPS('ok',`SIM ${+el('rng-sim').value}x · lap ${currentLap}/${totalLaps} · ${simIdx+1}/${pts.length}`);
@@ -2474,6 +2482,7 @@ function updInstruction(nearIdx,distFromStart){
 // (same physical spot — multi-lap cycles) from arriving until the vehicle
 // has actually left. Cleared once distance from the gate exceeds the radius.
 let departGate=null;
+let departGateDist=0;  // live.dist when the gate was set (route-progress fallback)
 
 function checkArrival(lat,lng,rawKmh){
   if(!stops.length)return;
@@ -2483,9 +2492,16 @@ function checkArrival(lat,lng,rawKmh){
   // Speed-aware arrival radius: when slowing down near stop, expand detection zone
   const effectiveRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
 
-  // Clear the gate once the vehicle physically left the completed stop
-  if(departGate&&haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius)
-    departGate=null;
+  // Clear the gate once the vehicle physically left the completed stop, OR once
+  // it has driven a short distance along the route since the gate was set. The
+  // route-progress fallback matters on circular routes where the next lap's
+  // first stop is metres from the one just completed — pure euclidean distance
+  // would never exceed the radius, leaving the gate stuck forever.
+  if(departGate){
+    const leftPhysically=haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius;
+    const drovePastIt=(live.dist-departGateDist)>0.03; // 30 m of route travel
+    if(leftPhysically||drovePastIt)departGate=null;
+  }
 
   // ── SEQUENCE-AWARE ARRIVAL: only the NEXT pending stop can arrive ──
   // Test cycles visit the same physical location on every lap; distance-only

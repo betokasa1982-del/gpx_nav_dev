@@ -777,3 +777,42 @@ navActive=false;stops=[];maneuvers=[];
 })();
 
 console.log('ALL v21-DEV TESTS PASSED');
+
+// ══ TEST 47: stop dwell timer accelerates during simulation ══
+(function(){
+simMode=true;el('rng-sim').value='10';
+stops=[{id:1,name:'T',lat:1,lng:1,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
+const _si=global.setInterval;let captured=null;
+global.setInterval=(fn,ms)=>{captured=ms;return 1;};
+startTimer(1);
+global.setInterval=_si;
+// at 10x, 1000ms tick should become ~100ms
+console.assert(captured<=100,'timer not accelerated in sim: '+captured+'ms');
+clearInterval(stops[0].intervalId);
+simMode=false;stops=[];
+// real navigation keeps 1000ms
+const _si2=global.setInterval;let cap2=null;
+global.setInterval=(fn,ms)=>{cap2=ms;return 1;};
+stops=[{id:1,name:'T',lat:1,lng:1,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
+startTimer(1);
+global.setInterval=_si2;
+console.assert(cap2===1000,'real timer not 1000ms: '+cap2);
+clearInterval(stops[0].intervalId);stops=[];
+console.log('47. stop timer accelerates in sim, real-time otherwise OK');
+})();
+
+// ══ TEST 48: departure gate clears by route progress (circular same-spot) ══
+(function(){
+departGate={lat:57.70,lng:11.97};departGateDist=0;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+stops=[{id:1,name:'S',lat:57.70,lng:11.97,dur_s:5,state:'waiting',events:[]}];
+el('rng-radius').value='10';
+// vehicle stays within radius (same spot) but drives 40m of route
+live.dist=0.04; // 40 m travelled
+checkArrival(57.70,11.97,5); // still at same spot physically
+console.assert(departGate===null,'gate not cleared by route progress');
+stops=[];
+console.log('48. departure gate clears by route progress OK');
+})();
+
+console.log('ALL v22-DEV TESTS PASSED');
