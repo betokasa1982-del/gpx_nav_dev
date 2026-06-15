@@ -1570,8 +1570,7 @@ function getNextManeuver(curIdx,curDistFromStart){
   // keep guiding toward the next stop / continue.
   if(!nextMan){
     const stopsDone=!stops.length||stops.every(s=>s.state==='done');
-    const lapDist=live.dist-lapBaseDist;
-    const lapDone=!_routeIsCircular||lapDist>=totalRouteDist*0.7;
+    const lapDone=!_routeIsCircular||(curDistFromStart-lapStartDist)>=totalRouteDist*0.7;
     const onFinalLap=currentLap>=totalLaps;
     if(stopsDone&&lapDone&&onFinalLap)
       return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
@@ -1816,7 +1815,7 @@ function markDone(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
   s.state='done';insideStop.delete(id);
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
-  departGateDist=live.dist;          // route-progress baseline for clearing the gate
+  departGateDist=routeCumDist[lastRouteIdx]||0; // route-progress baseline (nav-independent)
   // Resume simulation point advancement if it was paused for this dwell
   if(simMode&&_simPausedAtStop){
     _simPausedAtStop=false;
@@ -1858,7 +1857,7 @@ function updSummaryBar(){
 // ── NAVIGATION ─────────────────────────────────────────
 let totalLaps=1, currentLap=1, baseStops=null;
 let _routeIsCircular=false;  // cached at nav start
-let lapBaseDist=0;           // live.dist at the start of the current lap
+let lapStartDist=0;          // distFromStart (route-index km) at lap start — nav-independent of Live Cycle
 
 function buildLapStops(){
   if(!baseStops||totalLaps<2)return;
@@ -1939,7 +1938,7 @@ function startNav(nLapsArg){
   // here — in an installed/fullscreen PWA it is often suppressed and returns
   // null, which previously aborted startNav and left the app in a broken
   // half-started state (this was the "simulation won't start" bug).
-  totalLaps=1;currentLap=1;baseStops=null;lapBaseDist=0;
+  totalLaps=1;currentLap=1;baseStops=null;lapStartDist=0;
   _routeIsCircular=isCircularRoute();
   if(_routeIsCircular&&stops.length&&nLapsArg>1){
     totalLaps=Math.max(1,Math.min(50,parseInt(nLapsArg)||1));
@@ -2047,12 +2046,13 @@ function onGPS(pos){
   updRouteRemaining(nearIdx,distFromStart);
   updInstruction(nearIdx,distFromStart);
   // Announce arrival at destination. Multi-lap aware: only the FINAL lap may
-  // arrive, and only after that lap covered ≥70% of one route length (per-lap
-  // distance, not the total which accumulates across laps). On a circular route
-  // the end-point equals the start-point, so proximity alone would fire at t=0.
+  // arrive, and only after that lap covered ≥70% of the route. Progress is
+  // measured by route-index distance (distFromStart - lapStartDist), which is
+  // INDEPENDENT of the Live Cycle metrics — navigation must never depend on the
+  // display layer. (distFromStart resets to ~0 at each lap wrap.)
   const onFinalLap=currentLap>=totalLaps;
-  const lapDist=live.dist-lapBaseDist;
-  const progressed=lapDist>=totalRouteDist*0.7;
+  const lapProgress=distFromStart-lapStartDist;
+  const progressed=lapProgress>=totalRouteDist*0.7;
   const stopsDone=!stops.length||stops.every(x=>x.state==='done');
   if(routePts.length&&nearIdx>=routePts.length-3&&onFinalLap&&progressed&&stopsDone&&!destinationAnnounced){
     destinationAnnounced=true;speakText('You have arrived at your destination. All laps complete.',true);
@@ -2382,13 +2382,13 @@ function nearestRoutePoint(lat,lng){
   // after lap 1. Detect lap completion by: having traversed most of the route
   // this lap AND being physically near the start point, then wrap to index 0.
   if(navActive&&_routeIsCircular&&totalLaps>1&&currentLap<totalLaps){
-    const lapDist=live.dist-lapBaseDist;
+    const lapDistKm=routeCumDist[lastRouteIdx]-lapStartDist;
     const nearStart=haversine(lat,lng,routePts[0].lat,routePts[0].lon)*1000;
     const startRadius=Math.max(40,+(el('rng-radius').value||10)*2);
-    if(lapDist>=totalRouteDist*0.75 && nearStart<=startRadius){
+    if(lapDistKm>=totalRouteDist*0.75 && nearStart<=startRadius){
       currentLap++;
       lastRouteIdx=0;routeMaxIdx=0;
-      lapBaseDist=live.dist;       // reset per-lap distance baseline
+      lapStartDist=0;              // distFromStart resets to ~0 after wrapping to index 0
       insideStop.clear();          // re-arm same-spot stops for the new lap
       speakText(`Lap ${currentLap} of ${totalLaps}`,true);
       return{nearIdx:0,distFromStart:0};
@@ -2493,7 +2493,7 @@ function updInstruction(nearIdx,distFromStart){
 // (same physical spot — multi-lap cycles) from arriving until the vehicle
 // has actually left. Cleared once distance from the gate exceeds the radius.
 let departGate=null;
-let departGateDist=0;  // live.dist when the gate was set (route-progress fallback)
+let departGateDist=0;  // route distance (km) when the gate was set — nav-independent
 
 function checkArrival(lat,lng,rawKmh){
   if(!stops.length)return;
@@ -2510,7 +2510,7 @@ function checkArrival(lat,lng,rawKmh){
   // would never exceed the radius, leaving the gate stuck forever.
   if(departGate){
     const leftPhysically=haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius;
-    const drovePastIt=(live.dist-departGateDist)>0.03; // 30 m of route travel
+    const drovePastIt=(routeCumDist[lastRouteIdx]-departGateDist)>0.03; // 30 m of route travel
     if(leftPhysically||drovePastIt)departGate=null;
   }
 

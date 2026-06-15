@@ -530,7 +530,7 @@ stops=[{id:1,name:'L1·S1',lat:c33x+R33,lng:c33y,dur_s:5,elapsed:0,running:false
 stopMarkers={1:{setIcon(){},addTo(){return this}}};
 navActive=true;_routeIsCircular=true;totalLaps=3;currentLap=1;
 lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapStartDist=0;
 currentHeading=null; // disable direction penalty for clean geometry
 __speech.spoken=[];for(const k in _spokenAt)delete _spokenAt[k];
 
@@ -554,7 +554,7 @@ console.assert(!destinationAnnounced,'premature arrival after lap 2 FAIL');
 // Lap 3 (final) — drive most of it, check arrival predicate
 driveLoop();
 const onFinalLap=currentLap>=totalLaps;
-const lapDist=live.dist-lapBaseDist;
+const lapDist=live.dist-0;
 console.assert(onFinalLap,'not on final lap FAIL: '+currentLap);
 console.assert(lapDist>=totalRouteDist*0.7,'final lap distance FAIL: '+lapDist.toFixed(2)+'/'+totalRouteDist.toFixed(2));
 console.assert(lastRouteIdx>=routePts.length-3,'final lap end idx FAIL: '+lastRouteIdx);
@@ -564,10 +564,10 @@ console.log('33. multi-lap wrap OK — completed',currentLap,'laps, final idx',l
 fake=realNow();
 stops=[];navActive=true;_routeIsCircular=true;totalLaps=1;currentLap=1;
 lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapStartDist=0;
 plat=c33x+R33;plng=c33y;
 driveLoop();
-const fin=currentLap>=totalLaps,ld=live.dist-lapBaseDist;
+const fin=currentLap>=totalLaps,ld=live.dist-0;
 console.assert(currentLap===1,'single lap wrapped unexpectedly FAIL: '+currentLap);
 console.assert(fin&&ld>=totalRouteDist*0.7&&lastRouteIdx>=routePts.length-3,'single-lap arrival FAIL');
 console.log('34. single-lap circular OK — no spurious wrap');
@@ -583,13 +583,13 @@ for(let i=0;i<=NP35;i++){const a=i/NP35*2*Math.PI;routePts.push({lat:c35x+R35*Ma
 buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
 navActive=true;_routeIsCircular=true;totalLaps=2;currentLap=1;
 lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;currentHeading=null;
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapStartDist=0;
 el('rng-radius').value='10';
 let pa=c35x+R35,pb=c35y;
 // drive lap 1 but STOP probing 2 points before the exact end (idx ~70)
 for(let i=1;i<=70;i++){const a=i/NP35*2*Math.PI;const la=c35x+R35*Math.cos(a),lo=c35y+R35*Math.sin(a);
   live.dist+=haversine(pa,pb,la,lo);pa=la;pb=lo;nearestRoutePoint(la,lo);}
-const lapDistAtEnd=live.dist-lapBaseDist;
+const lapDistAtEnd=live.dist-0;
 console.assert(lapDistAtEnd>=totalRouteDist*0.75,'lap1 dist precondition: '+lapDistAtEnd.toFixed(2));
 // now a GPS point ~15m from the start point (realistic re-cross)
 const offLat=c35x+R35+0.00013; // ~14m north of start
@@ -597,7 +597,7 @@ live.dist+=haversine(pa,pb,offLat,c35y);
 const r35=nearestRoutePoint(offLat,c35y);
 console.assert(currentLap===2,'mid-traverse wrap FAIL: currentLap='+currentLap);
 console.assert(r35.nearIdx===0,'wrap did not reset index: '+r35.nearIdx);
-console.assert(lapBaseDist>0,'lapBaseDist not reset');
+console.assert(lapStartDist===0,'lapStartDist not reset on wrap');
 console.log('35. realistic lap wrap OK — wrapped to lap 2 near start point');
 
 console.log('ALL v15-DEV TESTS PASSED');
@@ -681,7 +681,7 @@ console.log('39. simMode blocks real GPS + clean stop OK — 0 watch calls');
 hudPanelOpen=false;if(el('hud-sp'))el('hud-sp').classList.remove('on');
 stops=[{id:1,name:'P1',lat:57.80,lng:11.97,dur_s:20,elapsed:0,running:false,intervalId:null,state:'waiting',events:[],seg_avg:null,photo:null}];
 stopMarkers={1:{setIcon(){}}};insideStop.clear();departGate=null;navActive=true;el('rng-radius').value='10';
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;totalLaps=1;currentLap=1;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapStartDist=0;totalLaps=1;currentLap=1;
 gps(57.80,11.97,1); // arrive
 console.assert(stops[0].state==='current','arrival precondition FAIL: '+stops[0].state);
 console.assert(hudPanelOpen===false,'BOTTOM STOPS PANEL auto-opened FAIL');
@@ -794,7 +794,7 @@ buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
 maneuvers=[]; // no maneuvers → would have triggered "Destination reached"
 stops=[{id:1,name:'S1',lat:cx+R,lng:cy,dur_s:10,state:'waiting',events:[]}];
 navActive=true;_routeIsCircular=true;totalLaps=1;currentLap=1;
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapStartDist=0;
 currentPos={lat:cx+R,lng:cy};el('rng-radius').value='10';
 const man=getNextManeuver(0,0);
 console.assert(man.label!=='Destination reached','PREMATURE arrival FAIL: '+man.label);
@@ -830,12 +830,12 @@ console.log('47. stop timer accelerates in sim, real-time otherwise OK');
 // ══ TEST 48: departure gate clears by route progress (circular same-spot) ══
 (function(){
 departGate={lat:57.70,lng:11.97};departGateDist=0;
-live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+// Build a tiny route so routeCumDist[lastRouteIdx] reflects 40 m of progress
+routePts=[{lat:57.70,lon:11.97},{lat:57.7004,lon:11.97}];buildCumDist(routePts);
+lastRouteIdx=1; // routeCumDist[1] ≈ 0.044 km > departGateDist + 0.03
 stops=[{id:1,name:'S',lat:57.70,lng:11.97,dur_s:5,state:'waiting',events:[]}];
 el('rng-radius').value='10';
-// vehicle stays within radius (same spot) but drives 40m of route
-live.dist=0.04; // 40 m travelled
-checkArrival(57.70,11.97,5); // still at same spot physically
+checkArrival(57.70,11.97,5); // same spot physically, but route progressed
 console.assert(departGate===null,'gate not cleared by route progress');
 stops=[];
 console.log('48. departure gate clears by route progress OK');
@@ -908,3 +908,28 @@ console.log('50. live metrics accumulate over real cycle OK — dist '+live.dist
 })();
 
 console.log('ALL v24-DEV TESTS PASSED');
+
+// ══ TEST 51: navigation works even if Live Cycle metrics are zeroed ══
+// Proves the decoupling: nav arrival/lap logic uses route-index distance, not live.*
+(function(){
+const cx=57.70,cy=11.97,R=0.004,NP=72;
+routePts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;routePts.push({lat:cx+R*Math.cos(a),lon:cy+R*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+maneuvers=[];stops=[];navActive=true;_routeIsCircular=true;totalLaps=1;currentLap=1;
+lastRouteIdx=0;routeMaxIdx=0;lapStartDist=0;destinationAnnounced=false;currentHeading=null;
+// FORCE live to stay zero (simulate the broken Live Cycle that caused the bug)
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+// Drive the full loop — distFromStart (route index) progresses even though live.dist=0
+let r;
+for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;r=nearestRoutePoint(cx+R*Math.cos(a),cy+R*Math.sin(a));}
+currentPos={lat:cx+R,lng:cy};
+const man=getNextManeuver(r.nearIdx,r.distFromStart);
+// With live.dist frozen at 0, the OLD code showed "Continue" forever; now nav
+// uses route distance so it correctly reaches the destination.
+console.assert(man.label==='Destination reached','nav still coupled to live: '+man.label+' (live.dist='+live.dist+')');
+console.assert(live.dist===0,'live should be untouched by this test');
+navActive=false;stops=[];maneuvers=[];
+console.log('51. navigation independent of Live Cycle OK — arrived with live.dist=0');
+})();
+
+console.log('ALL v25-DEV TESTS PASSED');
