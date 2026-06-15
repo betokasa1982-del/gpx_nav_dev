@@ -726,3 +726,54 @@ console.log('43. lap chooser without native prompt OK — 3 laps applied, sim ra
 })();
 
 console.log('ALL v20-DEV TESTS PASSED');
+
+// ══ TEST 44: voice says seconds only, not "0 hours 0 minutes" ══
+console.assert(fmtSpeak(15)==='15 seconds','fmtSpeak(15) FAIL: '+fmtSpeak(15));
+console.assert(fmtSpeak(1)==='1 second','fmtSpeak(1) FAIL: '+fmtSpeak(1));
+console.assert(fmtSpeak(65)==='1 minute 5 seconds','fmtSpeak(65) FAIL: '+fmtSpeak(65));
+console.assert(fmtSpeak(60)==='1 minute','fmtSpeak(60) FAIL: '+fmtSpeak(60));
+console.assert(fmtSpeak(3661)==='1 hour 1 minute 1 second','fmtSpeak(3661) FAIL: '+fmtSpeak(3661));
+console.assert(fmtSpeak(0)==='0 seconds','fmtSpeak(0) FAIL: '+fmtSpeak(0));
+console.assert(fmtSpeak(120)==='2 minutes','fmtSpeak(120) FAIL: '+fmtSpeak(120));
+console.log('44. voice seconds-only formatting OK');
+
+// ══ TEST 45: circular start/end stop dedup ══
+(function(){
+const cx=57.70,cy=11.97;
+// Two stops at nearly the same spot (start/end of loop) + one far
+const recz={name:'Dedup',dist:1,date:new Date(),
+  points:[{lat:cx,lng:cy,t:1},{lat:cx+0.01,lng:cy,t:2},{lat:cx+0.0001,lng:cy+0.0001,t:3}],
+  stops:[
+    {lat:cx,lng:cy,t:1,dur_s:20,events:['handBrake']},
+    {lat:cx+0.005,lng:cy,t:2,dur_s:15,events:['openDoor']},
+    {lat:cx+0.00005,lng:cy+0.00005,t:3,dur_s:25,events:['kneeling']} // ~7m from first
+  ]};
+savedRecs.push(recz);const zi=savedRecs.length-1;
+loadRec(zi);
+// 3 recorded stops → 2 after merge (first+last co-located)
+console.assert(stops.length===2,'dedup FAIL: '+stops.length+' stops (expected 2)');
+// merged stop keeps both events
+const merged=stops[0];
+console.assert(merged.events.includes('handBrake')&&merged.events.includes('kneeling'),
+  'merged events FAIL: '+JSON.stringify(merged.events));
+console.log('45. circular start/end stop dedup OK — 3→2, events merged');
+navActive=false;stops=[];
+})();
+
+// ══ TEST 46: no premature "Destination reached" with stops remaining ══
+(function(){
+const cx=57.70,cy=11.97,R=0.004,NP=72;
+routePts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;routePts.push({lat:cx+R*Math.cos(a),lon:cy+R*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+maneuvers=[]; // no maneuvers → would have triggered "Destination reached"
+stops=[{id:1,name:'S1',lat:cx+R,lng:cy,dur_s:10,state:'waiting',events:[]}];
+navActive=true;_routeIsCircular=true;totalLaps=1;currentLap=1;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+currentPos={lat:cx+R,lng:cy};el('rng-radius').value='10';
+const man=getNextManeuver(0,0);
+console.assert(man.label!=='Destination reached','PREMATURE arrival FAIL: '+man.label);
+console.log('46. no premature destination reached OK — got:',man.label);
+navActive=false;stops=[];maneuvers=[];
+})();
+
+console.log('ALL v21-DEV TESTS PASSED');

@@ -1564,7 +1564,26 @@ function getNextManeuver(curIdx,curDistFromStart){
     }
   }
 
-  if(!nextMan) return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
+  // "Destination reached" must only show when navigation is genuinely complete:
+  // all stops done AND, on a circular route, the current lap has covered most of
+  // the route. Otherwise (no upcoming maneuver yet, or circular wrap pending)
+  // keep guiding toward the next stop / continue.
+  if(!nextMan){
+    const stopsDone=!stops.length||stops.every(s=>s.state==='done');
+    const lapDist=live.dist-lapBaseDist;
+    const lapDone=!_routeIsCircular||lapDist>=totalRouteDist*0.7;
+    const onFinalLap=currentLap>=totalLaps;
+    if(stopsDone&&lapDone&&onFinalLap)
+      return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
+    // Not actually done — keep the driver moving toward the next stop if any
+    const ns=stops.find(s=>s.state!=='done');
+    if(ns){
+      const d=haversine(currentPos.lat,currentPos.lng,ns.lat,ns.lng)*1000;
+      return{dist:d,icon:'⏸',label:'Continue to next stop',
+        detail:ns.name,cls:'stop',type:'stop'};
+    }
+    return{dist:0,icon:'➡',label:'Continue',detail:'',cls:'',type:'continue'};
+  }
   const distM=haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000;
   const afterTxt=upcoming[1]?`Then: ${upcoming[1].label}`:'';
   return{dist:distM,icon:nextMan.icon,label:nextMan.label,detail:afterTxt,cls:nextMan.cls,type:nextMan.type};
@@ -2499,7 +2518,7 @@ function checkArrival(lat,lng,rawKmh){
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
-      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
+      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtSpeak(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
       if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually
     }
@@ -2660,10 +2679,27 @@ function loadRec(idx){
     // ── Stops ─────────────────────────────────────────
     stops=[];insideStop.clear();stopMarkers={};
     destinationAnnounced=false;evtAnnounced.clear();departGate=null;
-    const segs=calcSegments(rec.points,rec.stops); // recorded pacing per leg
+    // On a circular cycle the first and last recorded stops are the SAME physical
+    // place (the depot/start). Counting both makes navigation show e.g. 7→14 and
+    // double-counts the start/end. Merge them into one when they're co-located.
+    let recStopsToUse=(rec.stops||[]).filter(s=>s&&!isNaN(+s.lat)&&!isNaN(+s.lng));
+    if(recStopsToUse.length>=2){
+      const f=recStopsToUse[0],l=recStopsToUse[recStopsToUse.length-1];
+      const dFL=haversine(+f.lat,+f.lng,+l.lat,+l.lng)*1000;
+      if(dFL<30){
+        // Merge: keep the first, fold in the last stop's events/photo if richer
+        const last=recStopsToUse.pop();
+        const merged={...f};
+        merged.dur_s=Math.max(+f.dur_s||0,+last.dur_s||0);
+        merged.events=[...new Set([...(f.events||[]),...(last.events||[])])];
+        merged.photo=f.photo||last.photo||null;
+        recStopsToUse[0]=merged;
+      }
+    }
+    const segs=calcSegments(rec.points,recStopsToUse); // recorded pacing per leg
     const sl=el('stops-list');if(sl)sl.innerHTML='';
 
-    (rec.stops||[]).forEach((s,i)=>{
+    recStopsToUse.forEach((s,i)=>{
       if(s==null||isNaN(+s.lat)||isNaN(+s.lng))return; // skip invalid
       const id=i+1;
       const hasPhoto=!!(s.photo&&s.photo.length>10);
@@ -2869,6 +2905,17 @@ function brng(la1,lo1,la2,lo2){
 function calcDist(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);return t}
 function calcDistRaw(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);return t}
 function fmtTime(s){if(!s||isNaN(s))return'00:00:00';s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return[h,m,sc].map(v=>String(v).padStart(2,'0')).join(':')}
+// Speech-friendly duration: says only the units that matter, so a 15-second
+// timer is spoken "15 seconds" and never "0 hours 0 minutes 15 seconds".
+function fmtSpeak(s){
+  s=Math.max(0,Math.floor(s||0));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
+  const parts=[];
+  if(h>0)parts.push(h+(h===1?' hour':' hours'));
+  if(m>0)parts.push(m+(m===1?' minute':' minutes'));
+  if(sc>0||parts.length===0)parts.push(sc+(sc===1?' second':' seconds'));
+  return parts.join(' ');
+}
 function fmtDurMs(ms){return fmtTime(Math.floor(ms/1000))}
 function el(id){return document.getElementById(id)}
 function setGPS(state,msg){el('gps-dot').className='gps-dot '+state;el('gps-text').textContent=msg}
