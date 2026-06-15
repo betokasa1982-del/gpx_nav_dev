@@ -81,7 +81,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 @media(min-width:900px){.evt-cue span{font-size:210px}}
 
 /* ── LIVE CYCLE METRICS ── */
-.lcm{position:absolute;right:10px;top:312px;width:220px;
+.lcm{width:100%;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
   border-left:4px solid var(--blue,#58a6ff);border-radius:12px;
   padding:11px 14px;pointer-events:auto;display:none;z-index:905;
@@ -95,7 +95,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .lcm-sub .lcm-v{font-size:16px;color:var(--fg,#e6edf3)}
 
 /* ── NEXT STOP CARD ── */
-.nsc{position:absolute;right:10px;top:96px;width:195px;
+.right-rail{position:absolute;right:10px;top:90px;bottom:30px;width:200px;
+  display:flex;flex-direction:column;gap:10px;pointer-events:none;z-index:905;
+  overflow-y:auto;-webkit-overflow-scrolling:touch}
+.right-rail>*{pointer-events:auto;flex-shrink:0}
+@media(min-width:900px){.right-rail{width:300px;top:96px}}
+.nsc{width:100%;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
   border-left:3px solid var(--accent);border-radius:12px;
   padding:10px 12px;pointer-events:auto;display:none;z-index:905;
@@ -127,13 +132,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   .hud-spd-val{font-size:42px}
   .hud-tgt{font-size:14px}
   .stab{font-size:12px;padding:13px 2px}
-  .nsc{width:256px;top:104px;padding:12px 14px}
+  .nsc{padding:12px 14px}
   .nsc-dist{font-size:50px}
   .nsc-row{font-size:15px}
   .nsc-evt{font-size:21px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
-  .lcm{width:300px;top:360px;padding:14px 18px}
+  .lcm{padding:14px 18px}
   .lcm-title{font-size:13px}
   .lcm-l{font-size:17px}
   .lcm-v{font-size:36px}
@@ -529,25 +534,25 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   <!-- ══════════════════ NAV HUD ══════════════════ -->
   <div class="nav-hud" id="nav-hud">
 
-    <!-- Next Stop Card: the driver's primary reference on 10" tablets -->
-    <div class="nsc" id="nsc">
-      <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
-      <div class="nsc-dist" id="nsc-dist">—</div>
-      <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
-      <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
-      <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
-    </div>
-
     <!-- Big transparent event cue over the map -->
     <div class="evt-cue" id="evt-cue"></div>
 
-    <!-- Live cycle metrics: updated continuously during navigation -->
-    <div class="lcm" id="lcm">
-      <div class="lcm-title">LIVE CYCLE</div>
-      <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
-      <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
-      <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
-      <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
+    <!-- Right rail: Next Stop Card + Live Cycle stacked, scrollable, never overlap -->
+    <div class="right-rail" id="right-rail">
+      <div class="nsc" id="nsc">
+        <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
+        <div class="nsc-dist" id="nsc-dist">—</div>
+        <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
+        <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
+        <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
+      </div>
+      <div class="lcm" id="lcm">
+        <div class="lcm-title">LIVE CYCLE</div>
+        <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
+        <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
+        <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
+        <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
+      </div>
     </div>
 
     <!-- Main instruction strip (Waze-style) -->
@@ -590,7 +595,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   </div>
 
   <!-- Sheet toggle button -->
-  <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()">📍 Stops</div>
+  <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()" style="display:none">📍 Stops</div>
 
   <!-- Floating stops panel -->
   <div class="hud-stops-panel" id="hud-sp">
@@ -1848,6 +1853,8 @@ function startNav(){
   lastRouteIdx=0;routeMaxIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
+  hudPanelOpen=false;if(el('hud-sp'))el('hud-sp').classList.remove('on');
+  if(el('right-rail'))el('right-rail').style.display='flex';
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
   if(el('lcm')){el('lcm').style.display='none';
     ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
@@ -1858,7 +1865,8 @@ function startNav(){
   requestWakeLock();goFullscreen();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
   setGPS('wait','Waiting for GPS...');
-  watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  if(!simMode)
+    watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
 }
 function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
@@ -1873,6 +1881,7 @@ function stopNav(){
   // Reset map to north-up (spec 5.3)
   setMapBearing(0);_lastBearing=0;
   if(el('nsc'))el('nsc').style.display='none';
+  if(el('right-rail'))el('right-rail').style.display='none';
   if(el('evt-cue'))el('evt-cue').classList.remove('on');
   shState='mid';applySheet();
   if(!isRec) releaseWakeLock();
@@ -2041,18 +2050,22 @@ function onGPSErr(err){
 // heading derived from the recorded points. Lets new app versions be tested
 // at a desk against real, physically-driven cycles, at 1x-20x speed.
 let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
+let simMode=false;       // true between startSim and stopSim — blocks real GPS watch
+let simStartedNav=false; // sim auto-started navigation → stop it when sim ends
 
 function startSim(idx){
   const rec=savedRecs[idx];
   if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
   stopSim(true);
-  // Load the cycle if it isn't the one already loaded, then enter navigation —
-  // without navActive the new HUD / Next Stop Card / live panel never show.
-  if(currentLoadedRec!==idx)loadRec(idx);
-  if(!navActive)startNav();
-  simRec=rec;simIdx=0;simStartIdx=0;
-  // Real GPS off while simulating — the two must never interleave
+  // Set sim mode BEFORE startNav so it does NOT open the real GPS watch
+  // (which would otherwise feed live GPS over the simulation).
+  simMode=true;
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
+  if(currentLoadedRec!==idx)loadRec(idx);
+  simStartedNav=!navActive;       // remember if WE turned navigation on
+  if(!navActive)startNav();
+  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
+  simRec=rec;simIdx=0;simStartIdx=0;
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
   stepSim();
@@ -2098,16 +2111,25 @@ function stepSim(){
 
 function stopSim(silent){
   clearTimeout(simTimer);simTimer=null;
-  const was=simRec;simRec=null;simIdx=0;
+  const was=simRec;simRec=null;simIdx=0;simMode=false;
   el('btn-simstop').style.display='none';
   if(was&&!silent){
-    setGPS('wait','SIM stopped');
-    // Resume real GPS if navigation is still active
-    if(navActive&&watchId==null&&navigator.geolocation){
-      watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
-        {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+    if(simStartedNav){
+      // The sim turned navigation on — turn it back off so the app returns to
+      // its idle state instead of silently starting the real GPS watch.
+      simStartedNav=false;
+      if(navActive)stopNav();
+      setGPS('wait','SIM finished');
+    }else{
+      setGPS('wait','SIM stopped');
+      // Navigation pre-existed the sim — resume real GPS for the live drive
+      if(navActive&&watchId==null&&navigator.geolocation){
+        watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
+          {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+      }
     }
   }
+  simStartedNav=false;
 }
 
 // ── Next Stop Card updater (called every GPS tick while navigating) ──
@@ -2380,8 +2402,7 @@ function checkArrival(lat,lng,rawKmh){
       if(autoStart&&!next.running)startTimer(next.id);
       speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
-      if(!hudPanelOpen) toggleHudPanel();
-      else renderHudPanel();
+      if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually
     }
   }
 
