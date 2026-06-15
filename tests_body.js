@@ -479,3 +479,117 @@ delete global.__promptReply;navActive=false;
 console.log('32. non-circular no-prompt OK');
 
 console.log('ALL v13-DEV TESTS PASSED');
+
+// ══ TEST 33: multi-lap circular route — matcher wraps, no premature end ══
+fake=realNow();routePts=[];
+const c33x=57.70,c33y=11.97,R33=0.004;
+const NP=72;
+for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;routePts.push({lat:c33x+R33*Math.cos(a),lon:c33y+R33*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+// Set up a 3-lap run with one stop at the start point
+stops=[{id:1,name:'L1·S1',lat:c33x+R33,lng:c33y,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting',events:[],lapNum:1}];
+stopMarkers={1:{setIcon(){},addTo(){return this}}};
+navActive=true;_routeIsCircular=true;totalLaps=3;currentLap=1;
+lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+currentHeading=null; // disable direction penalty for clean geometry
+__speech.spoken=[];for(const k in _spokenAt)delete _spokenAt[k];
+
+// Helper: drive one full loop, accumulating live.dist
+let plat=c33x+R33,plng=c33y;
+function driveLoop(){
+  for(let i=1;i<=NP;i++){
+    const a=i/NP*2*Math.PI;const la=c33x+R33*Math.cos(a),lo=c33y+R33*Math.sin(a);
+    live.dist+=haversine(plat,plng,la,lo);plat=la;plng=lo;
+    nearestRoutePoint(la,lo);
+  }
+}
+// Lap 1
+driveLoop();
+console.assert(currentLap===2,'LAP1→2 wrap FAIL: currentLap='+currentLap+' idx='+lastRouteIdx);
+console.assert(!destinationAnnounced,'premature arrival after lap 1 FAIL');
+// Lap 2
+driveLoop();
+console.assert(currentLap===3,'LAP2→3 wrap FAIL: '+currentLap);
+console.assert(!destinationAnnounced,'premature arrival after lap 2 FAIL');
+// Lap 3 (final) — drive most of it, check arrival predicate
+driveLoop();
+const onFinalLap=currentLap>=totalLaps;
+const lapDist=live.dist-lapBaseDist;
+console.assert(onFinalLap,'not on final lap FAIL: '+currentLap);
+console.assert(lapDist>=totalRouteDist*0.7,'final lap distance FAIL: '+lapDist.toFixed(2)+'/'+totalRouteDist.toFixed(2));
+console.assert(lastRouteIdx>=routePts.length-3,'final lap end idx FAIL: '+lastRouteIdx);
+console.log('33. multi-lap wrap OK — completed',currentLap,'laps, final idx',lastRouteIdx);
+
+// ══ TEST 34: single-lap circular still arrives normally (no wrap interference) ══
+fake=realNow();
+stops=[];navActive=true;_routeIsCircular=true;totalLaps=1;currentLap=1;
+lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+plat=c33x+R33;plng=c33y;
+driveLoop();
+const fin=currentLap>=totalLaps,ld=live.dist-lapBaseDist;
+console.assert(currentLap===1,'single lap wrapped unexpectedly FAIL: '+currentLap);
+console.assert(fin&&ld>=totalRouteDist*0.7&&lastRouteIdx>=routePts.length-3,'single-lap arrival FAIL');
+console.log('34. single-lap circular OK — no spurious wrap');
+
+console.log('ALL v14-DEV TESTS PASSED');
+
+// ══ TEST 35: lap wrap fires mid-traverse (realistic GPS, not exact endpoint) ══
+// Vehicle approaches start at lap end but GPS lands slightly off the exact point
+fake=realNow();
+const NP35=72,c35x=57.70,c35y=11.97,R35=0.004;
+routePts=[];
+for(let i=0;i<=NP35;i++){const a=i/NP35*2*Math.PI;routePts.push({lat:c35x+R35*Math.cos(a),lon:c35y+R35*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+navActive=true;_routeIsCircular=true;totalLaps=2;currentLap=1;
+lastRouteIdx=0;routeMaxIdx=0;destinationAnnounced=false;currentHeading=null;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;
+el('rng-radius').value='10';
+let pa=c35x+R35,pb=c35y;
+// drive lap 1 but STOP probing 2 points before the exact end (idx ~70)
+for(let i=1;i<=70;i++){const a=i/NP35*2*Math.PI;const la=c35x+R35*Math.cos(a),lo=c35y+R35*Math.sin(a);
+  live.dist+=haversine(pa,pb,la,lo);pa=la;pb=lo;nearestRoutePoint(la,lo);}
+const lapDistAtEnd=live.dist-lapBaseDist;
+console.assert(lapDistAtEnd>=totalRouteDist*0.75,'lap1 dist precondition: '+lapDistAtEnd.toFixed(2));
+// now a GPS point ~15m from the start point (realistic re-cross)
+const offLat=c35x+R35+0.00013; // ~14m north of start
+live.dist+=haversine(pa,pb,offLat,c35y);
+const r35=nearestRoutePoint(offLat,c35y);
+console.assert(currentLap===2,'mid-traverse wrap FAIL: currentLap='+currentLap);
+console.assert(r35.nearIdx===0,'wrap did not reset index: '+r35.nearIdx);
+console.assert(lapBaseDist>0,'lapBaseDist not reset');
+console.log('35. realistic lap wrap OK — wrapped to lap 2 near start point');
+
+console.log('ALL v15-DEV TESTS PASSED');
+
+// ══ TEST 36: live metrics during RECORDING (not just navigation) ══
+navActive=false;isRec=true;
+recStops=[];recPoints=[];
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+let t36=realNow(),rmlat=57.70;
+for(let i=0;i<40;i++){t36+=1000;rmlat+=10*0.0000090;
+  updLiveMetrics(rmlat,11.97,36,t36,0);} // driving 36 km/h
+console.assert(live.moving>30,'REC accumulation FAIL: moving='+live.moving);
+console.assert(el('lcm').style.display==='block','REC live panel hidden FAIL');
+console.assert(el('lcm-title').textContent.includes('RECORDING'),'REC title FAIL: '+el('lcm-title').textContent);
+const drv36=parseFloat(el('lcm-drv').textContent);
+console.assert(Math.abs(drv36-36)<4,'REC avg driving FAIL: '+el('lcm-drv').textContent);
+// add 2 detected stops → stops/km reflects them
+recStops=[{lat:1,lng:1},{lat:2,lng:2}];
+t36+=1000;rmlat+=10*0.0000090;updLiveMetrics(rmlat,11.97,36,t36,0);
+const spk36=parseFloat(el('lcm-spk').textContent);
+console.assert(spk36>0,'REC stops/km FAIL: '+el('lcm-spk').textContent);
+isRec=false;
+console.log('36. live metrics during recording OK — drv36',el('lcm-drv').textContent,'spk36',el('lcm-spk').textContent);
+
+// ══ TEST 37: updSummaryBar null-safe after sum-bar removal ══
+stops=[{id:1,state:'done',elapsed:30,dur_s:25},{id:2,state:'waiting',elapsed:0,dur_s:20}];
+let threw=false;
+try{updSummaryBar();}catch(e){threw=true;}
+console.assert(!threw,'updSummaryBar threw after sum-bar removal');
+console.assert(el('h-stops').textContent==='1/2','topbar stop count FAIL: '+el('h-stops').textContent);
+stops=[];
+console.log('37. summary bar null-safe OK');
+
+console.log('ALL v16-DEV TESTS PASSED');

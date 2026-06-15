@@ -81,18 +81,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 @media(min-width:900px){.evt-cue span{font-size:210px}}
 
 /* ── LIVE CYCLE METRICS ── */
-.lcm{position:absolute;right:10px;top:312px;width:195px;
+.lcm{position:absolute;right:10px;top:312px;width:220px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
-  border-left:3px solid var(--blue,#58a6ff);border-radius:12px;
-  padding:9px 12px;pointer-events:auto;display:none;z-index:905;
+  border-left:4px solid var(--blue,#58a6ff);border-radius:12px;
+  padding:11px 14px;pointer-events:auto;display:none;z-index:905;
   box-shadow:0 4px 18px rgba(0,0,0,.45)}
-.lcm-title{font-size:10px;letter-spacing:1.5px;color:var(--muted);
-  font-weight:800;font-family:var(--mono);margin-bottom:5px}
+.lcm-title{font-size:11px;letter-spacing:1.5px;color:var(--muted);
+  font-weight:800;font-family:var(--mono);margin-bottom:7px}
 .lcm-row{display:flex;justify-content:space-between;align-items:baseline;
-  padding:3px 0;border-top:1px solid rgba(255,255,255,.05)}
-.lcm-l{font-size:12px;color:var(--muted)}
-.lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--blue,#58a6ff)}
-.lcm-sub .lcm-v{font-size:13px;color:var(--fg,#e6edf3)}
+  padding:5px 0;border-top:1px solid rgba(255,255,255,.06)}
+.lcm-l{font-size:14px;color:var(--muted)}
+.lcm-v{font-family:var(--mono);font-size:27px;font-weight:800;color:var(--blue,#58a6ff)}
+.lcm-sub .lcm-v{font-size:16px;color:var(--fg,#e6edf3)}
 
 /* ── NEXT STOP CARD ── */
 .nsc{position:absolute;right:10px;top:96px;width:195px;
@@ -133,10 +133,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   .nsc-evt{font-size:21px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
-  .lcm{width:256px;top:360px;padding:11px 14px}
-  .lcm-l{font-size:14px}
-  .lcm-v{font-size:24px}
-  .lcm-sub .lcm-v{font-size:15px}
+  .lcm{width:300px;top:360px;padding:14px 18px}
+  .lcm-title{font-size:13px}
+  .lcm-l{font-size:17px}
+  .lcm-v{font-size:36px}
+  .lcm-sub .lcm-v{font-size:19px}
 }
 
 /* ── MAP ── */
@@ -519,20 +520,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 </div>
 
 <!-- SUMMARY BAR -->
-<div class="sum-bar" id="sum-bar">
-  <div class="sb-cols">
-    <div class="sb-item"><span class="sb-lbl">Done</span><span class="sb-val ok" id="sb-done">0/0</span></div>
-    <div class="sb-div"></div>
-    <div class="sb-item"><span class="sb-lbl">Planned</span><span class="sb-val" id="sb-prog">—</span></div>
-    <div class="sb-div"></div>
-    <div class="sb-prog">
-      <div class="sb-prog-row"><span id="sb-rlbl">Actual: 0</span><span id="sb-dlbl" style="color:var(--green)">—</span></div>
-      <div class="sb-pbar"><div class="sb-pfill" id="sb-fill" style="width:0%"></div></div>
-    </div>
-    <div class="sb-div"></div>
-    <div class="sb-item"><span class="sb-lbl">Delta</span><span class="sb-val ok" id="sb-delta">—</span></div>
-  </div>
-</div>
+<!-- sum-bar removed: replaced by fixed right-column Live Cycle panel -->
 
 <!-- MAP WRAP -->
 <div class="map-wrap">
@@ -1783,23 +1771,27 @@ function updSummaryBar(){
   const done=stops.filter(s=>s.state==='done').length,n=stops.length;
   const real=stops.reduce((a,s)=>a+s.elapsed,0),prog=stops.reduce((a,s)=>a+s.dur_s,0);
   const delta=real-prog,pct=prog?(real/prog)*100:0;
-  el('h-stops').textContent=`${done}/${n}`;
-  el('sb-done').textContent=`${done}/${n}`;
-  el('sb-prog').textContent=prog?fmtTime(prog):'—';
-  el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
+  // Topbar still shows the stop count; the old sum-bar elements are gone, so
+  // every other write below is guarded with optional access.
+  if(el('h-stops'))el('h-stops').textContent=`${done}/${n}`;
+  if(el('sb-done'))el('sb-done').textContent=`${done}/${n}`;
+  if(el('sb-prog'))el('sb-prog').textContent=prog?fmtTime(prog):'—';
+  if(el('sb-rlbl'))el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
   const sfill=el('sb-fill');
   if(sfill){sfill.style.width=Math.min(pct,100)+'%';sfill.style.background=pct<90?'var(--green)':pct<100?'var(--accent)':'var(--red)';}
   if(prog&&real>0){
     const dv=el('sb-delta'),lv=el('sb-dlbl');
-    dv.className=`sb-val ${delta<=0?'ok':delta<120?'warn':'over'}`;
-    dv.textContent=delta<=0?'−'+fmtTime(-delta):'+'+fmtTime(delta);
-    lv.textContent=delta<=0?'ahead':'delay';
-    lv.style.color=delta<=0?'var(--green)':delta<120?'var(--accent)':'var(--red)';
+    if(dv){dv.className=`sb-val ${delta<=0?'ok':delta<120?'warn':'over'}`;
+      dv.textContent=delta<=0?'−'+fmtTime(-delta):'+'+fmtTime(delta);}
+    if(lv){lv.textContent=delta<=0?'ahead':'delay';
+      lv.style.color=delta<=0?'var(--green)':delta<120?'var(--accent)':'var(--red)';}
   }
 }
 
 // ── NAVIGATION ─────────────────────────────────────────
 let totalLaps=1, currentLap=1, baseStops=null;
+let _routeIsCircular=false;  // cached at nav start
+let lapBaseDist=0;           // live.dist at the start of the current lap
 
 function buildLapStops(){
   if(!baseStops||totalLaps<2)return;
@@ -1837,8 +1829,9 @@ function startNav(){
   // Multi-lap: on a circular route, ask how many laps to drive. Each lap
   // re-arms the same physical stops (sequential arrival + departure gate
   // already handle same-spot stops across laps).
-  totalLaps=1;currentLap=1;baseStops=null;
-  if(isCircularRoute()&&stops.length){
+  totalLaps=1;currentLap=1;baseStops=null;lapBaseDist=0;
+  _routeIsCircular=isCircularRoute();
+  if(_routeIsCircular&&stops.length){
     let n=null;
     try{n=prompt(`Circular route detected.\nHow many laps (turns) to drive?`,'1');}catch(e){}
     if(n===null)return; // cancelled
@@ -1944,15 +1937,16 @@ function onGPS(pos){
   const{nearIdx,distFromStart}=nearestRoutePoint(lat,lng);
   updRouteRemaining(nearIdx,distFromStart);
   updInstruction(nearIdx,distFromStart);
-  // Announce arrival at destination. On a circular route the end-point equals
-  // the start-point, so proximity alone would fire at t=0. Require that the
-  // vehicle has actually travelled most of the route distance, and that all
-  // stops (if any) are done. Distance-travelled is robust even when the index
-  // matcher jumps on a short loop where the AHEAD window spans the whole route.
-  const progressed=live.dist>=totalRouteDist*0.7;
+  // Announce arrival at destination. Multi-lap aware: only the FINAL lap may
+  // arrive, and only after that lap covered ≥70% of one route length (per-lap
+  // distance, not the total which accumulates across laps). On a circular route
+  // the end-point equals the start-point, so proximity alone would fire at t=0.
+  const onFinalLap=currentLap>=totalLaps;
+  const lapDist=live.dist-lapBaseDist;
+  const progressed=lapDist>=totalRouteDist*0.7;
   const stopsDone=!stops.length||stops.every(x=>x.state==='done');
-  if(routePts.length&&nearIdx>=routePts.length-3&&progressed&&stopsDone&&!destinationAnnounced){
-    destinationAnnounced=true;speakText('You have arrived at your destination',true);
+  if(routePts.length&&nearIdx>=routePts.length-3&&onFinalLap&&progressed&&stopsDone&&!destinationAnnounced){
+    destinationAnnounced=true;speakText('You have arrived at your destination. All laps complete.',true);
   }
 
   // Arrival check (rawKmh passed in — it's local to this function)
@@ -2150,8 +2144,10 @@ function updNextStopCard(lat,lng){
   else ph.style.display='none';
 }
 function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
-  if(!navActive){if(el('lcm'))el('lcm').style.display='none';return}
+  const active=navActive||isRec;
+  if(!active){if(el('lcm'))el('lcm').style.display='none';return}
   const p=el('lcm');if(!p)return;p.style.display='block';
+  el('lcm-title').textContent=isRec?'LIVE · RECORDING':'LIVE CYCLE';
   // Distance + time accumulation (ignore long gaps / GPS dropouts)
   if(live.last){
     const dt=(ts-live.lastT)/1000;
@@ -2163,8 +2159,8 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
     }
   }
   live.last={lat,lng};live.lastT=ts;
-  // Stops counted from the nav state machine (arrivals), not distance
-  live.stops=stops.filter(x=>x.state!=='waiting').length;
+  // Stops: nav = arrivals (state machine); recording = detected stops so far
+  live.stops=isRec?recStops.length:stops.filter(x=>x.state!=='waiting').length;
 
   const km=live.dist;
   const spk=km>0.05?(live.stops/km):0;
@@ -2192,22 +2188,40 @@ function nearestRoutePoint(lat,lng){
   // the same street driven in the opposite direction later in the route.
   const AHEAD=500;   // wider window — handles long segments between stops
   const BACK=3;      // minimal backtrack — prevents bidirectional confusion
+  const N=routePts.length;
 
   const from=Math.max(0, lastRouteIdx-BACK);
-  const to  =Math.min(routePts.length-1, lastRouteIdx+AHEAD);
+  const to  =Math.min(N-1, lastRouteIdx+AHEAD);
 
   let minIdx=from, minDist=Infinity;
   for(let i=from;i<=to;i++){
     let d=haversine(lat,lng,routePts[i].lat,routePts[i].lon);
-    // Direction penalty (spec 7.1): up to 60 m (0.06 km) for route points
-    // whose local bearing opposes the vehicle heading — disambiguates
-    // bidirectional roads driven in both directions on the same route.
-    if(currentHeading!=null&&i<routePts.length-1){
+    if(currentHeading!=null&&i<N-1){
       const segB=brng(routePts[i].lat,routePts[i].lon,routePts[i+1].lat,routePts[i+1].lon);
       const dAng=Math.abs(angleDiff(segB,currentHeading)); // 0..180
       d+=(dAng/180)*0.06;
     }
     if(d<minDist){minDist=d;minIdx=i;}
+  }
+
+  // ── LAP WRAP (circular multi-lap) ──────────────────────
+  // Near the end of a circular route the next physical point is the START.
+  // The forward-only window can't see index 0 (it's behind), so the matcher
+  // would stick at the end and distFromStart would freeze — navigation "ends"
+  // after lap 1. Detect lap completion by: having traversed most of the route
+  // this lap AND being physically near the start point, then wrap to index 0.
+  if(navActive&&_routeIsCircular&&totalLaps>1&&currentLap<totalLaps){
+    const lapDist=live.dist-lapBaseDist;
+    const nearStart=haversine(lat,lng,routePts[0].lat,routePts[0].lon)*1000;
+    const startRadius=Math.max(40,+(el('rng-radius').value||10)*2);
+    if(lapDist>=totalRouteDist*0.75 && nearStart<=startRadius){
+      currentLap++;
+      lastRouteIdx=0;routeMaxIdx=0;
+      lapBaseDist=live.dist;       // reset per-lap distance baseline
+      insideStop.clear();          // re-arm same-spot stops for the new lap
+      speakText(`Lap ${currentLap} of ${totalLaps}`,true);
+      return{nearIdx:0,distFromStart:0};
+    }
   }
 
   // Only advance, never jump backward by more than BACK
@@ -2390,6 +2404,9 @@ function startRec(){
   routePts=[];maneuvers=[];totalRouteDist=0;
 
   isRec=true;recPoints=[];recStops=[];recStopCandidate=null;
+  live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+  if(el('lcm')){el('lcm').style.display='none';
+    ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
   try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){}
   _lastFlush=Date.now();
   shState='hidden';applySheet();
@@ -2415,6 +2432,7 @@ function stopRec(){
   recStopCandidate=null;
   el('rec-ind').classList.remove('on');
   el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';
+  if(!navActive&&el('lcm'))el('lcm').style.display='none';
   const hasRoute=routePts.length>1; // startRec clears the route — Nav needs one
   el('btn-nav').disabled=!hasRoute;
   if(el('btn-nav2'))el('btn-nav2').disabled=!hasRoute;
