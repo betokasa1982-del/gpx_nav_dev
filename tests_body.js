@@ -335,3 +335,39 @@ console.assert(watchId!=null,'real GPS not resumed after sim');
 console.log('24. GPS simulator OK — arrival, matching, voice all replayed; stop state:',stops[0].state);
 
 console.log('ALL v10-DEV TESTS PASSED');
+
+// ══ TEST 25: live cycle metrics accumulate during navigation ══
+fake=realNow();
+stops=[{id:1,name:'P1',lat:57.85,lng:11.97,dur_s:20,elapsed:0,running:false,intervalId:null,
+  state:'waiting',events:[],seg_avg:null,photo:null}];
+stopMarkers={1:{setIcon(){}}};insideStop.clear();departGate=null;navActive=true;
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+el('rng-radius').value='10';
+// drive 50s @ ~10 m/s toward the stop
+let mlat=57.80;
+for(let i=0;i<50;i++){fake+=1000;mlat+=10*0.0000090;gps(mlat,11.97,36);}
+console.assert(el('lcm').style.display==='block','LCM hidden FAIL');
+const drv=parseFloat(el('lcm-drv').textContent);
+console.assert(Math.abs(drv-36)<4,'LCM avg driving FAIL: '+el('lcm-drv').textContent);
+console.assert(/km/.test(el('lcm-extra').textContent),'LCM extra FAIL: '+el('lcm-extra').textContent);
+// idle at the stop for 30s → avg total must drop below avg driving
+for(let i=0;i<30;i++){fake+=1000;gps(mlat,11.97,0.5);}
+const avgT=parseFloat(el('lcm-avg').textContent),drv2=parseFloat(el('lcm-drv').textContent);
+console.assert(avgT<drv2,'LCM total<driving FAIL: tot '+avgT+' drv '+drv2);
+console.assert(/[1-9][0-9]?%/.test(el('lcm-extra').textContent),'LCM idle% FAIL: '+el('lcm-extra').textContent);
+console.log('25. live metrics OK — drv',el('lcm-drv').textContent,'tot',el('lcm-avg').textContent,'·',el('lcm-extra').textContent);
+
+// ══ TEST 26: SIM auto-starts navigation (new HUD shown) ══
+navActive=false;currentLoadedRec=-1;watchId=null;
+fake=realNow();let s26lat=57.95;const s26pts=[{lat:s26lat,lng:11.97,t:fake}];
+for(let i=0;i<30;i++){s26lat+=10*0.0000090;fake+=1000;s26pts.push({lat:s26lat,lng:11.97,t:fake});}
+savedRecs.push({name:'AutoNavSim',dist:1,date:new Date(),points:s26pts,stops:[]});
+const s26idx=savedRecs.length-1;
+el('rng-sim').value='15';
+startSim(s26idx);
+console.assert(navActive===true,'SIM did not auto-start navigation (navActive false)');
+console.assert(currentLoadedRec===s26idx,'SIM did not auto-load cycle: '+currentLoadedRec);
+console.assert(routePts.length===s26pts.length,'SIM cycle not loaded into routePts');
+console.log('26. SIM auto-nav OK — new HUD active during simulation');
+
+console.log('ALL v11-DEV TESTS PASSED');

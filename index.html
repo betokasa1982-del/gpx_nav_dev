@@ -72,6 +72,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .score-badge.m3{background:rgba(240,165,0,.18);color:#f0a500}
 .score-badge.m0{background:rgba(248,81,73,.2);color:#f85149}
 
+/* ── LIVE CYCLE METRICS ── */
+.lcm{position:absolute;right:10px;top:430px;width:195px;
+  background:rgba(13,17,23,.95);border:1px solid var(--border);
+  border-left:3px solid var(--blue,#58a6ff);border-radius:12px;
+  padding:9px 12px;pointer-events:auto;display:none;z-index:905;
+  box-shadow:0 4px 18px rgba(0,0,0,.45)}
+.lcm-title{font-size:10px;letter-spacing:1.5px;color:var(--muted);
+  font-weight:800;font-family:var(--mono);margin-bottom:5px}
+.lcm-row{display:flex;justify-content:space-between;align-items:baseline;
+  padding:3px 0;border-top:1px solid rgba(255,255,255,.05)}
+.lcm-l{font-size:12px;color:var(--muted)}
+.lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--blue,#58a6ff)}
+.lcm-sub .lcm-v{font-size:13px;color:var(--fg,#e6edf3)}
+
 /* ── NEXT STOP CARD ── */
 .nsc{position:absolute;right:10px;top:215px;width:195px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
@@ -111,6 +125,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   .nsc-evt{font-size:21px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
+  .lcm{width:256px;top:495px;padding:11px 14px}
+  .lcm-l{font-size:14px}
+  .lcm-v{font-size:24px}
+  .lcm-sub .lcm-v{font-size:15px}
 }
 
 /* ── MAP ── */
@@ -524,6 +542,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
     </div>
 
+    <!-- Live cycle metrics: updated continuously during navigation -->
+    <div class="lcm" id="lcm">
+      <div class="lcm-title">LIVE CYCLE</div>
+      <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
+      <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
+      <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
+      <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
+    </div>
+
     <!-- Main instruction strip (Waze-style) -->
     <div class="hud-instr" id="hud-instr">
       <div class="hud-instr-icon straight" id="hud-icon">
@@ -779,6 +806,9 @@ let map, routeLayer, routeDoneLayer, routeAheadLayer, routeRemainLayer, recLayer
 let posMarker, accCircle;
 let stops=[], stopMarkers={};
 let extraMarkers=[];      // start/end dots + recording stop pins (were orphaned)
+let currentLoadedRec=-1;  // index of the recording currently loaded (sim guard)
+// Live cycle metrics accumulated during navigation
+let live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
 
 // ── Cycle analytics ───────────────────────────────────
 function fmtDur(sec){
@@ -1734,6 +1764,9 @@ function startNav(){
   lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
+  live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+  if(el('lcm')){el('lcm').style.display='none';
+    ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
   el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
   el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
   el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
@@ -1754,6 +1787,7 @@ function stopNav(){
   el('hud-sp').classList.remove('on');hudPanelOpen=false;
   el('sum-bar').classList.remove('on');
   stopSim(true); // never leave a simulation feeding a stopped navigation
+  if(el('lcm'))el('lcm').style.display='none';
   // Reset map to north-up (spec 5.3)
   setMapBearing(0);_lastBearing=0;
   if(el('nsc'))el('nsc').style.display='none';
@@ -1826,8 +1860,10 @@ function onGPS(pos){
   }
 
   // Arrival check (rawKmh passed in — it's local to this function)
+  const stopsBefore=stops.filter(x=>x.state!=='waiting').length;
   checkArrival(lat,lng,rawKmh);
   updNextStopCard(lat,lng);
+  updLiveMetrics(lat,lng,rawKmh,pos.timestamp,stopsBefore);
 
   // Recording stop detection
   if(isRec){
@@ -1914,13 +1950,17 @@ function onGPSErr(err){
 // Replays a recorded cycle through onGPS as if it were live GPS — speed and
 // heading derived from the recorded points. Lets new app versions be tested
 // at a desk against real, physically-driven cycles, at 1x-20x speed.
-let simTimer=null,simIdx=0,simRec=null;
+let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
 
 function startSim(idx){
   const rec=savedRecs[idx];
   if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
   stopSim(true);
-  simRec=rec;simIdx=0;
+  // Load the cycle if it isn't the one already loaded, then enter navigation —
+  // without navActive the new HUD / Next Stop Card / live panel never show.
+  if(currentLoadedRec!==idx)loadRec(idx);
+  if(!navActive)startNav();
+  simRec=rec;simIdx=0;simStartIdx=0;
   // Real GPS off while simulating — the two must never interleave
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   el('btn-simstop').style.display='';
@@ -1997,6 +2037,35 @@ function updNextStopCard(lat,lng){
   if(next.photo&&next.photo.length>10){if(ph.src!==next.photo)ph.src=next.photo;ph.style.display='block';}
   else ph.style.display='none';
 }
+function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
+  if(!navActive){if(el('lcm'))el('lcm').style.display='none';return}
+  const p=el('lcm');if(!p)return;p.style.display='block';
+  // Distance + time accumulation (ignore long gaps / GPS dropouts)
+  if(live.last){
+    const dt=(ts-live.lastT)/1000;
+    if(dt>0&&dt<30){
+      const d=haversine(live.last.lat,live.last.lng,lat,lng);
+      live.dist+=d;
+      const k=kmh!=null?kmh:d*1000/dt*3.6;
+      if(k<2)live.idle+=dt;else live.moving+=dt;
+    }
+  }
+  live.last={lat,lng};live.lastT=ts;
+  // Stops counted from the nav state machine (arrivals), not distance
+  live.stops=stops.filter(x=>x.state!=='waiting').length;
+
+  const km=live.dist;
+  const spk=km>0.05?(live.stops/km):0;
+  const total=live.moving+live.idle;
+  const avgTot=total>0?live.dist/(total/3600):0;
+  const avgDrv=live.moving>0?live.dist/(live.moving/3600):0;
+  const idlePct=total>0?live.idle/total*100:0;
+  el('lcm-spk').textContent=km>0.05?spk.toFixed(1):'—';
+  el('lcm-drv').textContent=live.moving>5?avgDrv.toFixed(1)+' km/h':'—';
+  el('lcm-avg').textContent=total>5?avgTot.toFixed(1)+' km/h':'—';
+  el('lcm-extra').textContent=`${km.toFixed(2)} km · ${Math.round(idlePct)}%`;
+}
+
 function nscPhotoTap(){
   const next=stops.find(x=>x.state!=='done');
   if(next?.photo)showStopPhoto(next,0);
@@ -2299,6 +2368,7 @@ function renderRecCard(rec,idx){
 function loadRec(idx){
   const rec=savedRecs[idx];
   if(!rec){alert('Recording not found. It may have been lost after a page reload.\nRecord a new route.');return;}
+  currentLoadedRec=idx;
 
   try{
     clearMapLayers();
