@@ -72,35 +72,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .score-badge.m3{background:rgba(240,165,0,.18);color:#f0a500}
 .score-badge.m0{background:rgba(248,81,73,.2);color:#f85149}
 
-/* ── BIG EVENT CUE OVER MAP ── */
-.evt-cue{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
-  display:none;gap:40px;pointer-events:none;z-index:903;text-shadow:0 4px 24px rgba(0,0,0,.6)}
-.evt-cue.on{display:flex}
-.evt-cue span{font-size:150px;line-height:1;opacity:.34;animation:cuePulse 1.8s ease-in-out infinite}
-@keyframes cuePulse{0%,100%{opacity:.22;transform:scale(.94)}50%{opacity:.42;transform:scale(1.06)}}
-@media(min-width:900px){.evt-cue span{font-size:210px}}
-
 /* ── LIVE CYCLE METRICS ── */
-.lcm{width:100%;
+.lcm{position:absolute;right:10px;top:430px;width:195px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
-  border-left:4px solid var(--blue,#58a6ff);border-radius:12px;
-  padding:11px 14px;pointer-events:auto;display:none;z-index:905;
+  border-left:3px solid var(--blue,#58a6ff);border-radius:12px;
+  padding:9px 12px;pointer-events:auto;display:none;z-index:905;
   box-shadow:0 4px 18px rgba(0,0,0,.45)}
-.lcm-title{font-size:11px;letter-spacing:1.5px;color:var(--muted);
-  font-weight:800;font-family:var(--mono);margin-bottom:7px}
+.lcm-title{font-size:10px;letter-spacing:1.5px;color:var(--muted);
+  font-weight:800;font-family:var(--mono);margin-bottom:5px}
 .lcm-row{display:flex;justify-content:space-between;align-items:baseline;
-  padding:5px 0;border-top:1px solid rgba(255,255,255,.06)}
-.lcm-l{font-size:14px;color:var(--muted)}
-.lcm-v{font-family:var(--mono);font-size:27px;font-weight:800;color:var(--blue,#58a6ff)}
-.lcm-sub .lcm-v{font-size:16px;color:var(--fg,#e6edf3)}
+  padding:3px 0;border-top:1px solid rgba(255,255,255,.05)}
+.lcm-l{font-size:12px;color:var(--muted)}
+.lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--blue,#58a6ff)}
+.lcm-sub .lcm-v{font-size:13px;color:var(--fg,#e6edf3)}
 
 /* ── NEXT STOP CARD ── */
-.right-rail{position:absolute;right:10px;top:90px;bottom:30px;width:200px;
-  display:flex;flex-direction:column;gap:10px;pointer-events:none;z-index:905;
-  overflow-y:auto;-webkit-overflow-scrolling:touch}
-.right-rail>*{pointer-events:auto;flex-shrink:0}
-@media(min-width:900px){.right-rail{width:300px;top:96px}}
-.nsc{width:100%;
+.nsc{position:absolute;right:10px;top:215px;width:195px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
   border-left:3px solid var(--accent);border-radius:12px;
   padding:10px 12px;pointer-events:auto;display:none;z-index:905;
@@ -132,17 +119,16 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   .hud-spd-val{font-size:42px}
   .hud-tgt{font-size:14px}
   .stab{font-size:12px;padding:13px 2px}
-  .nsc{padding:12px 14px}
+  .nsc{width:256px;top:235px;padding:12px 14px}
   .nsc-dist{font-size:50px}
   .nsc-row{font-size:15px}
   .nsc-evt{font-size:21px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
-  .lcm{padding:14px 18px}
-  .lcm-title{font-size:13px}
-  .lcm-l{font-size:17px}
-  .lcm-v{font-size:36px}
-  .lcm-sub .lcm-v{font-size:19px}
+  .lcm{width:256px;top:495px;padding:11px 14px}
+  .lcm-l{font-size:14px}
+  .lcm-v{font-size:24px}
+  .lcm-sub .lcm-v{font-size:15px}
 }
 
 /* ── MAP ── */
@@ -236,22 +222,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .hud-toggle.on{display:block}
 
 /* Floating stops panel — compact, max 40% screen height */
-.lap-modal{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.6);backdrop-filter:blur(2px)}
-.lap-modal.on{display:flex}
-.lap-box{background:var(--panel2,#161b22);border:1px solid var(--border);border-radius:16px;
-  padding:22px;width:min(360px,88vw);box-shadow:0 12px 48px rgba(0,0,0,.6)}
-.lap-title{font-size:18px;font-weight:800;color:var(--accent);margin-bottom:4px}
-.lap-sub{font-size:13px;color:var(--muted);margin-bottom:16px}
-.lap-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
-.lap-grid button{padding:14px 0;border-radius:10px;border:2px solid var(--border);
-  background:var(--panel,#0d1117);color:var(--fg,#e6edf3);font-size:18px;font-weight:700;cursor:pointer}
-.lap-grid button.sel{border-color:var(--accent);background:rgba(240,165,0,.15);color:var(--accent)}
-#lap-custom{width:100%;padding:12px;border-radius:10px;border:2px solid var(--border);
-  background:var(--panel,#0d1117);color:var(--fg,#e6edf3);font-size:16px;margin-bottom:16px;text-align:center}
-.lap-btns{display:flex;gap:10px}
-.lap-btns .btn{flex:1;padding:13px}
-
 .hud-stops-panel{
   position:absolute;bottom:56px;left:8px;right:8px;z-index:910;pointer-events:auto;
   background:rgba(13,17,23,.96);border:1px solid var(--border);border-radius:12px;
@@ -512,11 +482,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 </style>
 </head>
 <body>
-<div id="sim-debug" style="display:none;position:fixed;bottom:60px;left:8px;z-index:5000;
-  background:rgba(0,0,0,.85);color:#3fb950;font-family:monospace;font-size:13px;
-  padding:8px 12px;border-radius:8px;border:1px solid #3fb950;line-height:1.5;
-  pointer-events:none;white-space:pre"></div>
-
 
 <!-- TOPBAR -->
 <div class="topbar">
@@ -540,13 +505,26 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       style="background:var(--panel);border:1px solid var(--border);border-radius:6px;
              padding:7px 10px;font-size:16px;cursor:pointer;min-height:38px;
              color:var(--text);transition:all .15s;user-select:none">🌙</button>
-    <button class="btn go"       id="btn-nav"  onclick="launchNav()" disabled>▶ Nav</button>
+    <button class="btn go"       id="btn-nav"  onclick="startNav()" disabled>▶ Nav</button>
     <button class="btn stop-nav" id="btn-stop" onclick="stopNav()"  style="display:none">■ Stop</button>
   </div>
 </div>
 
 <!-- SUMMARY BAR -->
-<!-- sum-bar removed: replaced by fixed right-column Live Cycle panel -->
+<div class="sum-bar" id="sum-bar">
+  <div class="sb-cols">
+    <div class="sb-item"><span class="sb-lbl">Done</span><span class="sb-val ok" id="sb-done">0/0</span></div>
+    <div class="sb-div"></div>
+    <div class="sb-item"><span class="sb-lbl">Planned</span><span class="sb-val" id="sb-prog">—</span></div>
+    <div class="sb-div"></div>
+    <div class="sb-prog">
+      <div class="sb-prog-row"><span id="sb-rlbl">Actual: 0</span><span id="sb-dlbl" style="color:var(--green)">—</span></div>
+      <div class="sb-pbar"><div class="sb-pfill" id="sb-fill" style="width:0%"></div></div>
+    </div>
+    <div class="sb-div"></div>
+    <div class="sb-item"><span class="sb-lbl">Delta</span><span class="sb-val ok" id="sb-delta">—</span></div>
+  </div>
+</div>
 
 <!-- MAP WRAP -->
 <div class="map-wrap">
@@ -555,25 +533,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   <!-- ══════════════════ NAV HUD ══════════════════ -->
   <div class="nav-hud" id="nav-hud">
 
-    <!-- Big transparent event cue over the map -->
-    <div class="evt-cue" id="evt-cue"></div>
+    <!-- Next Stop Card: the driver's primary reference on 10" tablets -->
+    <div class="nsc" id="nsc">
+      <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
+      <div class="nsc-dist" id="nsc-dist">—</div>
+      <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
+      <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
+      <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
+    </div>
 
-    <!-- Right rail: Next Stop Card + Live Cycle stacked, scrollable, never overlap -->
-    <div class="right-rail" id="right-rail">
-      <div class="nsc" id="nsc">
-        <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
-        <div class="nsc-dist" id="nsc-dist">—</div>
-        <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
-        <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
-        <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
-      </div>
-      <div class="lcm" id="lcm">
-        <div class="lcm-title">LIVE CYCLE</div>
-        <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
-        <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
-        <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
-        <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
-      </div>
+    <!-- Live cycle metrics: updated continuously during navigation -->
+    <div class="lcm" id="lcm">
+      <div class="lcm-title">LIVE CYCLE</div>
+      <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
+      <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
+      <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
+      <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
     </div>
 
     <!-- Main instruction strip (Waze-style) -->
@@ -616,23 +591,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   </div>
 
   <!-- Sheet toggle button -->
-  <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()" style="display:none">📍 Stops</div>
+  <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()">📍 Stops</div>
 
   <!-- Floating stops panel -->
-  <!-- Lap chooser (replaces native prompt which fails in installed PWAs) -->
-  <div class="lap-modal" id="lap-modal">
-    <div class="lap-box">
-      <div class="lap-title">Circular route detected</div>
-      <div class="lap-sub">How many laps (turns) to drive?</div>
-      <div class="lap-grid" id="lap-grid"></div>
-      <input type="number" id="lap-custom" min="1" max="50" placeholder="Other…" inputmode="numeric">
-      <div class="lap-btns">
-        <button class="btn" onclick="closeLapModal()">Cancel</button>
-        <button class="btn go" onclick="confirmLaps()">Start</button>
-      </div>
-    </div>
-  </div>
-
   <div class="hud-stops-panel" id="hud-sp">
     <div class="hud-sp-head">
       Route stops
@@ -667,9 +628,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       </button>
       <button class="evt-btn" id="evt-knee" onclick="toggleStopEvent('kneeling')">
         ♿<br>Kneeling
-      </button>
-      <button class="evt-btn" id="evt-hand" onclick="toggleStopEvent('handBrake')">
-        🅿️<br>Hand Brake
       </button>
     </div>
 
@@ -750,7 +708,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
         </div>
         <div style="padding:0 14px 14px;display:flex;gap:8px">
           <button class="btn" style="flex:1" onclick="el('gpx-file').click()">↺ Change file</button>
-          <button class="btn go" style="flex:1" id="btn-nav2" onclick="launchNav()" disabled>▶ Navigate</button>
+          <button class="btn go" style="flex:1" id="btn-nav2" onclick="startNav()" disabled>▶ Navigate</button>
         </div>
       </div>
       <div class="empty" id="no-route">
@@ -793,7 +751,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
         <div style="display:flex;gap:8px;padding-top:4px">
-          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="launchNav()">▶ Start GPS</button>
+          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="startNav()">▶ Start GPS</button>
           <button class="btn stop-nav" id="btn-stop3" style="flex:1;display:none" onclick="stopNav()">■ Stop</button>
         </div>
       </div>
@@ -1095,7 +1053,6 @@ function toggleStopEvent(evt){
   else pendingStopEvents.push(evt);
   el('evt-door').classList.toggle('active',pendingStopEvents.includes('openDoor'));
   el('evt-knee').classList.toggle('active',pendingStopEvents.includes('kneeling'));
-  el('evt-hand').classList.toggle('active',pendingStopEvents.includes('handBrake'));
 }
 
 function confirmStopEvents(){
@@ -1109,7 +1066,6 @@ function confirmStopEvents(){
   // Reset button states
   el('evt-door').classList.remove('active');
   el('evt-knee').classList.remove('active');
-  el('evt-hand').classList.remove('active');
   el('cam-prompt').classList.remove('on');
   pendingPhotoStopIdx=-1;
 }
@@ -1158,10 +1114,6 @@ function updateStopMarkerPhoto(stopIdx){
 let photoAutoClose=null;
 function showStopPhoto(stop,distM){
   if(!stop||!stop.photo) return; // no photo — nothing to show
-  // While navigating, the Next Stop Card (fixed right column) shows the photo.
-  // The floating overlay would cover the live metrics panel — so suppress it
-  // here and only allow the full-screen view via an explicit photo tap.
-  if(navActive&&!_forcePhotoOverlay) return;
   const ov=el('stop-photo-ov');
   el('spo-name').textContent=stop.name||`Stop ${stop.id}`;
   el('spo-badge').textContent=distM<50?'At stop':`${Math.round(distM)} m ahead`;
@@ -1180,28 +1132,13 @@ function closeStopPhoto(){
 }
 
 // ── Wake Lock (keep screen on during nav/rec) ──
-// Fullscreen: must be triggered by a user gesture (browser policy).
-// Armed once on the first tap anywhere, and re-requested when nav/rec starts.
-let _fsArmed=false;
-function goFullscreen(){
-  try{
-    const e=document.documentElement;
-    if(!document.fullscreenElement&&e.requestFullscreen)
-      e.requestFullscreen({navigationUI:'hide'}).catch(()=>{});
-  }catch(e){}
-}
-function armFullscreenOnce(){
-  if(_fsArmed)return;_fsArmed=true;
-  document.addEventListener('click',goFullscreen,{once:true});
-}
-
 let wakeLock=null;
 async function requestWakeLock(){
   if(!('wakeLock' in navigator))return;
   try{
     wakeLock=await navigator.wakeLock.request('screen');
     wakeLock.addEventListener('release',()=>{
-      if(document.visibilityState==='visible') requestWakeLock();
+      if(document.visibilityState==='visible'&&(navActive||isRec)) requestWakeLock();
     });
     console.log('[WakeLock] Screen kept on');
   }catch(e){console.warn('[WakeLock]',e.message);}
@@ -1217,7 +1154,6 @@ document.addEventListener('visibilitychange',()=>{
 // ── Cumulative distance cache for fast route progress ──
 let routeCumDist=[];   // routeCumDist[i] = km from pt[0] to pt[i]
 let lastRouteIdx=0;    // last known route index — prevents backward jumps on bidirectional roads
-let routeMaxIdx=0;     // furthest index reached this run (circular-route arrival guard)
 
 function buildCumDist(pts){
   routeCumDist=[0];
@@ -1315,13 +1251,6 @@ map=L.map('map',{center:[-15,-50],zoom:5,zoomControl:false,tap:true,rotate:true,
 loadStoredRecordings();
 checkInflightRecovery();
 checkQuota();
-armFullscreenOnce();
-// Keep the screen awake whenever the tab is visible (not only during nav/rec),
-// re-acquiring after the OS drops the lock on focus changes.
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&!wakeLock)requestWakeLock();
-});
-requestWakeLock();
 setTimeout(()=>{try{map.invalidateSize();}catch(e){}},600);
 // Ensure map tiles render correctly after initial layout
 setTimeout(()=>{try{map.invalidateSize();}catch(e){}},500);
@@ -1450,7 +1379,7 @@ function renderHudPanel(){
         ${s.state==='done'?'✓':s.id}
       </div>
       <div class="hud-sr-name">${s.name}${(s.events||[]).map(e=>
-        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':e==='handBrake'?'🅿️':'⚡'}</span>`
+        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':'⚡'}</span>`
       ).join('')}</div>
       <div class="hud-sr-timer ${timerCls}">${timerTxt}${s.state==='current'?planned:''}</div>
       ${s.state==='current'?`
@@ -1553,10 +1482,8 @@ function getNextManeuver(curIdx,curDistFromStart){
     const stopDist=haversine(currentPos.lat,currentPos.lng,nextStop.lat,nextStop.lng)*1000;
     const manDist=nextMan?haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000:Infinity;
     if(stopDist<manDist){
-      // AT the stop — trust the state machine (checkArrival set state='current'
-      // using the arrival radius). Re-deriving "at stop" from a different radius
-      // here made the HUD and the state machine disagree.
-      if(nextStop.state==='current'){
+      // AT the stop (inside arrival radius) — show live timer + tap Done to continue
+      if(stopDist<=radius&&nextStop.state==='current'){
         const elapsed=fmtTime(nextStop.elapsed);
         const planned=nextStop.dur_s?` / ${fmtTime(nextStop.dur_s)}`:'';
         return{dist:0,icon:'⏸',
@@ -1571,25 +1498,7 @@ function getNextManeuver(curIdx,curDistFromStart){
     }
   }
 
-  // "Destination reached" must only show when navigation is genuinely complete:
-  // all stops done AND, on a circular route, the current lap has covered most of
-  // the route. Otherwise (no upcoming maneuver yet, or circular wrap pending)
-  // keep guiding toward the next stop / continue.
-  if(!nextMan){
-    const stopsDone=!stops.length||stops.every(s=>s.state==='done');
-    const lapDone=!_routeIsCircular||(curDistFromStart-lapStartDist)>=totalRouteDist*0.7;
-    const onFinalLap=currentLap>=totalLaps;
-    if(stopsDone&&lapDone&&onFinalLap)
-      return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
-    // Not actually done — keep the driver moving toward the next stop if any
-    const ns=stops.find(s=>s.state!=='done');
-    if(ns){
-      const d=haversine(currentPos.lat,currentPos.lng,ns.lat,ns.lng)*1000;
-      return{dist:d,icon:'⏸',label:'Continue to next stop',
-        detail:ns.name,cls:'stop',type:'stop'};
-    }
-    return{dist:0,icon:'➡',label:'Continue',detail:'',cls:'',type:'continue'};
-  }
+  if(!nextMan) return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
   const distM=haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000;
   const afterTxt=upcoming[1]?`Then: ${upcoming[1].label}`:'';
   return{dist:distM,icon:nextMan.icon,label:nextMan.label,detail:afterTxt,cls:nextMan.cls,type:nextMan.type};
@@ -1665,7 +1574,6 @@ function parseGPX(xml,filename){
     const events=[];
     if(w.querySelector('openDoor')||/openDoor/i.test(desc))events.push('openDoor');
     if(w.querySelector('kneeling')||/kneeling/i.test(desc))events.push('kneeling');
-    if(w.querySelector('handBrake')||/handBrake/i.test(desc))events.push('handBrake');
     const id=i+1;
     stops.push({id,name,lat,lng:lon,dur_s,elapsed:0,running:false,intervalId:null,state:'waiting',desc,events});
     stopMarkers[id]=L.marker([lat,lon],{icon:mkStopIcon(id,'waiting')}).addTo(map)
@@ -1726,7 +1634,7 @@ function cardHTML(s){
   <div class="sc-head">
     <div class="sc-num waiting" id="scnum-${s.id}">${s.id}</div>
     <div class="sc-name">${s.name}${s.photo?' 📷':''}${(s.events||[]).map(e=>
-      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':e==='handBrake'?'🅿️ Brake':''}</span>`
+      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':''}</span>`
     ).join('')}</div>
     <span class="sc-badge waiting" id="scst-${s.id}">Waiting</span>
   </div>
@@ -1779,16 +1687,6 @@ function updCardState(s){
 function startTimer(id){
   const s=stops.find(s=>s.id===id);if(!s||s.running)return;
   s.running=true;s.state='current';
-  // SIMULATION: do NOT start a real-time interval. The stop is completed by the
-  // player's route progress (see checkArrival departure). A 1 s wall-clock timer
-  // here would desync from the fast-replaying player and freeze the UI at a stop.
-  if(simMode){
-    const d=el(`td-${id}`);if(d)d.className='sc-time-val running';
-    const go=el(`tbgo-${id}`),ps=el(`tbps-${id}`);
-    if(go)go.style.display='none';if(ps)ps.style.display='';
-    updCardState(s);updSummaryBar();
-    return;
-  }
   s.intervalId=setInterval(()=>{
     s.elapsed++;
     const d=el(`td-${id}`);if(d)d.textContent=fmtTime(s.elapsed);
@@ -1827,9 +1725,6 @@ function markDone(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
   s.state='done';insideStop.delete(id);
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
-  departGateDist=routeCumDist[lastRouteIdx]||0; // route-progress baseline (nav-independent)
-  // (Live Cycle idle accrues from the recorded dwell during normal navigation;
-  //  in the UI player the recorded timestamps already include dwell time.)
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -1844,131 +1739,43 @@ function updSummaryBar(){
   const done=stops.filter(s=>s.state==='done').length,n=stops.length;
   const real=stops.reduce((a,s)=>a+s.elapsed,0),prog=stops.reduce((a,s)=>a+s.dur_s,0);
   const delta=real-prog,pct=prog?(real/prog)*100:0;
-  // Topbar still shows the stop count; the old sum-bar elements are gone, so
-  // every other write below is guarded with optional access.
-  if(el('h-stops'))el('h-stops').textContent=`${done}/${n}`;
-  if(el('sb-done'))el('sb-done').textContent=`${done}/${n}`;
-  if(el('sb-prog'))el('sb-prog').textContent=prog?fmtTime(prog):'—';
-  if(el('sb-rlbl'))el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
+  el('h-stops').textContent=`${done}/${n}`;
+  el('sb-done').textContent=`${done}/${n}`;
+  el('sb-prog').textContent=prog?fmtTime(prog):'—';
+  el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
   const sfill=el('sb-fill');
   if(sfill){sfill.style.width=Math.min(pct,100)+'%';sfill.style.background=pct<90?'var(--green)':pct<100?'var(--accent)':'var(--red)';}
   if(prog&&real>0){
     const dv=el('sb-delta'),lv=el('sb-dlbl');
-    if(dv){dv.className=`sb-val ${delta<=0?'ok':delta<120?'warn':'over'}`;
-      dv.textContent=delta<=0?'−'+fmtTime(-delta):'+'+fmtTime(delta);}
-    if(lv){lv.textContent=delta<=0?'ahead':'delay';
-      lv.style.color=delta<=0?'var(--green)':delta<120?'var(--accent)':'var(--red)';}
+    dv.className=`sb-val ${delta<=0?'ok':delta<120?'warn':'over'}`;
+    dv.textContent=delta<=0?'−'+fmtTime(-delta):'+'+fmtTime(delta);
+    lv.textContent=delta<=0?'ahead':'delay';
+    lv.style.color=delta<=0?'var(--green)':delta<120?'var(--accent)':'var(--red)';
   }
 }
 
 // ── NAVIGATION ─────────────────────────────────────────
-let totalLaps=1, currentLap=1, baseStops=null;
-let _routeIsCircular=false;  // cached at nav start
-let lapStartDist=0;          // distFromStart (route-index km) at lap start — nav-independent of Live Cycle
-
-function buildLapStops(){
-  if(!baseStops||totalLaps<2)return;
-  const expanded=[];
-  for(let lap=0;lap<totalLaps;lap++){
-    baseStops.forEach((bs,k)=>{
-      const id=lap*baseStops.length+k+1;
-      expanded.push({...bs,id,
-        name:`L${lap+1}·S${k+1}`,
-        lapNum:lap+1,
-        state:'waiting',elapsed:0,running:false,intervalId:null});
-    });
-  }
-  stops=expanded;
-  // Rebuild markers + cards for the expanded set
-  Object.values(stopMarkers).forEach(m=>{try{map.removeLayer(m)}catch(e){}});
-  stopMarkers={};
-  const sl=el('stops-list');if(sl)sl.innerHTML='';
-  stops.forEach(st=>{
-    stopMarkers[st.id]=L.marker([st.lat,st.lng],{icon:mkStopIcon(st.id,'waiting')}).addTo(map);
-    if(typeof renderCard==='function')renderCard(st);
-  });
-  refreshStopIcons&&refreshStopIcons();
-}
-
-function isCircularRoute(){
-  if(routePts.length<10)return false;
-  const a=routePts[0],b=routePts[routePts.length-1];
-  return haversine(a.lat,a.lon,b.lat,b.lon)*1000<60; // ends within 60 m of start
-}
-
-let _lapChoice=1;
-let _pendingSimIdx=-1;  // set when the lap chooser was opened for a simulation
-function closeLapModal(){el('lap-modal').classList.remove('on');}
-function confirmLaps(){
-  const custom=parseInt(el('lap-custom').value);
-  const laps=custom>0?Math.min(50,custom):_lapChoice;
-  closeLapModal();
-  // The lap chooser is navigation-only now (the simulation never opens it).
-  startNav(laps);
-}
-// Entry point for the Nav buttons: show the lap chooser on a circular route,
-// otherwise start immediately. Replaces the native prompt (unreliable in PWAs).
-function launchNav(){
-  if(navActive)return;
-  if(isRec){ if(!confirm('Stop recording and start navigation?'))return; stopRec(); }
-  _pendingSimIdx=-1; // this is a navigation, not a simulation
-  if(isCircularRoute()&&stops.length){
-    _lapChoice=1;
-    const g=el('lap-grid');g.innerHTML='';
-    [1,2,3,4,5,6,8,10,15,20].forEach(n=>{
-      const b=document.createElement('button');b.textContent=n;
-      if(n===1)b.classList.add('sel');
-      b.onclick=()=>{_lapChoice=n;el('lap-custom').value='';
-        [...g.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');};
-      g.appendChild(b);
-    });
-    el('lap-custom').value='';
-    el('lap-modal').classList.add('on');
-  }else{
-    startNav(1);
-  }
-}
-
-function startNav(nLapsArg){
+function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
-  if(isRec&&!simMode){                          // can't navigate while recording
-    if(!confirm('Stop recording and start navigation?'))return;
-    stopRec();
-  }
-  // Multi-lap: on a circular route, the number of laps is provided by the
-  // caller (lap chooser dialog or simulation). The native prompt() is NOT used
-  // here — in an installed/fullscreen PWA it is often suppressed and returns
-  // null, which previously aborted startNav and left the app in a broken
-  // half-started state (this was the "simulation won't start" bug).
-  totalLaps=1;currentLap=1;baseStops=null;lapStartDist=0;
-  _routeIsCircular=isCircularRoute();
-  if(_routeIsCircular&&stops.length&&nLapsArg>1){
-    totalLaps=Math.max(1,Math.min(50,parseInt(nLapsArg)||1));
-    baseStops=stops.map(s=>({...s})); // snapshot one lap
-    buildLapStops();                  // expand to totalLaps copies
-  }
   navActive=true;
-  if(totalLaps>1)speakText(`Starting. ${totalLaps} laps.`,true);
   // Reset per-run state — without this, a 2nd run of the same route
   // starts with lastRouteIdx stuck at the end and matching never recovers.
-  lastRouteIdx=0;routeMaxIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
+  lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
-  hudPanelOpen=false;if(el('hud-sp'))el('hud-sp').classList.remove('on');
-  if(el('right-rail'))el('right-rail').style.display='flex';
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
   if(el('lcm')){el('lcm').style.display='none';
     ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
   el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
   el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
-  el('nav-hud').classList.add('on');
+  el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
+  el('sum-bar').classList.add('on');
   shState='hidden';applySheet();
-  requestWakeLock();goFullscreen();
+  requestWakeLock();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
   setGPS('wait','Waiting for GPS...');
-  if(!simMode)
-    watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
 }
 function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
@@ -1978,25 +1785,18 @@ function stopNav(){
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   el('hud-sp').classList.remove('on');hudPanelOpen=false;
+  el('sum-bar').classList.remove('on');
   stopSim(true); // never leave a simulation feeding a stopped navigation
   if(el('lcm'))el('lcm').style.display='none';
   // Reset map to north-up (spec 5.3)
   setMapBearing(0);_lastBearing=0;
   if(el('nsc'))el('nsc').style.display='none';
-  if(el('right-rail'))el('right-rail').style.display='none';
-  if(el('evt-cue'))el('evt-cue').classList.remove('on');
   shState='mid';applySheet();
   if(!isRec) releaseWakeLock();
   setGPS('wait','GPS stopped');
 }
 
 function onGPS(pos){
-  // While a simulation is running, ONLY simulated fixes (marked _sim) are
-  // accepted. A real watchPosition still attached to a recording would otherwise
-  // overwrite the simulated position with the stationary device location (0 km/h),
-  // freezing the vehicle on the map. This keeps simulation fully independent of
-  // any real GPS source.
-  if(simMode&&!pos._sim) return;
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
   if(heading!=null&&!isNaN(heading)) currentHeading=smoothHeading(heading)??heading
@@ -2035,13 +1835,7 @@ function onGPS(pos){
 
   if(+el('rng-follow').value===1){
     const zoom=+el('rng-zoom').value;
-    // During SIM the points arrive fast; animating + rotating the map on every
-    // sample saturates the Android renderer and can mask/stall actual progress.
-    // Use instant, north-up updates while simulating.
-    if(simMode){
-      setMapBearing(0);
-      map.setView([lat,lng],zoom,{animate:false});
-    }else if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
+    if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
       // Heading-up: rotate map to put direction of travel at top
       setMapBearing(-currentHeading); // negative = rotate map opposite to heading
       // Offset center slightly behind vehicle (show more route ahead)
@@ -2060,17 +1854,9 @@ function onGPS(pos){
   const{nearIdx,distFromStart}=nearestRoutePoint(lat,lng);
   updRouteRemaining(nearIdx,distFromStart);
   updInstruction(nearIdx,distFromStart);
-  // Announce arrival at destination. Multi-lap aware: only the FINAL lap may
-  // arrive, and only after that lap covered ≥70% of the route. Progress is
-  // measured by route-index distance (distFromStart - lapStartDist), which is
-  // INDEPENDENT of the Live Cycle metrics — navigation must never depend on the
-  // display layer. (distFromStart resets to ~0 at each lap wrap.)
-  const onFinalLap=currentLap>=totalLaps;
-  const lapProgress=distFromStart-lapStartDist;
-  const progressed=lapProgress>=totalRouteDist*0.7;
-  const stopsDone=!stops.length||stops.every(x=>x.state==='done');
-  if(routePts.length&&nearIdx>=routePts.length-3&&onFinalLap&&progressed&&stopsDone&&!destinationAnnounced){
-    destinationAnnounced=true;speakText('You have arrived at your destination. All laps complete.',true);
+  // Announce arrival at destination
+  if(routePts.length&&nearIdx>=routePts.length-3&&!destinationAnnounced){
+    destinationAnnounced=true;speakText('You have arrived at your destination',true);
   }
 
   // Arrival check (rawKmh passed in — it's local to this function)
@@ -2165,75 +1951,23 @@ function onGPSErr(err){
 // heading derived from the recorded points. Lets new app versions be tested
 // at a desk against real, physically-driven cycles, at 1x-20x speed.
 let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
-let simMode=false;       // true between startSim and stopSim — blocks real GPS watch
-let simStartedNav=false; // sim auto-started navigation → stop it when sim ends
 
 function startSim(idx){
   const rec=savedRecs[idx];
   if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
-  // A recording in progress would capture the simulated points as if real, and
-  // leave REC + NAV + SIM all active at once (corrupted state). Stop it first —
-  // discard it without the save prompt (which blocks in an installed PWA).
-  if(isRec){
-    if(!confirm('A recording is in progress. Discard it and start the simulation?'))return;
-    isRec=false;recStopCandidate=null;
-    el('rec-ind')?.classList.remove('on');
-    if(el('btn-rec')){el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';}
-  }
-  // Kill ANY real GPS watch before simulating — recording or navigation may have left one.
-  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   stopSim(true);
+  // Load the cycle if it isn't the one already loaded, then enter navigation —
+  // without navActive the new HUD / Next Stop Card / live panel never show.
   if(currentLoadedRec!==idx)loadRec(idx);
-  // The simulation is a UI player: it replays the recorded cycle exactly once,
-  // regardless of route shape. Multi-lap is a real-navigation concept, not part
-  // of previewing the UI — so no lap chooser here.
-  beginSim(idx,1);
-}
-
-// Actually start the simulation with a known lap count.
-function beginSim(idx,laps){
-  const rec=savedRecs[idx];if(!rec)return;
-  // Sim mode ON before startNav so the real GPS watch is never opened.
-  simMode=true;
-  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
-  if(currentLoadedRec!==idx)loadRec(idx);
-  simStartedNav=!navActive;       // remember if WE turned navigation on
-  if(!navActive)startNav(1);      // the UI player replays the recorded cycle once
-  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
-  // ── FULL CLEAN RESET ── so a dirty prior state on the tablet can't be inherited.
-  insideStop.clear();
-  departGate=null;departGateDist=0;
-  destinationAnnounced=false;evtAnnounced.clear();
-  live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
-  lastRouteIdx=0;routeMaxIdx=0;lapStartDist=0;currentLap=1;
-  currentHeading=null;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
-  stops.forEach(s=>{s.state='waiting';s.elapsed=0;s.running=false;
-    if(s.intervalId){clearInterval(s.intervalId);s.intervalId=null;}
-    delete s._enterDist;updCardState(s);});
+  if(!navActive)startNav();
   simRec=rec;simIdx=0;simStartIdx=0;
+  // Real GPS off while simulating — the two must never interleave
+  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
   stepSim();
 }
 
-// ── SIMULATION = pure UI player ──────────────────────────────────────────────
-// The simulation exists to preview the system's UI (HUD, Next Stop Card, Live
-// Cycle, map) using ALREADY-RECORDED data, so UI changes can be checked at the
-// desk without driving. It is NOT a re-execution of navigation: it simply feeds
-// recorded points into onGPS at a chosen speed and lets the normal navigation
-// react. No private lap counter, no accelerated dwell timer, no pause-at-stop.
-function updSimDebug(){
-  const d=el('sim-debug');if(!d)return;
-  if(!simMode){d.style.display='none';return;}
-  d.style.display='block';
-  const s1=stops[0]||{};
-  const done=stops.filter(x=>x.state==='done').length;
-  d.textContent=
-    'SIM '+(+el('rng-sim').value)+'x  idx '+simIdx+'/'+(simRec?simRec.points.length:0)+'\n'+
-    'stops done '+done+'/'+stops.length+'  cur '+(stops.find(x=>x.state==='current')?.name||'-')+'\n'+
-    'routeIdx '+lastRouteIdx+'  live '+live.dist.toFixed(2)+'km\n'+
-    'last step '+new Date().toLocaleTimeString('en-GB');
-}
 function stepSim(){
   if(!simRec)return;
   const pts=simRec.points;
@@ -2241,73 +1975,50 @@ function stepSim(){
     showAlert('departed','■ Simulation finished');
     stopSim();return;
   }
-  const p=pts[simIdx],prev=simIdx>0?pts[simIdx-1]:null;
+  const p=pts[simIdx],prev=pts[simIdx-1];
   let heading=null,speed=null;
   if(prev){
     const dt=(p.t-prev.t)/1000;
     if(dt>0)speed=haversine(prev.lat,prev.lng,p.lat,p.lng)*1000/dt; // m/s
     heading=brng(prev.lat,prev.lng,p.lat,p.lng);
   }
-  // Feed the recorded point through the normal GPS path. Marked _sim so the real
-  // watch (if any) can't fight it; otherwise this is an ordinary fix.
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
-    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t,_sim:true});
+    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t});
   setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
-  updSimDebug();
   simIdx++;
-  // Schedule the next point, compressing the recorded inter-point time by the
-  // speed multiplier. The minimum step (120 ms ≈ 8 fps) guarantees the tablet UI
-  // can actually render each point — without it, a high multiplier races through
-  // the whole route in a fraction of a second and the UI never updates.
   const next=pts[simIdx];
   if(next){
     const mult=Math.max(1,+el('rng-sim').value||5);
-    const wait=Math.min(2000,Math.max(120,(next.t-p.t)/mult));
+    const wait=Math.min(4000,Math.max(40,(next.t-p.t)/mult));
     simTimer=setTimeout(stepSim,wait);
   }else simTimer=setTimeout(stepSim,300);
 }
 
 function stopSim(silent){
   clearTimeout(simTimer);simTimer=null;
-  const was=simRec;simRec=null;simIdx=0;simMode=false;
+  const was=simRec;simRec=null;simIdx=0;
   el('btn-simstop').style.display='none';
   if(was&&!silent){
-    if(simStartedNav){
-      // The sim turned navigation on — turn it back off so the app returns to
-      // its idle state instead of silently starting the real GPS watch.
-      simStartedNav=false;
-      if(navActive)stopNav();
-      setGPS('wait','SIM finished');
-    }else{
-      setGPS('wait','SIM stopped');
-      // Navigation pre-existed the sim — resume real GPS for the live drive
-      if(navActive&&watchId==null&&navigator.geolocation){
-        watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
-          {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
-      }
+    setGPS('wait','SIM stopped');
+    // Resume real GPS if navigation is still active
+    if(navActive&&watchId==null&&navigator.geolocation){
+      watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
+        {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
     }
   }
-  simStartedNav=false;
 }
 
 // ── Next Stop Card updater (called every GPS tick while navigating) ──
 function updNextStopCard(lat,lng){
   const c=el('nsc');if(!c)return;
   const next=navActive?stops.find(x=>x.state!=='done'):null;
-  if(!next){c.style.display='none';if(el('evt-cue'))el('evt-cue').classList.remove('on');return}
+  if(!next){c.style.display='none';return}
   // Compact glanceable time: mm:ss, hours only when >= 1h
   const fmtC=t=>{const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=Math.floor(t%60);
     return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');};
   c.style.display='block';
   const done=stops.filter(x=>x.state==='done').length;
   el('nsc-count').textContent=`${Math.min(done+1,stops.length)}/${stops.length}`;
-  // Lap indicator on circular multi-lap runs
-  if(totalLaps>1){
-    const lap=next.lapNum||Math.floor(done/(stops.length/totalLaps))+1;
-    el('nsc-title').textContent=next.state==='current'
-      ?(next.dur_s?'AT STOP · TIME LEFT':'AT STOP · ELAPSED')
-      :`NEXT · LAP ${lap}/${totalLaps}`;
-  }
   if(next.state==='current'){
     c.classList.add('atstop');
     el('nsc-title').textContent=next.dur_s?'AT STOP · TIME LEFT':'AT STOP · ELAPSED';
@@ -2320,41 +2031,28 @@ function updNextStopCard(lat,lng){
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
   }
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
-  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':e==='kneeling'?'♿':'🅿️').join(' ');
+  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':'♿').join(' ');
   el('nsc-leg').textContent=next.seg_avg!=null?`leg Ø ${next.seg_avg} km/h`:'';
-  const cue=el('evt-cue');
-  if(cue){
-    const dM=next.state==='current'?0:haversine(lat,lng,next.lat,next.lng)*1000;
-    const evs=next.events||[];
-    if(evs.length&&dM<=120){
-      cue.innerHTML=evs.map(e=>`<span>${e==='openDoor'?'🚪':e==='kneeling'?'♿':'🅿️'}</span>`).join('');
-      cue.classList.add('on');
-    }else cue.classList.remove('on');
-  }
   const ph=el('nsc-photo');
   if(next.photo&&next.photo.length>10){if(ph.src!==next.photo)ph.src=next.photo;ph.style.display='block';}
   else ph.style.display='none';
 }
 function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
-  const active=navActive||isRec;
-  if(!active){if(el('lcm'))el('lcm').style.display='none';return}
+  if(!navActive){if(el('lcm'))el('lcm').style.display='none';return}
   const p=el('lcm');if(!p)return;p.style.display='block';
-  el('lcm-title').textContent=isRec?'LIVE · RECORDING':'LIVE CYCLE';
-  // Distance + time accumulation. Use the delta between GPS fixes, but clamp it
-  // so recorded-timestamp gaps (decimated dwells, sim lap offsets) can't either
-  // inject a 10^7-second jump or stall accumulation. The distance is always real
-  // (haversine between fixes); only the time term is clamped.
+  // Distance + time accumulation (ignore long gaps / GPS dropouts)
   if(live.last){
-    let dt=(ts-live.lastT)/1000;
-    if(!isFinite(dt)||dt<=0||dt>30)dt=1; // treat anomalous gaps as a 1 s step
-    const d=haversine(live.last.lat,live.last.lng,lat,lng);
-    live.dist+=d;
-    const k=kmh!=null?kmh:d*1000/dt*3.6;
-    if(k<2)live.idle+=dt;else live.moving+=dt;
+    const dt=(ts-live.lastT)/1000;
+    if(dt>0&&dt<30){
+      const d=haversine(live.last.lat,live.last.lng,lat,lng);
+      live.dist+=d;
+      const k=kmh!=null?kmh:d*1000/dt*3.6;
+      if(k<2)live.idle+=dt;else live.moving+=dt;
+    }
   }
   live.last={lat,lng};live.lastT=ts;
-  // Stops: nav = arrivals (state machine); recording = detected stops so far
-  live.stops=isRec?recStops.length:stops.filter(x=>x.state!=='waiting').length;
+  // Stops counted from the nav state machine (arrivals), not distance
+  live.stops=stops.filter(x=>x.state!=='waiting').length;
 
   const km=live.dist;
   const spk=km>0.05?(live.stops/km):0;
@@ -2362,16 +2060,15 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   const avgTot=total>0?live.dist/(total/3600):0;
   const avgDrv=live.moving>0?live.dist/(live.moving/3600):0;
   const idlePct=total>0?live.idle/total*100:0;
-  el('lcm-spk').textContent=km>0.02?spk.toFixed(1):'—';
-  el('lcm-drv').textContent=live.moving>2?avgDrv.toFixed(1)+' km/h':'—';
-  el('lcm-avg').textContent=total>2?avgTot.toFixed(1)+' km/h':'—';
+  el('lcm-spk').textContent=km>0.05?spk.toFixed(1):'—';
+  el('lcm-drv').textContent=live.moving>5?avgDrv.toFixed(1)+' km/h':'—';
+  el('lcm-avg').textContent=total>5?avgTot.toFixed(1)+' km/h':'—';
   el('lcm-extra').textContent=`${km.toFixed(2)} km · ${Math.round(idlePct)}%`;
 }
 
-let _forcePhotoOverlay=false;
 function nscPhotoTap(){
   const next=stops.find(x=>x.state!=='done');
-  if(next?.photo){_forcePhotoOverlay=true;showStopPhoto(next,0);_forcePhotoOverlay=false;}
+  if(next?.photo)showStopPhoto(next,0);
 }
 
 function nearestRoutePoint(lat,lng){
@@ -2382,50 +2079,26 @@ function nearestRoutePoint(lat,lng){
   // the same street driven in the opposite direction later in the route.
   const AHEAD=500;   // wider window — handles long segments between stops
   const BACK=3;      // minimal backtrack — prevents bidirectional confusion
-  const N=routePts.length;
 
   const from=Math.max(0, lastRouteIdx-BACK);
-  const to  =Math.min(N-1, lastRouteIdx+AHEAD);
+  const to  =Math.min(routePts.length-1, lastRouteIdx+AHEAD);
 
   let minIdx=from, minDist=Infinity;
   for(let i=from;i<=to;i++){
     let d=haversine(lat,lng,routePts[i].lat,routePts[i].lon);
-    if(currentHeading!=null&&i<N-1){
+    // Direction penalty (spec 7.1): up to 60 m (0.06 km) for route points
+    // whose local bearing opposes the vehicle heading — disambiguates
+    // bidirectional roads driven in both directions on the same route.
+    if(currentHeading!=null&&i<routePts.length-1){
       const segB=brng(routePts[i].lat,routePts[i].lon,routePts[i+1].lat,routePts[i+1].lon);
       const dAng=Math.abs(angleDiff(segB,currentHeading)); // 0..180
       d+=(dAng/180)*0.06;
     }
-    // Forward-progress bias: penalise indices far from where we already are, so
-    // on a circular route the co-located START and END points don't tie and send
-    // the matcher to the end at t=0. The penalty is tiny (≈6 m per 100 indices of
-    // jump) — enough to break the start/end tie without blocking real progress.
-    d+=Math.abs(i-lastRouteIdx)*0.00006;
     if(d<minDist){minDist=d;minIdx=i;}
-  }
-
-  // ── LAP WRAP (circular multi-lap) ──────────────────────
-  // Near the end of a circular route the next physical point is the START.
-  // The forward-only window can't see index 0 (it's behind), so the matcher
-  // would stick at the end and distFromStart would freeze — navigation "ends"
-  // after lap 1. Detect lap completion by: having traversed most of the route
-  // this lap AND being physically near the start point, then wrap to index 0.
-  if(navActive&&_routeIsCircular&&totalLaps>1&&currentLap<totalLaps){
-    const lapDistKm=routeCumDist[lastRouteIdx]-lapStartDist;
-    const nearStart=haversine(lat,lng,routePts[0].lat,routePts[0].lon)*1000;
-    const startRadius=Math.max(40,+(el('rng-radius').value||10)*2);
-    if(lapDistKm>=totalRouteDist*0.75 && nearStart<=startRadius){
-      currentLap++;
-      lastRouteIdx=0;routeMaxIdx=0;
-      lapStartDist=0;              // distFromStart resets to ~0 after wrapping to index 0
-      insideStop.clear();          // re-arm same-spot stops for the new lap
-      speakText(`Lap ${currentLap} of ${totalLaps}`,true);
-      return{nearIdx:0,distFromStart:0};
-    }
   }
 
   // Only advance, never jump backward by more than BACK
   lastRouteIdx=Math.max(from, minIdx);
-  if(lastRouteIdx>routeMaxIdx)routeMaxIdx=lastRouteIdx;
   return{nearIdx:lastRouteIdx, distFromStart:routeCumDist[lastRouteIdx]};
 }
 
@@ -2521,32 +2194,18 @@ function updInstruction(nearIdx,distFromStart){
 // (same physical spot — multi-lap cycles) from arriving until the vehicle
 // has actually left. Cleared once distance from the gate exceeds the radius.
 let departGate=null;
-let departGateDist=0;  // route distance (km) when the gate was set — nav-independent
 
 function checkArrival(lat,lng,rawKmh){
   if(!stops.length)return;
   const radius=+el('rng-radius').value;
   const autoStart=+el('rng-auto').value===1;
   const autoStop=+el('rng-autostop').value===1;
-  // ARRIVAL radius expands at low speed so a slow approach still registers.
-  // DEPARTURE radius is kept TIGHT (= base radius) so the vehicle is considered
-  // "gone" as soon as it clears the stop — otherwise, with the arrival radius
-  // expanded to 18 m, the 1.2× departure ring reached 21.6 m and the recorded
-  // route (which only passes ~21 m from stop 1) never cleared it: the stop stayed
-  // "stuck". Asymmetric radii: easy to enter, easy to leave.
-  const arrivalRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
-  const departureRadius=radius;
+  // Speed-aware arrival radius: when slowing down near stop, expand detection zone
+  const effectiveRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
 
-  // Clear the gate once the vehicle physically left the completed stop, OR once
-  // it has driven a short distance along the route since the gate was set. The
-  // route-progress fallback matters on circular routes where the next lap's
-  // first stop is metres from the one just completed — pure euclidean distance
-  // would never exceed the radius, leaving the gate stuck forever.
-  if(departGate){
-    const leftPhysically=haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius;
-    const drovePastIt=(routeCumDist[lastRouteIdx]-departGateDist)>0.03; // 30 m of route travel
-    if(leftPhysically||drovePastIt)departGate=null;
-  }
+  // Clear the gate once the vehicle physically left the completed stop
+  if(departGate&&haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius)
+    departGate=null;
 
   // ── SEQUENCE-AWARE ARRIVAL: only the NEXT pending stop can arrive ──
   // Test cycles visit the same physical location on every lap; distance-only
@@ -2556,7 +2215,7 @@ function checkArrival(lat,lng,rawKmh){
     const dNext=haversine(lat,lng,next.lat,next.lng)*1000;
 
     // Pre-show photo + announce events of the next stop at 200m
-    if(dNext<=200&&dNext>arrivalRadius){
+    if(dNext<=200&&dNext>effectiveRadius){
       if(next.photo&&next.photo.length>10&&photoPreviewStopId!==next.id){
         showStopPhoto(next,dNext);
       }
@@ -2565,7 +2224,6 @@ function checkArrival(lat,lng,rawKmh){
         const msgs=[];
         if(next.events.includes('openDoor'))msgs.push('open doors');
         if(next.events.includes('kneeling'))msgs.push('kneeling');
-        if(next.events.includes('handBrake'))msgs.push('hand brake');
         if(msgs.length)speakText(`Stop ${next.id}: ${msgs.join(' and ')} required`,true);
       }
     }
@@ -2573,16 +2231,16 @@ function checkArrival(lat,lng,rawKmh){
     // Gate check: same-spot next-lap stop must wait for a real departure first
     const gated=departGate&&haversine(departGate.lat,departGate.lng,next.lat,next.lng)*1000<30;
 
-    if(!gated&&dNext<=arrivalRadius&&!insideStop.has(next.id)){
+    if(!gated&&dNext<=effectiveRadius&&!insideStop.has(next.id)){
       insideStop.add(next.id);
-      next._enterDist=routeCumDist[lastRouteIdx]||0; // route km when we entered (sim departure)
       showAlert('arrived',`📍 ${next.name}${next.dur_s?' · '+fmtTime(next.dur_s):''}`);
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
-      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtSpeak(next.dur_s):''}`,true);
+      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
-      if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually
+      if(!hudPanelOpen) toggleHudPanel();
+      else renderHudPanel();
     }
   }
 
@@ -2591,24 +2249,7 @@ function checkArrival(lat,lng,rawKmh){
     const s=stops.find(x=>x.id===id);
     if(!s){insideStop.delete(id);return;}
     const distM=haversine(lat,lng,s.lat,s.lng)*1000;
-    const idx=stops.indexOf(s);
-    // SIMULATION: complete the stop by ROUTE PROGRESS, not euclidean distance.
-    // The recorded route may only pass ~21 m from a stop sitting at the depot,
-    // so a distance gate can stick forever. Once the player has advanced a little
-    // along the route past where it entered, the dwell is done — deterministic.
-    if(simMode&&s.state!=='done'){
-      const leftByDist=distM>departureRadius;
-      const leftByRoute=(routeCumDist[lastRouteIdx]-(s._enterDist??0))>0.02; // 20 m of route
-      if(leftByDist||leftByRoute){
-        insideStop.delete(id);
-        pauseTimer(id);markDone(id);
-        showAlert('departed',`✓ ${s.name}`);
-        if(photoPreviewStopId===id)closeStopPhoto();
-      }
-      return;
-    }
-    // REAL navigation: tight departure radius — easy to leave once clear.
-    if(distM>departureRadius){
+    if(distM>effectiveRadius*1.2){
       insideStop.delete(id);
       if(autoStop&&s.running){
         pauseTimer(id);markDone(id);
@@ -2628,17 +2269,12 @@ function toggleRec(){if(!isRec)startRec();else stopRec()}
 
 function startRec(){
   if(!navigator.geolocation){alert('Geolocation not available.');return}
-  if(simMode){stopSim(true);}                 // never record simulated points
-  if(navActive){stopNav();}                    // recording and navigating are exclusive
   // ← Clear existing GPX map layers before recording
   clearMapLayers();
   stops=[];insideStop.clear();el('stops-list').innerHTML='';el('stops-badge').textContent='';
   routePts=[];maneuvers=[];totalRouteDist=0;
 
   isRec=true;recPoints=[];recStops=[];recStopCandidate=null;
-  live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
-  if(el('lcm')){el('lcm').style.display='none';
-    ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
   try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){}
   _lastFlush=Date.now();
   shState='hidden';applySheet();
@@ -2651,7 +2287,7 @@ function startRec(){
   if(watchId===null){
     watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
   }
-  requestWakeLock();goFullscreen();
+  requestWakeLock();
   setGPS('active','Recording route...');
 }
 
@@ -2664,7 +2300,6 @@ function stopRec(){
   recStopCandidate=null;
   el('rec-ind').classList.remove('on');
   el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';
-  if(!navActive&&el('lcm'))el('lcm').style.display='none';
   const hasRoute=routePts.length>1; // startRec clears the route — Nav needs one
   el('btn-nav').disabled=!hasRoute;
   if(el('btn-nav2'))el('btn-nav2').disabled=!hasRoute;
@@ -2758,15 +2393,14 @@ function loadRec(idx){
     // ── Stops ─────────────────────────────────────────
     stops=[];insideStop.clear();stopMarkers={};
     destinationAnnounced=false;evtAnnounced.clear();departGate=null;
-    // On a circular cycle the first and last recorded stops are the SAME physical
-    // place (the depot/start). Counting both makes navigation show e.g. 7→14 and
-    // double-counts the start/end. Merge them into one when they're co-located.
+    // Circular-cycle dedup: on a loop the first and last recorded stops are the
+    // SAME physical place (the depot). Counting both makes the last stop sit on
+    // top of the start and never release. Merge them when co-located (<30 m).
     let recStopsToUse=(rec.stops||[]).filter(s=>s&&!isNaN(+s.lat)&&!isNaN(+s.lng));
     if(recStopsToUse.length>=2){
       const f=recStopsToUse[0],l=recStopsToUse[recStopsToUse.length-1];
       const dFL=haversine(+f.lat,+f.lng,+l.lat,+l.lng)*1000;
       if(dFL<30){
-        // Merge: keep the first, fold in the last stop's events/photo if richer
         const last=recStopsToUse.pop();
         const merged={...f};
         merged.dur_s=Math.max(+f.dur_s||0,+last.dur_s||0);
@@ -2849,7 +2483,6 @@ function dlRecGPX(idx){
     xml+=`  <duracao_s>${s.dur_s||0}</duracao_s>\n`;
     if(evts.includes('openDoor'))xml+=`  <openDoor>1</openDoor>\n`;
     if(evts.includes('kneeling'))xml+=`  <kneeling>1</kneeling>\n`;
-    if(evts.includes('handBrake'))xml+=`  <handBrake>1</handBrake>\n`;
     xml+=`  <time>${new Date(s.t).toISOString()}</time>\n`;
     xml+=`</wpt>\n`;
   });
@@ -2984,17 +2617,6 @@ function brng(la1,lo1,la2,lo2){
 function calcDist(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);return t}
 function calcDistRaw(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);return t}
 function fmtTime(s){if(!s||isNaN(s))return'00:00:00';s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return[h,m,sc].map(v=>String(v).padStart(2,'0')).join(':')}
-// Speech-friendly duration: says only the units that matter, so a 15-second
-// timer is spoken "15 seconds" and never "0 hours 0 minutes 15 seconds".
-function fmtSpeak(s){
-  s=Math.max(0,Math.floor(s||0));
-  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
-  const parts=[];
-  if(h>0)parts.push(h+(h===1?' hour':' hours'));
-  if(m>0)parts.push(m+(m===1?' minute':' minutes'));
-  if(sc>0||parts.length===0)parts.push(sc+(sc===1?' second':' seconds'));
-  return parts.join(' ');
-}
 function fmtDurMs(ms){return fmtTime(Math.floor(ms/1000))}
 function el(id){return document.getElementById(id)}
 function setGPS(state,msg){el('gps-dot').className='gps-dot '+state;el('gps-text').textContent=msg}

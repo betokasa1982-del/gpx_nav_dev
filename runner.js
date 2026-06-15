@@ -19,9 +19,7 @@ global.document={
   getElementById:id=>{const isNew=!elems[id];const e=mkEl(id);if(isNew&&sliderVals[id])e.value=sliderVals[id];return e},
   createElement:t=>mkEl('_dyn_'+Math.random()),
   addEventListener(){},
-  visibilityState:'visible',
-  fullscreenElement:null,
-  documentElement:{requestFullscreen:()=>Promise.resolve()}
+  visibilityState:'visible'
 };
 global.__speech={spoken:[],cancels:0,speaking:false,pending:false,
   cancel(){this.cancels++},speak(u){this.spoken.push(u.text)},resume(){}};

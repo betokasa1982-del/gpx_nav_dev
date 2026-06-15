@@ -48,7 +48,7 @@ Referência para gerar arquivos carregáveis no app a partir de scripts externos
 | `points[].alt` | não | altitude em metros; alias `ele` aceito — habilita ganho de elevação |
 | `stops[]` | não | mesmas tolerâncias lat/lng/lon e t |
 | `stops[].dur_s` | não | segundos planejados; alias `duracao_s` aceito; 0 = sem tempo planejado (sem auto-complete) |
-| `stops[].events` | não | array com `"openDoor"`, `"kneeling"` e/ou `"handBrake"` |
+| `stops[].events` | não | array com `"openDoor"` e/ou `"kneeling"` |
 | `stops[].photo` | não | data URL `data:image/jpeg;base64,...` (≤ ~800px, qualidade 72% recomendado) ou `null` |
 
 Campos calculados automaticamente se ausentes (não precisa gerar no script):
@@ -87,7 +87,6 @@ ferramentas. O app lê e escreve as extensões abaixo.
     <duracao_s>45</duracao_s>
     <openDoor>1</openDoor>
     <kneeling>1</kneeling>
-    <handBrake>1</handBrake>
     <time>2026-06-10T08:31:00Z</time>
   </wpt>
 
