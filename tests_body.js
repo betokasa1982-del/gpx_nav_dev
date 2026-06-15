@@ -646,12 +646,12 @@ let steps=0;const realST=global.setTimeout;
 global.setTimeout=(fn,ms)=>{if(steps<30000){steps++;fn();}return 0;};
 _simWithLaps(idx,3);
 global.setTimeout=realST;
-// Must have progressed beyond lap 1 (the bug: stuck after 1 lap)
-console.assert(currentLap===totalLaps,'SIM did not reach final lap: lap '+currentLap+'/'+totalLaps);
-console.assert(live.dist>totalRouteDist*1.5,'SIM did not replay multiple laps: dist '+live.dist.toFixed(2)+' vs route '+totalRouteDist.toFixed(2));
+// Sim is now a single-pass UI player: it replays the cycle once and stops.
+console.assert(simMode===false,'sim should have finished (single pass)');
+console.assert(live.dist>0,'sim player did not feed any movement');
 delete global.__promptReply;
 stopSim(true);navActive=false;
-console.log('38. multi-lap sim replay OK — reached lap',currentLap,'dist',live.dist.toFixed(2));
+console.log('38. single-pass UI player OK — replayed cycle once, dist',live.dist.toFixed(2));
 })();
 
 console.log('ALL v17-DEV TESTS PASSED');
@@ -735,20 +735,15 @@ const idx=savedRecs.length-1;
 isRec=false;navActive=false;simMode=false;
 el('rng-sim').value='20';el('rng-radius').value='10';
 // Tap SIM → must open modal (NOT call prompt, NOT abort)
+// Sim no longer opens a lap chooser — it begins immediately as a UI player.
+const _st43=global.setTimeout;global.setTimeout=()=>0;
 startSim(idx);
-console.assert(el('lap-modal').classList.contains('on'),'lap modal did not open');
-console.assert(_pendingSimIdx===idx,'pending sim idx not set: '+_pendingSimIdx);
-// Choose 3 laps and confirm → sim BEGINS even though prompt() is dead.
-// (We assert the modal-driven start works; completion is covered by test 49.)
-_lapChoice=3;el('lap-custom').value='';
-const rST=global.setTimeout;global.setTimeout=()=>0; // don't auto-run to completion
-confirmLaps();
-global.setTimeout=rST;global.prompt=_p;
-console.assert(totalLaps===3,'laps from modal not applied: '+totalLaps);
-console.assert(simMode===true,'sim did not begin after modal confirm');
-console.assert(!el('lap-modal').classList.contains('on'),'modal still open');
+console.assert(!el('lap-modal').classList.contains('on'),'sim should NOT open lap modal');
+console.assert(simMode===true,'sim did not begin');
+global.setTimeout=_st43;
+global.prompt=_p;
 stopSim(true);navActive=false;
-console.log('43. lap chooser without native prompt OK — 3 laps applied, sim began');
+console.log('43. simulation begins immediately as UI player (no lap chooser) OK');
 })();
 
 console.log('ALL v20-DEV TESTS PASSED');
@@ -804,27 +799,17 @@ navActive=false;stops=[];maneuvers=[];
 
 console.log('ALL v21-DEV TESTS PASSED');
 
-// ══ TEST 47: stop dwell timer accelerates during simulation ══
+// ══ TEST 47: stop dwell timer is always real-time (1000ms) — no sim acceleration ══
 (function(){
-simMode=true;el('rng-sim').value='10';
+simMode=false;
 stops=[{id:1,name:'T',lat:1,lng:1,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
-const _si=global.setInterval;let captured=null;
-global.setInterval=(fn,ms)=>{captured=ms;return 1;};
-startTimer(1);
-global.setInterval=_si;
-// at 10x, 1000ms tick should become ~100ms
-console.assert(captured<=100,'timer not accelerated in sim: '+captured+'ms');
-clearInterval(stops[0].intervalId);
-simMode=false;stops=[];
-// real navigation keeps 1000ms
 const _si2=global.setInterval;let cap2=null;
 global.setInterval=(fn,ms)=>{cap2=ms;return 1;};
-stops=[{id:1,name:'T',lat:1,lng:1,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
 startTimer(1);
 global.setInterval=_si2;
-console.assert(cap2===1000,'real timer not 1000ms: '+cap2);
+console.assert(cap2===1000,'timer not real-time 1000ms: '+cap2);
 clearInterval(stops[0].intervalId);stops=[];
-console.log('47. stop timer accelerates in sim, real-time otherwise OK');
+console.log('47. stop timer is always real-time (no sim acceleration) OK');
 })();
 
 // ══ TEST 48: departure gate clears by route progress (circular same-spot) ══
@@ -858,18 +843,18 @@ global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,ty
 global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
 global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
 global.clearInterval=global.clearTimeout;
-startSim(idx);
-if(el('lap-modal').classList.contains('on')){_lapChoice=2;el('lap-custom').value='';confirmLaps();}
+startSim(idx); // UI player — no lap chooser, single pass
 let it=0;
 while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
   if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
   if(simRec===null)break;}
 global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
 const done=stops.filter(s=>s.state==='done').length;
-console.assert(done===stops.length,'SIM STUCK: only '+done+'/'+stops.length+' done');
-console.assert(done===12,'expected 12 stops over 2 laps, got '+done);
+console.assert(done===stops.length,'SIM did not complete all stops: '+done+'/'+stops.length);
+console.assert(done===6,'expected 6 stops (single pass, deduped), got '+done);
+console.assert(simRec===null,'sim did not finish');
 delete global.__promptReply;navActive=false;
-console.log('49. sim 2-lap real-data completes all stops OK — '+done+'/'+stops.length);
+console.log('49. UI player replays real cycle once, all stops shown OK — '+done+'/'+stops.length);
 })();
 
 console.log('ALL v23-DEV TESTS PASSED');
@@ -974,3 +959,45 @@ console.log('52. sim rejects real GPS during recording-active scenario OK — di
 })();
 
 console.log('ALL v26-DEV TESTS PASSED');
+
+// ══ TEST 53: three modes are independent ══
+(function(){
+// (a) Simulation is a pure single-pass UI player — feeds points, no lap machinery
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+el('rng-sim').value='30';el('rng-radius').value='10';el('rng-auto').value='1';
+let onGPSCalls=0;const _onGPS=onGPS;
+// count how many times the player feeds a point (should equal point count, 1:1)
+let now=0;const queue=[];let nid=1;
+const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+global.clearInterval=global.clearTimeout;
+startSim(idx);
+console.assert(!el('lap-modal').classList.contains('on'),'sim opened a lap modal (should not)');
+console.assert(simMode===true,'sim did not enter simMode');
+let it=0,simFeeds=0;
+while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+  if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+  if(simRec===null)break;}
+global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+// player fed each recorded point about once (single pass) — not thousands of times
+console.assert(simIdx<=r.points.length+2,'player looped/over-fed: simIdx='+simIdx+' vs '+r.points.length);
+console.assert(simMode===false,'simMode not cleared after finish');
+console.assert(navActive===false||simStartedNav,'nav state leaked after sim');
+
+// (b) Real navigation still supports laps independently (lap chooser, multi-lap)
+isRec=false;simMode=false;navActive=false;
+launchNav();
+const navUsesLapModal=el('lap-modal').classList.contains('on');
+closeLapModal();navActive=false;
+console.assert(navUsesLapModal,'navigation lost its lap chooser');
+
+navActive=false;stops=[];
+console.log('53. three modes independent OK — sim is single-pass UI player, nav keeps laps');
+})();
+
+console.log('ALL v27-DEV TESTS PASSED');

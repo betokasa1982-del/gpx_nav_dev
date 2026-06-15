@@ -1772,11 +1772,6 @@ function updCardState(s){
 function startTimer(id){
   const s=stops.find(s=>s.id===id);if(!s||s.running)return;
   s.running=true;s.state='current';
-  // During simulation the vehicle moves at Nx speed, so the stop dwell timer
-  // must tick at the same rate — otherwise the sim races past the stop while
-  // the real-time timer is still counting, and navigation appears to stall.
-  const simMult=simMode?Math.max(1,+el('rng-sim').value||1):1;
-  const tickMs=Math.max(50,Math.round(1000/simMult));
   s.intervalId=setInterval(()=>{
     s.elapsed++;
     const d=el(`td-${id}`);if(d)d.textContent=fmtTime(s.elapsed);
@@ -1792,7 +1787,7 @@ function startTimer(id){
         speakText('Stop '+s.id+' time complete. Proceed to the next stop.',true);
       },800);
     }
-  },tickMs);
+  },1000);
   const d=el(`td-${id}`);if(d)d.className='sc-time-val running';
   el(`tbgo-${id}`).style.display='none';el(`tbps-${id}`).style.display='';
   updCardState(s);updSummaryBar();
@@ -1816,13 +1811,8 @@ function markDone(id){
   s.state='done';insideStop.delete(id);
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
   departGateDist=routeCumDist[lastRouteIdx]||0; // route-progress baseline (nav-independent)
-  // Resume simulation point advancement if it was paused for this dwell
-  if(simMode&&_simPausedAtStop){
-    _simPausedAtStop=false;
-    // The dwell time elapsed while paused counts as idle for the live metrics.
-    if(s.dur_s>0)live.idle+=s.dur_s;
-    clearTimeout(simTimer);simTimer=setTimeout(stepSim,120);
-  }
+  // (Live Cycle idle accrues from the recorded dwell during normal navigation;
+  //  in the UI player the recorded timestamps already include dwell time.)
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -1896,12 +1886,8 @@ function confirmLaps(){
   const custom=parseInt(el('lap-custom').value);
   const laps=custom>0?Math.min(50,custom):_lapChoice;
   closeLapModal();
-  if(_pendingSimIdx>=0){
-    const idx=_pendingSimIdx;_pendingSimIdx=-1;
-    beginSim(idx,laps);
-  }else{
-    startNav(laps);
-  }
+  // The lap chooser is navigation-only now (the simulation never opens it).
+  startNav(laps);
 }
 // Entry point for the Nav buttons: show the lap chooser on a circular route,
 // otherwise start immediately. Replaces the native prompt (unreliable in PWAs).
@@ -2158,8 +2144,6 @@ function onGPSErr(err){
 let simTimer=null,simIdx=0,simRec=null,simStartIdx=0;
 let simMode=false;       // true between startSim and stopSim — blocks real GPS watch
 let simStartedNav=false; // sim auto-started navigation → stop it when sim ends
-let _simLap=0;           // how many times stepSim has replayed the points
-let _simPausedAtStop=false; // sim point advancement held during a stop dwell
 
 function startSim(idx){
   const rec=savedRecs[idx];
@@ -2176,60 +2160,39 @@ function startSim(idx){
   // Kill ANY real GPS watch before simulating — recording or navigation may have left one.
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   stopSim(true);
-  // Load the cycle so we can detect whether it's circular (needs routePts).
   if(currentLoadedRec!==idx)loadRec(idx);
-  // Circular cycle → show the lap chooser, then begin the sim with that count.
-  // (Same HTML dialog as navigation — the native prompt fails in installed PWAs,
-  //  which was the real cause of "simulation won't start".)
-  if(isCircularRoute()&&stops.length){
-    _pendingSimIdx=idx;
-    _lapChoice=1;
-    const g=el('lap-grid');g.innerHTML='';
-    [1,2,3,4,5,6,8,10,15,20].forEach(n=>{
-      const b=document.createElement('button');b.textContent=n;
-      if(n===1)b.classList.add('sel');
-      b.onclick=()=>{_lapChoice=n;el('lap-custom').value='';
-        [...g.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');};
-      g.appendChild(b);
-    });
-    el('lap-custom').value='';
-    el('lap-modal').classList.add('on');
-    return; // confirmLaps() → beginSim() continues the flow
-  }
+  // The simulation is a UI player: it replays the recorded cycle exactly once,
+  // regardless of route shape. Multi-lap is a real-navigation concept, not part
+  // of previewing the UI — so no lap chooser here.
   beginSim(idx,1);
 }
 
 // Actually start the simulation with a known lap count.
 function beginSim(idx,laps){
   const rec=savedRecs[idx];if(!rec)return;
-  // Set sim mode BEFORE startNav so it does NOT open the real GPS watch.
+  // Sim mode ON before startNav so the real GPS watch is never opened.
   simMode=true;
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   if(currentLoadedRec!==idx)loadRec(idx);
   simStartedNav=!navActive;       // remember if WE turned navigation on
-  if(!navActive)startNav(laps);
+  if(!navActive)startNav(1);      // the UI player replays the recorded cycle once
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
-  simRec=rec;simIdx=0;simStartIdx=0;_simLap=0;_simPausedAtStop=false;
+  simRec=rec;simIdx=0;simStartIdx=0;
   el('btn-simstop').style.display='';
-  showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x${laps>1?' · '+laps+' laps':''}`);
+  showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
   stepSim();
 }
 
+// ── SIMULATION = pure UI player ──────────────────────────────────────────────
+// The simulation exists to preview the system's UI (HUD, Next Stop Card, Live
+// Cycle, map) using ALREADY-RECORDED data, so UI changes can be checked at the
+// desk without driving. It is NOT a re-execution of navigation: it simply feeds
+// recorded points into onGPS at a chosen speed and lets the normal navigation
+// react. No private lap counter, no accelerated dwell timer, no pause-at-stop.
 function stepSim(){
   if(!simRec)return;
-  if(_simPausedAtStop)return; // held at a stop until its dwell timer completes
   const pts=simRec.points;
   if(simIdx>=pts.length){
-    // Multi-lap: the recorded data is ONE lap. The simulation owns the lap
-    // count via _simLap (how many times we've replayed the points), which is
-    // independent of the route-matcher's own wrap. Replay until we've driven
-    // totalLaps laps of data.
-    _simLap++;
-    if(navActive&&_routeIsCircular&&totalLaps>1&&_simLap<totalLaps){
-      simIdx=0;
-      simTimer=setTimeout(stepSim,200);
-      return;
-    }
     showAlert('departed','■ Simulation finished');
     stopSim();return;
   }
@@ -2240,17 +2203,18 @@ function stepSim(){
     if(dt>0)speed=haversine(prev.lat,prev.lng,p.lat,p.lng)*1000/dt; // m/s
     heading=brng(prev.lat,prev.lng,p.lat,p.lng);
   }
-  // Each replayed lap needs monotonically increasing timestamps, otherwise the
-  // metrics/decimation logic sees a backward jump and stalls. Offset by lap.
-  const tStamp=p.t+ _simLap*1e7;
+  // Feed the recorded point through the normal GPS path. Marked _sim so the real
+  // watch (if any) can't fight it; otherwise this is an ordinary fix.
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
-    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:tStamp,_sim:true});
-  setGPS('ok',`SIM ${+el('rng-sim').value}x · lap ${currentLap}/${totalLaps} · ${simIdx+1}/${pts.length}`);
+    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t,_sim:true});
+  setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
   simIdx++;
+  // Schedule the next point, compressing the recorded inter-point time by the
+  // speed multiplier. Clamp so the player never stalls on long recorded gaps.
   const next=pts[simIdx];
   if(next){
     const mult=Math.max(1,+el('rng-sim').value||5);
-    const wait=Math.min(4000,Math.max(40,(next.t-p.t)/mult));
+    const wait=Math.min(2000,Math.max(30,(next.t-p.t)/mult));
     simTimer=setTimeout(stepSim,wait);
   }else simTimer=setTimeout(stepSim,300);
 }
@@ -2556,8 +2520,9 @@ function checkArrival(lat,lng,rawKmh){
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
-      // During simulation, hold point advancement while dwelling at the stop.
-      if(simMode&&next.dur_s>0){_simPausedAtStop=true;clearTimeout(simTimer);}
+      // In simulation, the player keeps moving; auto-complete the dwell shortly
+      // so the UI shows the stop → next-stop transition without waiting realtime.
+      if(simMode&&next.dur_s>0){setTimeout(()=>{if(next.state==='current')markDone(next.id);},900);}
       speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtSpeak(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
       if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually
