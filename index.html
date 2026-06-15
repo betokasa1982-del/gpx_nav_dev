@@ -2210,11 +2210,13 @@ function stepSim(){
   setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
   simIdx++;
   // Schedule the next point, compressing the recorded inter-point time by the
-  // speed multiplier. Clamp so the player never stalls on long recorded gaps.
+  // speed multiplier. The minimum step (120 ms ≈ 8 fps) guarantees the tablet UI
+  // can actually render each point — without it, a high multiplier races through
+  // the whole route in a fraction of a second and the UI never updates.
   const next=pts[simIdx];
   if(next){
     const mult=Math.max(1,+el('rng-sim').value||5);
-    const wait=Math.min(2000,Math.max(30,(next.t-p.t)/mult));
+    const wait=Math.min(2000,Math.max(120,(next.t-p.t)/mult));
     simTimer=setTimeout(stepSim,wait);
   }else simTimer=setTimeout(stepSim,300);
 }
@@ -2347,6 +2349,11 @@ function nearestRoutePoint(lat,lng){
       const dAng=Math.abs(angleDiff(segB,currentHeading)); // 0..180
       d+=(dAng/180)*0.06;
     }
+    // Forward-progress bias: penalise indices far from where we already are, so
+    // on a circular route the co-located START and END points don't tie and send
+    // the matcher to the end at t=0. The penalty is tiny (≈6 m per 100 indices of
+    // jump) — enough to break the start/end tie without blocking real progress.
+    d+=Math.abs(i-lastRouteIdx)*0.00006;
     if(d<minDist){minDist=d;minIdx=i;}
   }
 
@@ -2520,9 +2527,6 @@ function checkArrival(lat,lng,rawKmh){
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
-      // In simulation, the player keeps moving; auto-complete the dwell shortly
-      // so the UI shows the stop → next-stop transition without waiting realtime.
-      if(simMode&&next.dur_s>0){setTimeout(()=>{if(next.state==='current')markDone(next.id);},900);}
       speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtSpeak(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
       if(hudPanelOpen) renderHudPanel(); // only update if user opened it manually
@@ -2536,7 +2540,13 @@ function checkArrival(lat,lng,rawKmh){
     const distM=haversine(lat,lng,s.lat,s.lng)*1000;
     if(distM>effectiveRadius*1.2){
       insideStop.delete(id);
-      if(autoStop&&s.running){
+      // In the UI player the vehicle moving past the stop IS the dwell — complete
+      // it deterministically so the UI advances with the player, no realtime wait.
+      if(simMode&&s.state!=='done'){
+        pauseTimer(id);markDone(id);
+        showAlert('departed',`✓ ${s.name}`);
+        if(photoPreviewStopId===id)closeStopPhoto();
+      }else if(autoStop&&s.running){
         pauseTimer(id);markDone(id);
         showAlert('departed',`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
         if(photoPreviewStopId===id)closeStopPhoto();

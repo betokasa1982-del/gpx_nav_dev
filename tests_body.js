@@ -1001,3 +1001,23 @@ console.log('53. three modes independent OK — sim is single-pass UI player, na
 })();
 
 console.log('ALL v27-DEV TESTS PASSED');
+
+// ══ TEST 54: circular route start must NOT match the co-located end (0%, not 100%) ══
+(function(){
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+loadRec(idx);
+navActive=true;lastRouteIdx=0;routeMaxIdx=0;currentHeading=null;
+const p0=r.points[0];
+const m=nearestRoutePoint(p0.lat,p0.lng);
+const pct=m.distFromStart/totalRouteDist*100;
+// The bug: start point matched index ~269 → 100% progress at t=0, breaking nav.
+console.assert(pct<10,'circular start matched the END: '+Math.round(pct)+'% (idx '+m.nearIdx+')');
+console.assert(m.nearIdx<20,'start index should be near 0, got '+m.nearIdx);
+navActive=false;
+console.log('54. circular start matches the START not the END OK — '+Math.round(pct)+'% idx '+m.nearIdx);
+})();
+
+console.log('ALL v28-DEV TESTS PASSED');
