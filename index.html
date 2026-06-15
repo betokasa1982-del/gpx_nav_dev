@@ -236,6 +236,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .hud-toggle.on{display:block}
 
 /* Floating stops panel — compact, max 40% screen height */
+.lap-modal{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.6);backdrop-filter:blur(2px)}
+.lap-modal.on{display:flex}
+.lap-box{background:var(--panel2,#161b22);border:1px solid var(--border);border-radius:16px;
+  padding:22px;width:min(360px,88vw);box-shadow:0 12px 48px rgba(0,0,0,.6)}
+.lap-title{font-size:18px;font-weight:800;color:var(--accent);margin-bottom:4px}
+.lap-sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+.lap-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.lap-grid button{padding:14px 0;border-radius:10px;border:2px solid var(--border);
+  background:var(--panel,#0d1117);color:var(--fg,#e6edf3);font-size:18px;font-weight:700;cursor:pointer}
+.lap-grid button.sel{border-color:var(--accent);background:rgba(240,165,0,.15);color:var(--accent)}
+#lap-custom{width:100%;padding:12px;border-radius:10px;border:2px solid var(--border);
+  background:var(--panel,#0d1117);color:var(--fg,#e6edf3);font-size:16px;margin-bottom:16px;text-align:center}
+.lap-btns{display:flex;gap:10px}
+.lap-btns .btn{flex:1;padding:13px}
+
 .hud-stops-panel{
   position:absolute;bottom:56px;left:8px;right:8px;z-index:910;pointer-events:auto;
   background:rgba(13,17,23,.96);border:1px solid var(--border);border-radius:12px;
@@ -519,7 +535,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       style="background:var(--panel);border:1px solid var(--border);border-radius:6px;
              padding:7px 10px;font-size:16px;cursor:pointer;min-height:38px;
              color:var(--text);transition:all .15s;user-select:none">🌙</button>
-    <button class="btn go"       id="btn-nav"  onclick="startNav()" disabled>▶ Nav</button>
+    <button class="btn go"       id="btn-nav"  onclick="launchNav()" disabled>▶ Nav</button>
     <button class="btn stop-nav" id="btn-stop" onclick="stopNav()"  style="display:none">■ Stop</button>
   </div>
 </div>
@@ -598,6 +614,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()" style="display:none">📍 Stops</div>
 
   <!-- Floating stops panel -->
+  <!-- Lap chooser (replaces native prompt which fails in installed PWAs) -->
+  <div class="lap-modal" id="lap-modal">
+    <div class="lap-box">
+      <div class="lap-title">Circular route detected</div>
+      <div class="lap-sub">How many laps (turns) to drive?</div>
+      <div class="lap-grid" id="lap-grid"></div>
+      <input type="number" id="lap-custom" min="1" max="50" placeholder="Other…" inputmode="numeric">
+      <div class="lap-btns">
+        <button class="btn" onclick="closeLapModal()">Cancel</button>
+        <button class="btn go" onclick="confirmLaps()">Start</button>
+      </div>
+    </div>
+  </div>
+
   <div class="hud-stops-panel" id="hud-sp">
     <div class="hud-sp-head">
       Route stops
@@ -715,7 +745,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
         </div>
         <div style="padding:0 14px 14px;display:flex;gap:8px">
           <button class="btn" style="flex:1" onclick="el('gpx-file').click()">↺ Change file</button>
-          <button class="btn go" style="flex:1" id="btn-nav2" onclick="startNav()" disabled>▶ Navigate</button>
+          <button class="btn go" style="flex:1" id="btn-nav2" onclick="launchNav()" disabled>▶ Navigate</button>
         </div>
       </div>
       <div class="empty" id="no-route">
@@ -758,7 +788,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
         <div style="display:flex;gap:8px;padding-top:4px">
-          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="startNav()">▶ Start GPS</button>
+          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="launchNav()">▶ Start GPS</button>
           <button class="btn stop-nav" id="btn-stop3" style="flex:1;display:none" onclick="stopNav()">■ Stop</button>
         </div>
       </div>
@@ -1828,27 +1858,61 @@ function isCircularRoute(){
   return haversine(a.lat,a.lon,b.lat,b.lon)*1000<60; // ends within 60 m of start
 }
 
-function startNav(){
+let _lapChoice=1;
+let _pendingSimIdx=-1;  // set when the lap chooser was opened for a simulation
+function closeLapModal(){el('lap-modal').classList.remove('on');}
+function confirmLaps(){
+  const custom=parseInt(el('lap-custom').value);
+  const laps=custom>0?Math.min(50,custom):_lapChoice;
+  closeLapModal();
+  if(_pendingSimIdx>=0){
+    const idx=_pendingSimIdx;_pendingSimIdx=-1;
+    beginSim(idx,laps);
+  }else{
+    startNav(laps);
+  }
+}
+// Entry point for the Nav buttons: show the lap chooser on a circular route,
+// otherwise start immediately. Replaces the native prompt (unreliable in PWAs).
+function launchNav(){
+  if(navActive)return;
+  if(isRec){ if(!confirm('Stop recording and start navigation?'))return; stopRec(); }
+  _pendingSimIdx=-1; // this is a navigation, not a simulation
+  if(isCircularRoute()&&stops.length){
+    _lapChoice=1;
+    const g=el('lap-grid');g.innerHTML='';
+    [1,2,3,4,5,6,8,10,15,20].forEach(n=>{
+      const b=document.createElement('button');b.textContent=n;
+      if(n===1)b.classList.add('sel');
+      b.onclick=()=>{_lapChoice=n;el('lap-custom').value='';
+        [...g.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');};
+      g.appendChild(b);
+    });
+    el('lap-custom').value='';
+    el('lap-modal').classList.add('on');
+  }else{
+    startNav(1);
+  }
+}
+
+function startNav(nLapsArg){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
   if(isRec&&!simMode){                          // can't navigate while recording
     if(!confirm('Stop recording and start navigation?'))return;
     stopRec();
   }
-  // Multi-lap: on a circular route, ask how many laps to drive. Each lap
-  // re-arms the same physical stops (sequential arrival + departure gate
-  // already handle same-spot stops across laps).
+  // Multi-lap: on a circular route, the number of laps is provided by the
+  // caller (lap chooser dialog or simulation). The native prompt() is NOT used
+  // here — in an installed/fullscreen PWA it is often suppressed and returns
+  // null, which previously aborted startNav and left the app in a broken
+  // half-started state (this was the "simulation won't start" bug).
   totalLaps=1;currentLap=1;baseStops=null;lapBaseDist=0;
   _routeIsCircular=isCircularRoute();
-  if(_routeIsCircular&&stops.length){
-    let n=null;
-    try{n=prompt(`Circular route detected.\nHow many laps (turns) to drive?`,'1');}catch(e){}
-    if(n===null)return; // cancelled
-    totalLaps=Math.max(1,Math.min(50,parseInt(n)||1));
-    if(totalLaps>1){
-      baseStops=stops.map(s=>({...s})); // snapshot one lap
-      buildLapStops(); // expand to totalLaps copies
-    }
+  if(_routeIsCircular&&stops.length&&nLapsArg>1){
+    totalLaps=Math.max(1,Math.min(50,parseInt(nLapsArg)||1));
+    baseStops=stops.map(s=>({...s})); // snapshot one lap
+    buildLapStops();                  // expand to totalLaps copies
   }
   navActive=true;
   if(totalLaps>1)speakText(`Starting. ${totalLaps} laps.`,true);
@@ -2067,17 +2131,42 @@ function startSim(idx){
     stopRec();
   }
   stopSim(true);
-  // Set sim mode BEFORE startNav so it does NOT open the real GPS watch
-  // (which would otherwise feed live GPS over the simulation).
+  // Load the cycle so we can detect whether it's circular (needs routePts).
+  if(currentLoadedRec!==idx)loadRec(idx);
+  // Circular cycle → show the lap chooser, then begin the sim with that count.
+  // (Same HTML dialog as navigation — the native prompt fails in installed PWAs,
+  //  which was the real cause of "simulation won't start".)
+  if(isCircularRoute()&&stops.length){
+    _pendingSimIdx=idx;
+    _lapChoice=1;
+    const g=el('lap-grid');g.innerHTML='';
+    [1,2,3,4,5,6,8,10,15,20].forEach(n=>{
+      const b=document.createElement('button');b.textContent=n;
+      if(n===1)b.classList.add('sel');
+      b.onclick=()=>{_lapChoice=n;el('lap-custom').value='';
+        [...g.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');};
+      g.appendChild(b);
+    });
+    el('lap-custom').value='';
+    el('lap-modal').classList.add('on');
+    return; // confirmLaps() → beginSim() continues the flow
+  }
+  beginSim(idx,1);
+}
+
+// Actually start the simulation with a known lap count.
+function beginSim(idx,laps){
+  const rec=savedRecs[idx];if(!rec)return;
+  // Set sim mode BEFORE startNav so it does NOT open the real GPS watch.
   simMode=true;
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   if(currentLoadedRec!==idx)loadRec(idx);
   simStartedNav=!navActive;       // remember if WE turned navigation on
-  if(!navActive)startNav();
+  if(!navActive)startNav(laps);
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   simRec=rec;simIdx=0;simStartIdx=0;
   el('btn-simstop').style.display='';
-  showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
+  showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x${laps>1?' · '+laps+' laps':''}`);
   stepSim();
 }
 

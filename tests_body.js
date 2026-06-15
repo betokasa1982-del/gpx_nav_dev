@@ -1,3 +1,11 @@
+// ── test helper: drive the lap modal if startSim/launchNav opened it ──
+function _simWithLaps(idx,laps){
+  if(typeof _pendingSimIdx!=='undefined'){ /* state lives in app scope */ }
+  startSim(idx);
+  if(el('lap-modal').classList.contains('on')){
+    _lapChoice=laps; el('lap-custom').value=''; confirmLaps();
+  }
+}
 // ══ helpers ══
 function gps(lat,lng,kmh){onGPS({coords:{latitude:lat,longitude:lng,accuracy:8,altitude:30,speed:kmh/3.6,heading:0},timestamp:Date.now()});}
 const realNow=Date.now.bind(Date); let fake=realNow(); Date.now=()=>fake;
@@ -325,7 +333,7 @@ loadRec(simRecIdx);
 console.assert(stops.length===1&&routePts.length===qpts.length,'sim loadRec FAIL');
 navActive=true;watchId=7;el('rng-sim').value='10';
 __speech.spoken=[];for(const k in _spokenAt)delete _spokenAt[k];
-startSim(simRecIdx);
+_simWithLaps(simRecIdx,1);
 // mock setTimeout runs <=1000ms inline → whole sim executed synchronously
 console.assert(simRec===null,'sim did not finish: idx '+simIdx); // simTimer===0 is the sync-mock artifact
 console.assert(stops[0].state==='done'||stops[0].state==='current','SIM arrival FAIL: '+stops[0].state);
@@ -367,7 +375,7 @@ el('rng-sim').value='15';
 // Capture nav state mid-sim: pause the auto-run by making setTimeout a no-op
 const _st26=global.setTimeout;let firstStep=true;
 global.setTimeout=(fn)=>{if(firstStep){firstStep=false;}return 0;}; // don't auto-advance
-startSim(s26idx);
+_simWithLaps(s26idx,1);
 // Right after startSim, before sim completes, navigation must be ON
 console.assert(navActive===true,'SIM did not auto-start navigation (navActive false)');
 console.assert(currentLoadedRec===s26idx,'SIM did not auto-load cycle: '+currentLoadedRec);
@@ -461,8 +469,8 @@ console.assert(isCircularRoute(),'circular detect FAIL');
 // one base stop
 stops=[{id:1,name:'S1',lat:c31x+R31,lng:c31y,dur_s:15,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
 stopMarkers={1:{setIcon(){},addTo(){return this}}};
-global.__promptReply='3'; navActive=false;
-startNav();
+navActive=false;
+startNav(3);
 console.assert(totalLaps===3,'lap count FAIL: '+totalLaps);
 console.assert(stops.length===3,'lap stops expansion FAIL: '+stops.length);
 console.assert(stops[0].name==='L1·S1'&&stops[2].name==='L3·S1','lap labels FAIL: '+stops.map(s=>s.name));
@@ -477,8 +485,8 @@ buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
 console.assert(!isCircularRoute(),'straight route flagged circular FAIL');
 stops=[{id:1,name:'S1',lat:57.72,lng:11.97,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
 stopMarkers={1:{setIcon(){},addTo(){return this}}};
-global.__promptReply='9'; navActive=false; // would be used IF prompted
-startNav();
+navActive=false;
+startNav(1); // straight route — laps ignored
 console.assert(totalLaps===1,'straight route got laps FAIL: '+totalLaps);
 console.assert(stops.length===1,'straight route stops changed FAIL');
 delete global.__promptReply;navActive=false;
@@ -608,10 +616,10 @@ for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.co
 savedRecs.push({name:'Sim3Lap',dist:1,date:new Date(),points:pts,
   stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
 const idx=savedRecs.length-1;
-__promptReply='3';el('rng-sim').value='20';el('rng-radius').value='10';
+el('rng-sim').value='20';el('rng-radius').value='10';
 let steps=0;const realST=global.setTimeout;
 global.setTimeout=(fn,ms)=>{if(steps<30000){steps++;fn();}return 0;};
-startSim(idx);
+_simWithLaps(idx,3);
 global.setTimeout=realST;
 // Must have progressed beyond lap 1 (the bug: stuck after 1 lap)
 console.assert(currentLap===totalLaps,'SIM did not reach final lap: lap '+currentLap+'/'+totalLaps);
@@ -629,12 +637,12 @@ let t=realNow();const cx=57.70,cy=11.97,R=0.004,NP=72;
 const pts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.cos(a),lng:cy+R*Math.sin(a),t});}
 savedRecs.push({name:'NoRealGPS',dist:1,date:new Date(),points:pts,stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
 const idx=savedRecs.length-1;
-__promptReply='1';el('rng-sim').value='20';el('rng-radius').value='10';
+el('rng-sim').value='20';el('rng-radius').value='10';
 // Spy on watchPosition — it must NOT be called during sim
 let watchCalls=0;const realWatch=navigator.geolocation.watchPosition;
 navigator.geolocation.watchPosition=function(){watchCalls++;return 99;};
 let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<9000){steps++;fn();}return 0;};
-startSim(idx);
+_simWithLaps(idx,1);
 global.setTimeout=rST;navigator.geolocation.watchPosition=realWatch;
 // Sim started nav itself → on finish it stops nav, never opening real GPS
 console.assert(watchCalls===0,'REAL GPS STARTED during/after sim FAIL: '+watchCalls+' watch calls');
@@ -666,10 +674,10 @@ savedRecs.push({name:'ExclRec',dist:1,date:new Date(),points:pts,stops:[{lat:cx+
 const idx=savedRecs.length-1;
 // Recording active (the screenshot scenario)
 isRec=true;recPoints=[{lat:1,lng:1,t:1},{lat:2,lng:2,t:2}];navActive=false;
-global.confirm=()=>true;global.__promptReply='1';
+global.confirm=()=>true;
 el('rng-sim').value='20';el('rng-radius').value='10';
 let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<50){steps++;fn();}return 0;};
-startSim(idx);
+_simWithLaps(idx,1);
 global.setTimeout=rST;
 // After SIM start: recording must be OFF, sim must be running cleanly
 console.assert(isRec===false,'RECORDING NOT STOPPED when SIM started: isRec='+isRec);
@@ -690,3 +698,31 @@ isRec=false;navActive=false;
 })();
 
 console.log('ALL v19-DEV TESTS PASSED');
+
+// ══ TEST 43: lap chooser works WITHOUT native prompt (the PWA bug) ══
+(function(){
+// Disable native prompt entirely (simulates installed PWA where it returns null)
+const _p=global.prompt;global.prompt=()=>null;
+let t=realNow();const cx=57.70,cy=11.97,R=0.004,NP=72;
+const pts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.cos(a),lng:cy+R*Math.sin(a),t});}
+savedRecs.push({name:'NoPrompt',dist:1,date:new Date(),points:pts,stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
+const idx=savedRecs.length-1;
+isRec=false;navActive=false;simMode=false;
+el('rng-sim').value='20';el('rng-radius').value='10';
+// Tap SIM → must open modal (NOT call prompt, NOT abort)
+startSim(idx);
+console.assert(el('lap-modal').classList.contains('on'),'lap modal did not open');
+console.assert(_pendingSimIdx===idx,'pending sim idx not set: '+_pendingSimIdx);
+// Choose 3 laps and confirm → sim begins even though prompt() is dead
+_lapChoice=3;el('lap-custom').value='';
+let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<30000){steps++;fn();}return 0;};
+confirmLaps();
+global.setTimeout=rST;global.prompt=_p;
+console.assert(simMode===false,'sim did not run to completion');  // finished
+console.assert(totalLaps===3,'laps from modal not applied: '+totalLaps);
+console.assert(!el('lap-modal').classList.contains('on'),'modal still open');
+stopSim(true);navActive=false;
+console.log('43. lap chooser without native prompt OK — 3 laps applied, sim ran');
+})();
+
+console.log('ALL v20-DEV TESTS PASSED');
