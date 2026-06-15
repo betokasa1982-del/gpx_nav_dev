@@ -72,8 +72,16 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .score-badge.m3{background:rgba(240,165,0,.18);color:#f0a500}
 .score-badge.m0{background:rgba(248,81,73,.2);color:#f85149}
 
+/* ── BIG EVENT CUE OVER MAP ── */
+.evt-cue{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+  display:none;gap:40px;pointer-events:none;z-index:903;text-shadow:0 4px 24px rgba(0,0,0,.6)}
+.evt-cue.on{display:flex}
+.evt-cue span{font-size:150px;line-height:1;opacity:.34;animation:cuePulse 1.8s ease-in-out infinite}
+@keyframes cuePulse{0%,100%{opacity:.22;transform:scale(.94)}50%{opacity:.42;transform:scale(1.06)}}
+@media(min-width:900px){.evt-cue span{font-size:210px}}
+
 /* ── LIVE CYCLE METRICS ── */
-.lcm{position:absolute;right:10px;top:430px;width:195px;
+.lcm{position:absolute;right:10px;top:312px;width:195px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
   border-left:3px solid var(--blue,#58a6ff);border-radius:12px;
   padding:9px 12px;pointer-events:auto;display:none;z-index:905;
@@ -87,7 +95,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .lcm-sub .lcm-v{font-size:13px;color:var(--fg,#e6edf3)}
 
 /* ── NEXT STOP CARD ── */
-.nsc{position:absolute;right:10px;top:215px;width:195px;
+.nsc{position:absolute;right:10px;top:96px;width:195px;
   background:rgba(13,17,23,.95);border:1px solid var(--border);
   border-left:3px solid var(--accent);border-radius:12px;
   padding:10px 12px;pointer-events:auto;display:none;z-index:905;
@@ -119,13 +127,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
   .hud-spd-val{font-size:42px}
   .hud-tgt{font-size:14px}
   .stab{font-size:12px;padding:13px 2px}
-  .nsc{width:256px;top:235px;padding:12px 14px}
+  .nsc{width:256px;top:104px;padding:12px 14px}
   .nsc-dist{font-size:50px}
   .nsc-row{font-size:15px}
   .nsc-evt{font-size:21px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
-  .lcm{width:256px;top:495px;padding:11px 14px}
+  .lcm{width:256px;top:360px;padding:11px 14px}
   .lcm-l{font-size:14px}
   .lcm-v{font-size:24px}
   .lcm-sub .lcm-v{font-size:15px}
@@ -541,6 +549,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
       <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
     </div>
+
+    <!-- Big transparent event cue over the map -->
+    <div class="evt-cue" id="evt-cue"></div>
 
     <!-- Live cycle metrics: updated continuously during navigation -->
     <div class="lcm" id="lcm">
@@ -1114,6 +1125,10 @@ function updateStopMarkerPhoto(stopIdx){
 let photoAutoClose=null;
 function showStopPhoto(stop,distM){
   if(!stop||!stop.photo) return; // no photo — nothing to show
+  // While navigating, the Next Stop Card (fixed right column) shows the photo.
+  // The floating overlay would cover the live metrics panel — so suppress it
+  // here and only allow the full-screen view via an explicit photo tap.
+  if(navActive&&!_forcePhotoOverlay) return;
   const ov=el('stop-photo-ov');
   el('spo-name').textContent=stop.name||`Stop ${stop.id}`;
   el('spo-badge').textContent=distM<50?'At stop':`${Math.round(distM)} m ahead`;
@@ -1132,13 +1147,28 @@ function closeStopPhoto(){
 }
 
 // ── Wake Lock (keep screen on during nav/rec) ──
+// Fullscreen: must be triggered by a user gesture (browser policy).
+// Armed once on the first tap anywhere, and re-requested when nav/rec starts.
+let _fsArmed=false;
+function goFullscreen(){
+  try{
+    const e=document.documentElement;
+    if(!document.fullscreenElement&&e.requestFullscreen)
+      e.requestFullscreen({navigationUI:'hide'}).catch(()=>{});
+  }catch(e){}
+}
+function armFullscreenOnce(){
+  if(_fsArmed)return;_fsArmed=true;
+  document.addEventListener('click',goFullscreen,{once:true});
+}
+
 let wakeLock=null;
 async function requestWakeLock(){
   if(!('wakeLock' in navigator))return;
   try{
     wakeLock=await navigator.wakeLock.request('screen');
     wakeLock.addEventListener('release',()=>{
-      if(document.visibilityState==='visible'&&(navActive||isRec)) requestWakeLock();
+      if(document.visibilityState==='visible') requestWakeLock();
     });
     console.log('[WakeLock] Screen kept on');
   }catch(e){console.warn('[WakeLock]',e.message);}
@@ -1154,6 +1184,7 @@ document.addEventListener('visibilitychange',()=>{
 // ── Cumulative distance cache for fast route progress ──
 let routeCumDist=[];   // routeCumDist[i] = km from pt[0] to pt[i]
 let lastRouteIdx=0;    // last known route index — prevents backward jumps on bidirectional roads
+let routeMaxIdx=0;     // furthest index reached this run (circular-route arrival guard)
 
 function buildCumDist(pts){
   routeCumDist=[0];
@@ -1251,6 +1282,13 @@ map=L.map('map',{center:[-15,-50],zoom:5,zoomControl:false,tap:true,rotate:true,
 loadStoredRecordings();
 checkInflightRecovery();
 checkQuota();
+armFullscreenOnce();
+// Keep the screen awake whenever the tab is visible (not only during nav/rec),
+// re-acquiring after the OS drops the lock on focus changes.
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&!wakeLock)requestWakeLock();
+});
+requestWakeLock();
 setTimeout(()=>{try{map.invalidateSize();}catch(e){}},600);
 // Ensure map tiles render correctly after initial layout
 setTimeout(()=>{try{map.invalidateSize();}catch(e){}},500);
@@ -1761,7 +1799,7 @@ function startNav(){
   navActive=true;
   // Reset per-run state — without this, a 2nd run of the same route
   // starts with lastRouteIdx stuck at the end and matching never recovers.
-  lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
+  lastRouteIdx=0;routeMaxIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
@@ -1772,7 +1810,7 @@ function startNav(){
   el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
   el('sum-bar').classList.add('on');
   shState='hidden';applySheet();
-  requestWakeLock();
+  requestWakeLock();goFullscreen();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
   setGPS('wait','Waiting for GPS...');
   watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
@@ -1791,6 +1829,7 @@ function stopNav(){
   // Reset map to north-up (spec 5.3)
   setMapBearing(0);_lastBearing=0;
   if(el('nsc'))el('nsc').style.display='none';
+  if(el('evt-cue'))el('evt-cue').classList.remove('on');
   shState='mid';applySheet();
   if(!isRec) releaseWakeLock();
   setGPS('wait','GPS stopped');
@@ -1854,8 +1893,14 @@ function onGPS(pos){
   const{nearIdx,distFromStart}=nearestRoutePoint(lat,lng);
   updRouteRemaining(nearIdx,distFromStart);
   updInstruction(nearIdx,distFromStart);
-  // Announce arrival at destination
-  if(routePts.length&&nearIdx>=routePts.length-3&&!destinationAnnounced){
+  // Announce arrival at destination. On a circular route the end-point equals
+  // the start-point, so proximity alone would fire at t=0. Require that the
+  // vehicle has actually travelled most of the route distance, and that all
+  // stops (if any) are done. Distance-travelled is robust even when the index
+  // matcher jumps on a short loop where the AHEAD window spans the whole route.
+  const progressed=live.dist>=totalRouteDist*0.7;
+  const stopsDone=!stops.length||stops.every(x=>x.state==='done');
+  if(routePts.length&&nearIdx>=routePts.length-3&&progressed&&stopsDone&&!destinationAnnounced){
     destinationAnnounced=true;speakText('You have arrived at your destination',true);
   }
 
@@ -2012,7 +2057,7 @@ function stopSim(silent){
 function updNextStopCard(lat,lng){
   const c=el('nsc');if(!c)return;
   const next=navActive?stops.find(x=>x.state!=='done'):null;
-  if(!next){c.style.display='none';return}
+  if(!next){c.style.display='none';if(el('evt-cue'))el('evt-cue').classList.remove('on');return}
   // Compact glanceable time: mm:ss, hours only when >= 1h
   const fmtC=t=>{const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=Math.floor(t%60);
     return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');};
@@ -2033,6 +2078,15 @@ function updNextStopCard(lat,lng){
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
   el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':'♿').join(' ');
   el('nsc-leg').textContent=next.seg_avg!=null?`leg Ø ${next.seg_avg} km/h`:'';
+  const cue=el('evt-cue');
+  if(cue){
+    const dM=next.state==='current'?0:haversine(lat,lng,next.lat,next.lng)*1000;
+    const evs=next.events||[];
+    if(evs.length&&dM<=120){
+      cue.innerHTML=evs.map(e=>`<span>${e==='openDoor'?'🚪':'♿'}</span>`).join('');
+      cue.classList.add('on');
+    }else cue.classList.remove('on');
+  }
   const ph=el('nsc-photo');
   if(next.photo&&next.photo.length>10){if(ph.src!==next.photo)ph.src=next.photo;ph.style.display='block';}
   else ph.style.display='none';
@@ -2066,9 +2120,10 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   el('lcm-extra').textContent=`${km.toFixed(2)} km · ${Math.round(idlePct)}%`;
 }
 
+let _forcePhotoOverlay=false;
 function nscPhotoTap(){
   const next=stops.find(x=>x.state!=='done');
-  if(next?.photo)showStopPhoto(next,0);
+  if(next?.photo){_forcePhotoOverlay=true;showStopPhoto(next,0);_forcePhotoOverlay=false;}
 }
 
 function nearestRoutePoint(lat,lng){
@@ -2099,6 +2154,7 @@ function nearestRoutePoint(lat,lng){
 
   // Only advance, never jump backward by more than BACK
   lastRouteIdx=Math.max(from, minIdx);
+  if(lastRouteIdx>routeMaxIdx)routeMaxIdx=lastRouteIdx;
   return{nearIdx:lastRouteIdx, distFromStart:routeCumDist[lastRouteIdx]};
 }
 
@@ -2287,7 +2343,7 @@ function startRec(){
   if(watchId===null){
     watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
   }
-  requestWakeLock();
+  requestWakeLock();goFullscreen();
   setGPS('active','Recording route...');
 }
 

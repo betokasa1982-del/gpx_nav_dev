@@ -371,3 +371,60 @@ console.assert(routePts.length===s26pts.length,'SIM cycle not loaded into routeP
 console.log('26. SIM auto-nav OK — new HUD active during simulation');
 
 console.log('ALL v11-DEV TESTS PASSED');
+
+// ══ TEST 27: circular route — no premature "arrived at destination" ══
+// Route that returns to its start (loop): end point == start point
+fake=realNow();
+routePts=[];
+const cx=57.70,cy=11.97,R=0.003;
+for(let i=0;i<=72;i++){const a=i/72*2*Math.PI;routePts.push({lat:cx+R*Math.cos(a),lon:cy+R*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+stops=[];navActive=true;destinationAnnounced=false;routeMaxIdx=0;lastRouteIdx=0;
+__speech.spoken=[];for(const k in _spokenAt)delete _spokenAt[k];
+// Predicate mirrors the in-app guard: distance-travelled based, robust to
+// index jumps on a short loop.
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+const _arrAt=(nearIdx)=>{
+  const progressed=live.dist>=totalRouteDist*0.7;
+  const stopsDone=!stops.length||stops.every(x=>x.state==='done');
+  return routePts.length&&nearIdx>=routePts.length-3&&progressed&&stopsDone;};
+// At t=0 on the start point: live.dist=0 → must NOT arrive even if idx hits the end
+let r=nearestRoutePoint(cx+R,cy);
+console.assert(!_arrAt(r.nearIdx),'CIRCULAR FAIL — arrived at t=0 before moving');
+// Drive a quarter of the loop accumulating real distance — still not arrived
+let pl=cx+R,pn=cy;
+for(let i=1;i<=20;i++){const a=i/72*2*Math.PI;const la=cx+R*Math.cos(a),lo=cy+R*Math.sin(a);
+  live.dist+=haversine(pl,pn,la,lo);pl=la;pn=lo;r=nearestRoutePoint(la,lo);}
+console.assert(!_arrAt(r.nearIdx),'CIRCULAR FAIL — arrived at 25% (dist '+live.dist.toFixed(2)+'/'+totalRouteDist.toFixed(2)+')');
+// Complete the loop — distance now ≥70% AND near the end point
+for(let i=21;i<=72;i++){const a=i/72*2*Math.PI;const la=cx+R*Math.cos(a),lo=cy+R*Math.sin(a);
+  live.dist+=haversine(pl,pn,la,lo);pl=la;pn=lo;r=nearestRoutePoint(la,lo);}
+console.assert(_arrAt(r.nearIdx),'CIRCULAR FAIL — never arrived after full loop: dist '+live.dist.toFixed(2)+' near '+r.nearIdx);
+console.log('27. circular route arrival OK — dist-based guard, '+routePts.length+' pts loop');
+
+// ══ TEST 28: floating photo overlay suppressed during navigation ══
+navActive=true;_forcePhotoOverlay=false;
+el('stop-photo-ov').classList.remove('on');
+showStopPhoto({id:9,name:'P9',photo:'data:image/jpeg;base64,zzz'},0);
+console.assert(!el('stop-photo-ov').classList.contains('on'),'overlay NOT suppressed during nav');
+// explicit tap forces it
+stops=[{id:9,state:'waiting',photo:'data:image/jpeg;base64,zzz',events:[],lat:1,lng:1}];
+nscPhotoTap();
+console.assert(el('stop-photo-ov').classList.contains('on'),'explicit photo tap FAIL');
+el('stop-photo-ov').classList.remove('on');stops=[];
+console.log('28. photo overlay suppression OK');
+
+// ══ TEST 29: big event cue appears within 120m, hides far away ══
+navActive=true;
+stops=[{id:1,name:'P1',lat:57.80,lng:11.97,dur_s:20,elapsed:0,running:false,intervalId:null,
+  state:'waiting',events:['openDoor','kneeling'],seg_avg:null,photo:null}];
+stopMarkers={1:{setIcon(){}}};insideStop.clear();departGate=null;el('rng-radius').value='10';
+updNextStopCard(57.7964,11.97); // ~400 m → cue hidden
+console.assert(!el('evt-cue').classList.contains('on'),'cue shown too far FAIL');
+updNextStopCard(57.7993,11.97); // ~78 m → cue shown
+console.assert(el('evt-cue').classList.contains('on'),'cue not shown near FAIL');
+console.assert(el('evt-cue').innerHTML.includes('🚪')&&el('evt-cue').innerHTML.includes('♿'),'cue icons FAIL: '+el('evt-cue').innerHTML);
+navActive=false;stops=[];
+console.log('29. big event cue OK');
+
+console.log('ALL v12-DEV TESTS PASSED');
