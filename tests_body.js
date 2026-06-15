@@ -593,3 +593,26 @@ stops=[];
 console.log('37. summary bar null-safe OK');
 
 console.log('ALL v16-DEV TESTS PASSED');
+
+// ══ TEST 38: simulation replays once per lap on multi-lap circular ══
+(function(){
+let t=realNow();const cx=57.70,cy=11.97,R=0.004,NP=72;
+const pts=[];
+for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.cos(a),lng:cy+R*Math.sin(a),t});}
+savedRecs.push({name:'Sim3Lap',dist:1,date:new Date(),points:pts,
+  stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
+const idx=savedRecs.length-1;
+__promptReply='3';el('rng-sim').value='20';el('rng-radius').value='10';
+let steps=0;const realST=global.setTimeout;
+global.setTimeout=(fn,ms)=>{if(steps<30000){steps++;fn();}return 0;};
+startSim(idx);
+global.setTimeout=realST;
+// Must have progressed beyond lap 1 (the bug: stuck after 1 lap)
+console.assert(currentLap===totalLaps,'SIM did not reach final lap: lap '+currentLap+'/'+totalLaps);
+console.assert(live.dist>totalRouteDist*1.5,'SIM did not replay multiple laps: dist '+live.dist.toFixed(2)+' vs route '+totalRouteDist.toFixed(2));
+delete global.__promptReply;
+stopSim(true);navActive=false;
+console.log('38. multi-lap sim replay OK — reached lap',currentLap,'dist',live.dist.toFixed(2));
+})();
+
+console.log('ALL v17-DEV TESTS PASSED');

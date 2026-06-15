@@ -2062,19 +2062,31 @@ function stepSim(){
   if(!simRec)return;
   const pts=simRec.points;
   if(simIdx>=pts.length){
+    // Multi-lap: the recorded data is ONE lap. If navigation still has laps to
+    // run on a circular route, replay the points from the top for the next lap
+    // instead of ending — otherwise the sim stops after lap 1 while the app
+    // waits for data that never comes.
+    if(navActive&&_routeIsCircular&&totalLaps>1&&currentLap<totalLaps){
+      simIdx=0;
+      simTimer=setTimeout(stepSim,200);
+      return;
+    }
     showAlert('departed','■ Simulation finished');
     stopSim();return;
   }
-  const p=pts[simIdx],prev=pts[simIdx-1];
+  const p=pts[simIdx],prev=simIdx>0?pts[simIdx-1]:null;
   let heading=null,speed=null;
   if(prev){
     const dt=(p.t-prev.t)/1000;
     if(dt>0)speed=haversine(prev.lat,prev.lng,p.lat,p.lng)*1000/dt; // m/s
     heading=brng(prev.lat,prev.lng,p.lat,p.lng);
   }
+  // Each replayed lap needs monotonically increasing timestamps, otherwise the
+  // metrics/decimation logic sees a backward jump and stalls. Offset by lap.
+  const tStamp=p.t+ (currentLap-1)*1e7;
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
-    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t});
-  setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
+    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:tStamp});
+  setGPS('ok',`SIM ${+el('rng-sim').value}x · lap ${currentLap}/${totalLaps} · ${simIdx+1}/${pts.length}`);
   simIdx++;
   const next=pts[simIdx];
   if(next){
