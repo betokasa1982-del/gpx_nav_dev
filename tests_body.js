@@ -364,11 +364,17 @@ for(let i=0;i<30;i++){s26lat+=10*0.0000090;fake+=1000;s26pts.push({lat:s26lat,ln
 savedRecs.push({name:'AutoNavSim',dist:1,date:new Date(),points:s26pts,stops:[]});
 const s26idx=savedRecs.length-1;
 el('rng-sim').value='15';
+// Capture nav state mid-sim: pause the auto-run by making setTimeout a no-op
+const _st26=global.setTimeout;let firstStep=true;
+global.setTimeout=(fn)=>{if(firstStep){firstStep=false;}return 0;}; // don't auto-advance
 startSim(s26idx);
+// Right after startSim, before sim completes, navigation must be ON
 console.assert(navActive===true,'SIM did not auto-start navigation (navActive false)');
 console.assert(currentLoadedRec===s26idx,'SIM did not auto-load cycle: '+currentLoadedRec);
 console.assert(routePts.length===s26pts.length,'SIM cycle not loaded into routePts');
-console.log('26. SIM auto-nav OK — new HUD active during simulation');
+console.assert(simMode===true,'simMode not set during sim');
+global.setTimeout=_st26;stopSim(true);navActive=false;
+console.log('26. SIM auto-nav OK — nav active + simMode set during simulation');
 
 console.log('ALL v11-DEV TESTS PASSED');
 
@@ -616,3 +622,71 @@ console.log('38. multi-lap sim replay OK — reached lap',currentLap,'dist',live
 })();
 
 console.log('ALL v17-DEV TESTS PASSED');
+
+// ══ TEST 39: simMode blocks real GPS during simulation ══
+(function(){
+let t=realNow();const cx=57.70,cy=11.97,R=0.004,NP=72;
+const pts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.cos(a),lng:cy+R*Math.sin(a),t});}
+savedRecs.push({name:'NoRealGPS',dist:1,date:new Date(),points:pts,stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
+const idx=savedRecs.length-1;
+__promptReply='1';el('rng-sim').value='20';el('rng-radius').value='10';
+// Spy on watchPosition — it must NOT be called during sim
+let watchCalls=0;const realWatch=navigator.geolocation.watchPosition;
+navigator.geolocation.watchPosition=function(){watchCalls++;return 99;};
+let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<9000){steps++;fn();}return 0;};
+startSim(idx);
+global.setTimeout=rST;navigator.geolocation.watchPosition=realWatch;
+// Sim started nav itself → on finish it stops nav, never opening real GPS
+console.assert(watchCalls===0,'REAL GPS STARTED during/after sim FAIL: '+watchCalls+' watch calls');
+console.assert(simMode===false,'simMode not cleared after finish');
+console.assert(navActive===false,'sim-started nav not stopped on finish');
+delete global.__promptReply;
+console.log('39. simMode blocks real GPS + clean stop OK — 0 watch calls');
+})();
+
+// ══ TEST 40: arrival does NOT auto-open the bottom stops panel ══
+hudPanelOpen=false;if(el('hud-sp'))el('hud-sp').classList.remove('on');
+stops=[{id:1,name:'P1',lat:57.80,lng:11.97,dur_s:20,elapsed:0,running:false,intervalId:null,state:'waiting',events:[],seg_avg:null,photo:null}];
+stopMarkers={1:{setIcon(){}}};insideStop.clear();departGate=null;navActive=true;el('rng-radius').value='10';
+live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};lapBaseDist=0;totalLaps=1;currentLap=1;
+gps(57.80,11.97,1); // arrive
+console.assert(stops[0].state==='current','arrival precondition FAIL: '+stops[0].state);
+console.assert(hudPanelOpen===false,'BOTTOM STOPS PANEL auto-opened FAIL');
+console.assert(!el('hud-sp').classList.contains('on'),'hud-sp shown on arrival FAIL');
+navActive=false;stops=[];
+console.log('40. no auto-open stops panel on arrival OK');
+
+console.log('ALL v18-DEV TESTS PASSED');
+
+// ══ TEST 41: SIM during active recording — stops the recording first ══
+(function(){
+let t=realNow();const cx=57.70,cy=11.97,R=0.004,NP=72;
+const pts=[];for(let i=0;i<=NP;i++){const a=i/NP*2*Math.PI;t+=2000;pts.push({lat:cx+R*Math.cos(a),lng:cy+R*Math.sin(a),t});}
+savedRecs.push({name:'ExclRec',dist:1,date:new Date(),points:pts,stops:[{lat:cx+R,lng:cy,t:pts[0].t,dur_s:5,events:[]}]});
+const idx=savedRecs.length-1;
+// Recording active (the screenshot scenario)
+isRec=true;recPoints=[{lat:1,lng:1,t:1},{lat:2,lng:2,t:2}];navActive=false;
+global.confirm=()=>true;global.__promptReply='1';
+el('rng-sim').value='20';el('rng-radius').value='10';
+let steps=0;const rST=global.setTimeout;global.setTimeout=(fn)=>{if(steps<50){steps++;fn();}return 0;};
+startSim(idx);
+global.setTimeout=rST;
+// After SIM start: recording must be OFF, sim must be running cleanly
+console.assert(isRec===false,'RECORDING NOT STOPPED when SIM started: isRec='+isRec);
+console.log('41. SIM stops active recording first OK — isRec now',isRec);
+stopSim(true);isRec=false;navActive=false;delete global.__promptReply;
+})();
+
+// ══ TEST 42: starting recording stops active navigation (exclusive) ══
+(function(){
+navActive=true;isRec=false;simMode=false;watchId=5;
+global.confirm=()=>true;
+// stub geolocation watch so startRec doesn't explode
+startRec();
+console.assert(isRec===true,'recording did not start');
+console.assert(navActive===false,'NAV NOT STOPPED when recording started: navActive='+navActive);
+console.log('42. recording stops navigation OK');
+isRec=false;navActive=false;
+})();
+
+console.log('ALL v19-DEV TESTS PASSED');

@@ -1831,6 +1831,10 @@ function isCircularRoute(){
 function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
+  if(isRec&&!simMode){                          // can't navigate while recording
+    if(!confirm('Stop recording and start navigation?'))return;
+    stopRec();
+  }
   // Multi-lap: on a circular route, ask how many laps to drive. Each lap
   // re-arms the same physical stops (sequential arrival + departure gate
   // already handle same-spot stops across laps).
@@ -1860,7 +1864,7 @@ function startNav(){
     ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
   el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
   el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
-  el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
+  el('nav-hud').classList.add('on');
   shState='hidden';applySheet();
   requestWakeLock();goFullscreen();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
@@ -2056,6 +2060,12 @@ let simStartedNav=false; // sim auto-started navigation → stop it when sim end
 function startSim(idx){
   const rec=savedRecs[idx];
   if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
+  // A recording in progress would capture the simulated points as if real, and
+  // leave REC + NAV + SIM all active at once (corrupted state). Stop it first.
+  if(isRec){
+    if(!confirm('A recording is in progress. Stop it and start the simulation?'))return;
+    stopRec();
+  }
   stopSim(true);
   // Set sim mode BEFORE startNav so it does NOT open the real GPS watch
   // (which would otherwise feed live GPS over the simulation).
@@ -2431,6 +2441,8 @@ function toggleRec(){if(!isRec)startRec();else stopRec()}
 
 function startRec(){
   if(!navigator.geolocation){alert('Geolocation not available.');return}
+  if(simMode){stopSim(true);}                 // never record simulated points
+  if(navActive){stopNav();}                    // recording and navigating are exclusive
   // ← Clear existing GPX map layers before recording
   clearMapLayers();
   stops=[];insideStop.clear();el('stops-list').innerHTML='';el('stops-badge').textContent='';
