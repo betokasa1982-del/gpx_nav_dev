@@ -933,3 +933,44 @@ console.log('51. navigation independent of Live Cycle OK — arrived with live.d
 })();
 
 console.log('ALL v25-DEV TESTS PASSED');
+
+// ══ TEST 52: sim ignores real GPS even if a recording watch is still firing ══
+(function(){
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+el('rng-sim').value='20';el('rng-radius').value='10';el('rng-auto').value='1';
+__promptReply='1';global.confirm=()=>true;
+// Simulate a recording being active before sim starts
+isRec=true;
+let now=0;const queue=[];let nid=1;
+const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+global.clearInterval=global.clearTimeout;
+startSim(idx);
+console.assert(isRec===false,'recording not stopped when sim started: isRec='+isRec);
+if(el('lap-modal').classList.contains('on')){_lapChoice=1;el('lap-custom').value='';confirmLaps();}
+// Inject a REAL GPS fix (stationary, 0 km/h) mid-sim — must be IGNORED
+let realInjected=false;
+let it=0;
+while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+  if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+  // halfway through, inject a real stationary GPS fix (no _sim flag)
+  if(!realInjected&&simIdx>30){realInjected=true;
+    const posBefore={...currentPos};
+    onGPS({coords:{latitude:57.0,longitude:11.0,accuracy:5,speed:0,heading:null},timestamp:Date.now()});
+    // currentPos must NOT have jumped to the injected real location
+    console.assert(currentPos.lat!==57.0,'REAL GPS overwrote sim position! lat='+currentPos.lat);
+  }
+  if(simRec===null)break;}
+global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+console.assert(stops.filter(s=>s.state==='done').length===6,'sim did not complete with real GPS interference');
+console.assert(live.dist>2.0,'live.dist did not accumulate (real GPS froze sim): '+live.dist.toFixed(2));
+delete global.__promptReply;navActive=false;
+console.log('52. sim rejects real GPS during recording-active scenario OK — dist '+live.dist.toFixed(2)+'km, 6/6 stops');
+})();
+
+console.log('ALL v26-DEV TESTS PASSED');

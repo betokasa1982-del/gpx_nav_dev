@@ -1988,6 +1988,12 @@ function stopNav(){
 }
 
 function onGPS(pos){
+  // While a simulation is running, ONLY simulated fixes (marked _sim) are
+  // accepted. A real watchPosition still attached to a recording would otherwise
+  // overwrite the simulated position with the stationary device location (0 km/h),
+  // freezing the vehicle on the map. This keeps simulation fully independent of
+  // any real GPS source.
+  if(simMode&&!pos._sim) return;
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
   if(heading!=null&&!isNaN(heading)) currentHeading=smoothHeading(heading)??heading
@@ -2159,11 +2165,16 @@ function startSim(idx){
   const rec=savedRecs[idx];
   if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
   // A recording in progress would capture the simulated points as if real, and
-  // leave REC + NAV + SIM all active at once (corrupted state). Stop it first.
+  // leave REC + NAV + SIM all active at once (corrupted state). Stop it first —
+  // discard it without the save prompt (which blocks in an installed PWA).
   if(isRec){
-    if(!confirm('A recording is in progress. Stop it and start the simulation?'))return;
-    stopRec();
+    if(!confirm('A recording is in progress. Discard it and start the simulation?'))return;
+    isRec=false;recStopCandidate=null;
+    el('rec-ind')?.classList.remove('on');
+    if(el('btn-rec')){el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';}
   }
+  // Kill ANY real GPS watch before simulating — recording or navigation may have left one.
+  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
   stopSim(true);
   // Load the cycle so we can detect whether it's circular (needs routePts).
   if(currentLoadedRec!==idx)loadRec(idx);
@@ -2233,7 +2244,7 @@ function stepSim(){
   // metrics/decimation logic sees a backward jump and stalls. Offset by lap.
   const tStamp=p.t+ _simLap*1e7;
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
-    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:tStamp});
+    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:tStamp,_sim:true});
   setGPS('ok',`SIM ${+el('rng-sim').value}x · lap ${currentLap}/${totalLaps} · ${simIdx+1}/${pts.length}`);
   simIdx++;
   const next=pts[simIdx];
