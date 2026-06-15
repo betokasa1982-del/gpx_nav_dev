@@ -1,0 +1,2546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#a371f7">
+<meta name="application-name" content="GPX Navigator DEV">
+<meta name="apple-mobile-web-app-title" content="GPX DEV">
+<title>GPX Navigator DEV</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c2128;--border:#30363d;
+  --accent:#f0a500;--green:#3fb950;--red:#f85149;--blue:#58a6ff;
+  --text:#e6edf3;--muted:#8b949e;
+  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;touch-action:manipulation}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100dvh}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;gap:6px;padding:calc(7px + var(--safe-t)) 10px 7px;
+  background:var(--panel);border-bottom:1px solid var(--border);z-index:3000;flex-shrink:0;min-height:52px}
+.logo{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--accent);display:flex;align-items:center;gap:4px;flex-shrink:0}
+.top-stats{display:flex;gap:8px;flex:1;overflow:hidden;align-items:center}
+.tstat{display:flex;flex-direction:column;min-width:0}
+.tstat-l{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.tstat-v{font-size:14px;font-weight:700;font-family:var(--mono);white-space:nowrap}
+.tstat-v.ok{color:var(--green)}.tstat-v.warn{color:var(--accent)}.tstat-v.over{color:var(--red)}
+.tdiv{width:1px;height:24px;background:var(--border);flex-shrink:0}
+.top-actions{display:flex;gap:5px;flex-shrink:0}
+.btn{display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 11px;
+  border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text);
+  font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;
+  text-transform:uppercase;min-height:38px;white-space:nowrap;user-select:none}
+.btn:active{opacity:.65}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000}
+.btn.go{background:var(--green);border-color:var(--green);color:#000}
+.btn.stop-nav{background:var(--red);border-color:var(--red);color:#fff}
+.btn.rec{background:rgba(248,81,73,.15);border-color:var(--red);color:var(--red)}
+.btn.rec-on{background:var(--red);border-color:var(--red);color:#fff;animation:recPulse 1.5s infinite}
+@keyframes recPulse{50%{opacity:.6}}
+.btn:disabled{opacity:.28;pointer-events:none}
+
+/* ── SUMMARY BAR ── */
+.sum-bar{display:none;flex-shrink:0;background:var(--panel2);border-bottom:1px solid var(--border);padding:5px 12px}
+.sum-bar.on{display:flex}
+.sb-cols{display:flex;width:100%;align-items:center;gap:10px}
+.sb-item{display:flex;flex-direction:column;align-items:center;flex:1}
+.sb-lbl{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.sb-val{font-size:15px;font-weight:700;font-family:var(--mono)}
+.sb-val.ok{color:var(--green)}.sb-val.warn{color:var(--accent)}.sb-val.over{color:var(--red)}
+.sb-div{width:1px;height:28px;background:var(--border);flex-shrink:0}
+.sb-prog{flex:2;display:flex;flex-direction:column;gap:3px}
+.sb-prog-row{display:flex;justify-content:space-between;font-size:9px;font-family:var(--mono);color:var(--muted)}
+.sb-pbar{height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden}
+.sb-pfill{height:100%;border-radius:3px;transition:width .5s,background .5s}
+
+.score-badge{display:inline-block;font-size:10px;font-weight:800;font-family:var(--mono);
+  padding:1px 6px;border-radius:8px;vertical-align:1px;margin-left:4px}
+.score-badge.m5{background:rgba(63,185,80,.18);color:#3fb950}
+.score-badge.m4{background:rgba(88,166,255,.18);color:#58a6ff}
+.score-badge.m3{background:rgba(240,165,0,.18);color:#f0a500}
+.score-badge.m0{background:rgba(248,81,73,.2);color:#f85149}
+
+/* ── NEXT STOP CARD ── */
+.nsc{position:absolute;right:10px;top:215px;width:195px;
+  background:rgba(13,17,23,.95);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:12px;
+  padding:10px 12px;pointer-events:auto;display:none;z-index:905;
+  box-shadow:0 4px 18px rgba(0,0,0,.45)}
+.nsc-head{display:flex;justify-content:space-between;font-size:10px;
+  letter-spacing:1.5px;color:var(--muted);font-weight:800;font-family:var(--mono)}
+.nsc-dist{font-family:var(--mono);font-size:34px;font-weight:800;
+  color:var(--accent);line-height:1.15;margin:3px 0}
+.nsc.atstop .nsc-dist{color:var(--green,#3fb950)}
+.nsc.atstop{border-left-color:#3fb950}
+.nsc-row{display:flex;justify-content:space-between;align-items:center;
+  font-size:13px;margin-top:2px;color:var(--fg,#e6edf3)}
+.nsc-evt{font-size:17px;letter-spacing:2px}
+.nsc-leg{color:var(--blue,#58a6ff);font-family:var(--mono);font-size:12px;font-weight:700}
+.nsc-photo{width:100%;height:96px;object-fit:cover;border-radius:8px;
+  margin-top:8px;border:1px solid var(--border);cursor:pointer}
+@keyframes mkpg{0%{box-shadow:0 0 0 0 rgba(63,185,80,.65)}70%{box-shadow:0 0 0 16px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+@keyframes mkpa{0%{box-shadow:0 0 0 0 rgba(240,165,0,.65)}70%{box-shadow:0 0 0 16px rgba(240,165,0,0)}100%{box-shadow:0 0 0 0 rgba(240,165,0,0)}}
+.mk-pulse-g{animation:mkpg 1.6s ease-out infinite}
+.mk-pulse-a{animation:mkpa 1.6s ease-out infinite}
+
+/* ── 10" TABLET (landscape ≥900px): larger nav typography & targets ── */
+@media(min-width:900px){
+  .hud-instr-icon{width:118px;font-size:72px}
+  .hud-icon-lbl{font-size:13px}
+  .hud-dist{font-size:42px}
+  .hud-action{font-size:25px}
+  .hud-detail{font-size:15px}
+  .hud-spd-val{font-size:42px}
+  .hud-tgt{font-size:14px}
+  .stab{font-size:12px;padding:13px 2px}
+  .nsc{width:256px;top:235px;padding:12px 14px}
+  .nsc-dist{font-size:50px}
+  .nsc-row{font-size:15px}
+  .nsc-evt{font-size:21px}
+  .nsc-leg{font-size:14px}
+  .nsc-photo{height:140px}
+}
+
+/* ── MAP ── */
+.map-wrap{position:relative;flex:1;min-height:0;overflow:hidden}
+/* Map is 2x the viewport so heading-up rotation never exposes empty corners.
+   The visible area is the central quarter; controls are offset back inside. */
+#map{position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:#1a1f2e;
+  will-change:transform;transition:transform .45s linear}
+#map .leaflet-bottom{bottom:25%}
+#map .leaflet-top{top:25%}
+#map .leaflet-left{left:25%}
+#map .leaflet-right{right:25%}
+/* Controls would spin with the map while rotated — hide them during heading-up */
+#map.rotated .leaflet-control-container{visibility:hidden}
+
+/* ════════════════════════════════════════
+   NAV HUD — Waze-style overlay
+════════════════════════════════════════ */
+.nav-hud{position:absolute;inset:0;pointer-events:none;display:none;z-index:900}
+.nav-hud.on{display:block}
+
+/* ── INSTRUCTION CARD (top, full-width strip like Waze) ── */
+.hud-instr{
+  position:absolute;top:0;left:0;right:0;pointer-events:auto;
+  background:rgba(13,17,23,.96);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:0;
+  backdrop-filter:blur(10px);
+}
+/* Arrow box */
+/* ── HUD instruction bar — compact for tablet ── */
+.hud-instr-icon{
+  width:82px;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:52px;padding:8px 6px;gap:2px;
+  border-right:1px solid var(--border);transition:all .4s;
+}
+.hud-icon-lbl{font-size:8px;letter-spacing:1px;text-transform:uppercase;
+  font-family:var(--mono);color:var(--muted);text-align:center;line-height:1}
+.hud-instr-body{flex:1;padding:6px 12px;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.hud-instr-dist{font-size:28px;font-weight:700;font-family:var(--mono);line-height:1;transition:color .4s}
+.hud-instr-dist.far   {color:var(--blue)}
+.hud-instr-dist.medium{color:var(--accent)}
+.hud-instr-dist.close {color:var(--red);animation:urgentPulse .8s infinite}
+@keyframes urgentPulse{50%{opacity:.4}}
+.hud-instr-action{font-size:17px;font-weight:700;color:var(--text);margin:2px 0}
+.hud-instr-detail{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.hud-next-preview{font-size:10px;color:rgba(139,148,158,.7);font-family:var(--mono);
+  margin-top:3px;padding:2px 6px;background:rgba(255,255,255,.05);
+  border-radius:4px;display:none}
+.hud-next-preview.visible{display:block}
+.hud-instr-speed{
+  width:62px;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-left:1px solid var(--border);padding:8px 4px;
+}
+.hud-spd-val{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1}
+.hud-spd-unit{font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:1px}
+.hud-tgt{font-size:10px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-top:2px;white-space:nowrap}
+
+/* Instruction colors by type */
+.hud-instr-icon.stop   {background:rgba(248,81,73,.15);border-right-color:rgba(248,81,73,.3)}
+.hud-instr-icon.arrive {background:rgba(63,185,80,.12);border-right-color:rgba(63,185,80,.3)}
+.hud-instr-icon.turn   {background:rgba(240,165,0,.12);border-right-color:rgba(240,165,0,.3)}
+.hud-instr-icon.straight{background:transparent}
+
+/* ── COMPASS (right side of map, below instruction) ── */
+.hud-compass{
+  position:absolute;right:12px;top:100px;pointer-events:auto;
+  background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:50%;
+  width:60px;height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  backdrop-filter:blur(8px);
+}
+.hud-compass-arrow{font-size:26px;transition:transform .3s}
+.hud-compass-deg{font-size:10px;font-family:var(--mono);color:var(--muted)}
+
+/* ── ROUTE PROGRESS (bottom strip) ── */
+.hud-strip{
+  position:absolute;bottom:58px;left:8px;right:8px;pointer-events:auto;
+  background:rgba(13,17,23,.85);border:1px solid var(--border);border-radius:8px;
+  padding:6px 12px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(8px);
+}
+.hud-sbar{flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+.hud-sfill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;transition:width .5s}
+.hud-slbl{font-size:11px;font-family:var(--mono);color:var(--muted);white-space:nowrap}
+
+/* Toggle stops panel */
+.hud-toggle{position:absolute;bottom:10px;right:10px;z-index:910;pointer-events:auto;
+  background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:10px;
+  padding:8px 14px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;
+  color:var(--accent);letter-spacing:1px;backdrop-filter:blur(8px);display:none}
+.hud-toggle.on{display:block}
+
+/* Floating stops panel — compact, max 40% screen height */
+.hud-stops-panel{
+  position:absolute;bottom:56px;left:8px;right:8px;z-index:910;pointer-events:auto;
+  background:rgba(13,17,23,.96);border:1px solid var(--border);border-radius:12px;
+  display:none;flex-direction:column;
+  max-height:40vh;   /* never more than 40% of screen */
+  overflow:hidden;backdrop-filter:blur(12px);
+  box-shadow:0 -4px 24px rgba(0,0,0,.5);
+}
+.hud-stops-panel.on{display:flex}
+.hud-sp-head{padding:7px 12px;border-bottom:1px solid var(--border);font-size:10px;
+  font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+
+/* Compact stop row in floating panel */
+.hud-stop-row{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-bottom:1px solid rgba(48,54,61,.4);
+  min-height:0;
+}
+.hud-stop-row:last-child{border-bottom:none}
+.hud-stop-row.current{background:rgba(63,185,80,.06)}
+.hud-stop-row.done{opacity:.35}
+.hud-sr-num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+.hud-sr-num.waiting{background:var(--accent);color:#000}
+.hud-sr-num.current{background:var(--green);color:#000;animation:blink 1.2s infinite}
+.hud-sr-num.done{background:var(--muted);color:#000}
+.hud-sr-name{flex:1;font-size:13px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hud-sr-timer{font-size:13px;font-family:var(--mono);color:var(--text);
+  white-space:nowrap;flex-shrink:0}
+.hud-sr-timer.running{color:var(--green)}
+.hud-sr-timer.over{color:var(--red)}
+.hud-sr-done-btn{
+  background:var(--green);color:#000;border:none;border-radius:6px;
+  font-size:11px;font-weight:700;padding:5px 8px;cursor:pointer;
+  flex-shrink:0;white-space:nowrap;font-family:var(--sans);
+}
+.hud-sr-done-btn:active{opacity:.7}
+
+/* ── RECORDING INDICATOR ── */
+.rec-ind{
+  position:absolute;bottom:165px;left:12px;z-index:910;pointer-events:auto;
+  background:rgba(90,0,0,.95);border:1px solid var(--red);border-radius:10px;
+  padding:8px 12px;display:none;align-items:center;gap:8px;backdrop-filter:blur(8px);
+}
+.rec-ind.on{display:flex}
+.rec-dot{width:10px;height:10px;border-radius:50%;background:var(--red);animation:blink 1s infinite;flex-shrink:0}
+
+/* ── Photo feature ── */
+/* Camera + events prompt */
+.cam-prompt{
+  position:absolute;bottom:170px;left:50%;transform:translateX(-50%);z-index:1600;
+  background:var(--panel);border:2px solid var(--accent);border-radius:14px;
+  padding:14px 18px;display:none;flex-direction:column;align-items:center;gap:8px;
+  box-shadow:0 6px 30px rgba(0,0,0,.7);min-width:280px;max-width:340px;
+  backdrop-filter:blur(8px);animation:popIn .3s ease;
+}
+.cam-prompt.on{display:flex}
+.cam-prompt-title{font-size:15px;font-weight:700;color:var(--accent);text-align:center}
+.cam-prompt-sub{font-size:11px;color:var(--muted);text-align:center;font-family:var(--mono)}
+.cam-prompt-btns{display:flex;gap:8px;width:100%}
+/* Events section */
+.cam-events-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);font-family:var(--mono);align-self:flex-start}
+.cam-events-row{display:flex;gap:8px;width:100%}
+.evt-btn{flex:1;padding:10px 8px;border-radius:8px;border:2px solid var(--border);
+  background:transparent;color:var(--text);font-family:var(--sans);font-size:13px;
+  font-weight:700;cursor:pointer;text-align:center;transition:all .15s;user-select:none}
+.evt-btn:active{transform:scale(.95)}
+.evt-btn.active{border-color:var(--green);background:rgba(63,185,80,.15);color:var(--green)}
+.cam-divider{width:100%;height:1px;background:var(--border)}
+/* Event badges on stop markers/cards */
+.stop-event-badge{display:inline-flex;align-items:center;gap:3px;
+  font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:8px;
+  background:rgba(88,166,255,.12);color:var(--blue);margin-left:4px}
+
+/* Stop photo overlay (shown when approaching a stop) */
+.stop-photo-ov{
+  position:absolute;
+  top:90px;right:12px;       /* top-right corner, below HUD bar */
+  width:190px;               /* compact 190px */
+  z-index:1400;
+  display:none;flex-direction:column;
+  border-radius:10px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,.75);
+  border:1px solid var(--border);
+  animation:fadeIn .3s ease;
+}
+.stop-photo-ov.on{display:flex}
+.stop-photo-header{
+  background:rgba(13,17,23,.96);padding:5px 8px;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.stop-photo-name{font-size:12px;font-weight:700;color:var(--accent);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.stop-photo-close{font-size:16px;cursor:pointer;color:var(--muted);padding:0 2px;flex-shrink:0}
+.stop-photo-img{width:290px;height:195px;object-fit:cover;display:block}
+.stop-photo-none{background:rgba(13,17,23,.9);padding:14px;text-align:center;
+  color:var(--muted);font-size:11px;font-family:var(--mono);height:80px;
+  display:flex;align-items:center;justify-content:center}
+
+/* Photo thumbnail in stop card */
+.sc-photo{width:100%;height:90px;object-fit:cover;display:block;
+  border-radius:0 0 8px 8px;cursor:pointer}
+.sc-no-photo{display:none}
+.rec-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--red);font-family:var(--mono)}
+.rec-stats{font-size:12px;font-family:var(--mono);color:var(--text)}
+.rec-stops-count{font-size:10px;font-family:var(--mono);color:var(--accent)}
+
+/* ── ARRIVING ALERT ── */
+.arriving{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1500;
+  padding:14px 22px;border-radius:12px;font-size:17px;font-weight:700;letter-spacing:1px;
+  display:none;animation:popIn .3s ease;text-align:center}
+.arriving.arrived {background:var(--green);color:#000;box-shadow:0 6px 30px rgba(63,185,80,.5)}
+.arriving.departed{background:var(--blue);color:#000;box-shadow:0 6px 30px rgba(88,166,255,.4)}
+.arriving.stop-alert{background:var(--red);color:#fff;box-shadow:0 6px 30px rgba(248,81,73,.5)}
+@keyframes popIn{from{transform:translate(-50%,-50%) scale(.7);opacity:0}}
+@keyframes blink{50%{opacity:.15}}
+
+/* ── INSTALL BANNER ── */
+.install-banner{position:absolute;bottom:115px;left:12px;right:12px;z-index:1800;
+  background:var(--panel2);border:1px solid var(--accent);border-radius:12px;
+  padding:12px 16px;display:none;flex-direction:column;gap:8px}
+.install-btns{display:flex;gap:8px}
+
+/* ── BOTTOM SHEET ── */
+.sheet{position:absolute;bottom:0;left:0;right:0;
+  background:var(--panel);border-radius:18px 18px 0 0;border-top:1px solid var(--border);
+  z-index:1000;display:flex;flex-direction:column;max-height:72vh;
+  transition:transform .35s cubic-bezier(.32,.72,0,1);
+  transform:translateY(calc(100% - 96px));padding-bottom:var(--safe-b)}
+.sheet.expanded{transform:translateY(0)}
+.sheet.mid{transform:translateY(calc(100% - 300px))}
+/* hidden (nav/rec active): drag handle only — map gets the whole screen */
+.sheet.hidden{transform:translateY(calc(100% - 22px))}
+.sheet.hidden .peek,.sheet.hidden .sheet-tabs{visibility:hidden}
+/* peek (resting): handle + tab bar only (~56px) — header lives in mid/expanded */
+.sheet.peek{transform:translateY(calc(100% - 56px))}
+.sheet.peek .peek{display:none}  /* handle + tab bar only */
+.sheet-handle{width:52px;height:5px;background:var(--muted);border-radius:3px;margin:10px auto 4px;flex-shrink:0;cursor:pointer;opacity:.8}
+.peek{display:flex;align-items:center;gap:10px;padding:8px 14px 6px;cursor:pointer;flex-shrink:0;user-select:none}
+.peek-left{flex:1;min-width:0}
+.peek-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.peek-sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.peek-dist{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent)}
+
+/* Tabs */
+.sheet-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.stab{flex:1;padding:10px 2px;text-align:center;font-size:10px;font-weight:700;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;user-select:none}
+.stab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.stab-chev{flex:0 0 44px;font-size:15px;line-height:1;color:var(--accent);cursor:pointer;user-select:none}
+
+/* Panes */
+.pane{display:none;flex-direction:column;overflow:hidden;flex:1}
+.pane.active{display:flex}
+
+/* Upload */
+.upload-zone{margin:14px;border:2px dashed var(--border);border-radius:10px;padding:22px 14px;
+  text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
+.upload-zone:active{border-color:var(--accent);background:rgba(240,165,0,.05)}
+.upload-zone input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.upload-zone .icon{font-size:28px}
+.upload-zone strong{color:var(--accent);font-size:15px}
+.upload-zone p{font-size:11px;color:var(--muted)}
+
+/* Route info */
+.route-info{margin:0 14px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px}
+.ri-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ri-item .ril{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.ri-item .riv{font-size:15px;font-weight:700;font-family:var(--mono)}
+
+/* GPS settings */
+.nav-section{padding:12px 14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.nav-field{display:flex;align-items:center;gap:8px}
+.nav-field label{font-size:11px;color:var(--muted);width:145px;flex-shrink:0;font-family:var(--mono)}
+.nav-field input[type=range]{flex:1;accent-color:var(--accent)}
+.nav-field .val{font-size:11px;font-family:var(--mono);color:var(--accent);width:55px;text-align:right}
+.gps-status{padding:10px 14px;border-radius:8px;border:1px solid var(--border);
+  font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px;background:var(--bg)}
+.gps-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.gps-dot.wait  {background:var(--muted)}
+.gps-dot.active{background:var(--green);animation:blink 1.2s infinite}
+.gps-dot.error {background:var(--red)}
+
+/* Stop cards */
+.stops-list{flex:1;overflow-y:auto;padding:8px 12px 12px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
+.stop-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;animation:fadeUp .2s ease;transition:border-color .2s,opacity .2s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}}
+.stop-card.state-current{border-color:var(--green);box-shadow:0 0 0 1px rgba(63,185,80,.12)}
+.stop-card.state-done{opacity:.4}
+.stop-card.state-over{border-color:var(--red)}
+.sc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 7px}
+.sc-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+.sc-num.waiting{background:var(--accent);color:#000}
+.sc-num.current{background:var(--green);color:#000;animation:blink 1.2s infinite}
+.sc-num.done   {background:var(--muted);color:#000}
+.sc-name{flex:1;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-badge{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:10px;flex-shrink:0}
+.sc-badge.waiting{background:rgba(240,165,0,.1);color:var(--accent)}
+.sc-badge.current{background:rgba(63,185,80,.15);color:var(--green)}
+.sc-badge.done   {background:rgba(139,148,158,.12);color:var(--muted)}
+.sc-times{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin:0 12px 7px;border-radius:8px;overflow:hidden}
+.sc-time-col{background:var(--panel2);padding:8px 12px}
+.sc-time-col.real{background:var(--panel)}
+.sc-time-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.sc-time-val{font-size:20px;font-weight:700;font-family:var(--mono);letter-spacing:1px;color:var(--text);margin-top:1px}
+.sc-time-val.running{color:var(--green)}.sc-time-val.paused{color:var(--accent)}.sc-time-val.over{color:var(--red)}
+.sc-delta{font-size:10px;font-family:var(--mono);margin-top:2px}
+.sc-delta.ok{color:var(--green)}.sc-delta.warn{color:var(--accent)}.sc-delta.over{color:var(--red)}
+.sc-prog{margin:0 12px 6px}
+.sc-prog-bg{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.sc-prog-fill{height:100%;border-radius:3px;transition:width .5s,background .5s;min-width:2px}
+.sc-ctrl{display:flex;align-items:center;gap:7px;padding:0 12px 10px}
+.tbtn{width:36px;height:36px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;flex-shrink:0}
+.tbtn:active{transform:scale(.88)}
+.tbtn.go {background:rgba(63,185,80,.15);color:var(--green)}
+.tbtn.ps {background:rgba(240,165,0,.15);color:var(--accent)}
+.tbtn.rst{background:rgba(248,81,73,.08);color:var(--muted)}
+.sc-btns{display:flex;gap:5px;flex:1;justify-content:flex-end}
+.sc-btn{font-size:11px;padding:6px 8px;min-height:32px;border-radius:5px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--sans);
+  font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.sc-btn:active{opacity:.6}
+.stops-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
+.stops-bar .btn{flex:1;font-size:11px;padding:9px 4px}
+
+/* Recorded routes */
+.rec-list{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
+.rec-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.rec-card-head{display:flex;align-items:center;gap:8px}
+.rec-card-name{flex:1;font-size:14px;font-weight:700}
+.rec-card-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.rec-card-btns{display:flex;gap:6px;margin-top:2px}
+
+/* Pos marker */
+.pos-arrow{font-size:28px;line-height:1;transition:transform .4s;filter:drop-shadow(0 0 5px rgba(88,166,255,.8))}
+.pos-dot{width:14px;height:14px;background:var(--blue);border:3px solid #fff;border-radius:50%;
+  box-shadow:0 0 0 0 rgba(88,166,255,.6);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(88,166,255,.6)}70%{box-shadow:0 0 0 10px rgba(88,166,255,0)}100%{box-shadow:0 0 0 0 rgba(88,166,255,0)}}
+
+/* Empty */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);padding:28px;text-align:center;flex:1}
+.empty .icon{font-size:36px;opacity:.35}
+.empty p{font-size:12px;line-height:1.6}
+
+/* Leaflet */
+.leaflet-container{background:#1a1f2e}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-color:var(--border)!important;font-size:18px!important;width:36px!important;height:36px!important;line-height:36px!important}
+.leaflet-control-zoom{margin-bottom:110px!important;margin-left:12px!important}
+/* Keep zoom buttons larger for touch */
+.leaflet-control-zoom a{touch-action:manipulation}
+.leaflet-popup-content-wrapper{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px}
+.leaflet-popup-tip{background:var(--panel)}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>GPX <span style="font-size:9px;background:#a371f7;color:#fff;padding:1px 5px;border-radius:6px;font-weight:800;letter-spacing:.5px;vertical-align:2px">DEV</span>
+  </div>
+  <div class="top-stats">
+    <div class="tstat"><span class="tstat-l">Route</span><span class="tstat-v" id="h-dist">—</span></div>
+    <div class="tdiv"></div>
+    <div class="tstat"><span class="tstat-l">Stops</span><span class="tstat-v" id="h-stops">0/0</span></div>
+    <div class="tdiv"></div>
+    <div class="tstat"><span class="tstat-l">Planned</span><span class="tstat-v" id="h-prog">—</span></div>
+    <div class="tdiv"></div>
+    <div class="tstat"><span class="tstat-l">Actual</span><span class="tstat-v ok" id="h-real">—</span></div>
+  </div>
+  <div class="top-actions">
+    <button class="btn primary" onclick="el('gpx-file').click()" style="min-width:38px;padding:7px">📂</button>
+    <input type="file" id="gpx-file" accept=".gpx,.json" style="display:none" onchange="loadGPX(this)">
+    <button class="btn rec" id="btn-rec" onclick="toggleRec()">⏺ Rec</button>
+    <button id="map-style-btn" onclick="toggleMapStyle()" title="Toggle day/night map"
+      style="background:var(--panel);border:1px solid var(--border);border-radius:6px;
+             padding:7px 10px;font-size:16px;cursor:pointer;min-height:38px;
+             color:var(--text);transition:all .15s;user-select:none">🌙</button>
+    <button class="btn go"       id="btn-nav"  onclick="startNav()" disabled>▶ Nav</button>
+    <button class="btn stop-nav" id="btn-stop" onclick="stopNav()"  style="display:none">■ Stop</button>
+  </div>
+</div>
+
+<!-- SUMMARY BAR -->
+<div class="sum-bar" id="sum-bar">
+  <div class="sb-cols">
+    <div class="sb-item"><span class="sb-lbl">Done</span><span class="sb-val ok" id="sb-done">0/0</span></div>
+    <div class="sb-div"></div>
+    <div class="sb-item"><span class="sb-lbl">Planned</span><span class="sb-val" id="sb-prog">—</span></div>
+    <div class="sb-div"></div>
+    <div class="sb-prog">
+      <div class="sb-prog-row"><span id="sb-rlbl">Actual: 0</span><span id="sb-dlbl" style="color:var(--green)">—</span></div>
+      <div class="sb-pbar"><div class="sb-pfill" id="sb-fill" style="width:0%"></div></div>
+    </div>
+    <div class="sb-div"></div>
+    <div class="sb-item"><span class="sb-lbl">Delta</span><span class="sb-val ok" id="sb-delta">—</span></div>
+  </div>
+</div>
+
+<!-- MAP WRAP -->
+<div class="map-wrap">
+  <div id="map"></div>
+
+  <!-- ══════════════════ NAV HUD ══════════════════ -->
+  <div class="nav-hud" id="nav-hud">
+
+    <!-- Next Stop Card: the driver's primary reference on 10" tablets -->
+    <div class="nsc" id="nsc">
+      <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
+      <div class="nsc-dist" id="nsc-dist">—</div>
+      <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
+      <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
+      <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
+    </div>
+
+    <!-- Main instruction strip (Waze-style) -->
+    <div class="hud-instr" id="hud-instr">
+      <div class="hud-instr-icon straight" id="hud-icon">
+        <span id="hud-icon-arrow">↑</span>
+        <span class="hud-icon-lbl" id="hud-icon-lbl"></span>
+      </div>
+      <div class="hud-instr-body">
+        <div class="hud-instr-dist far" id="hud-dist">—</div>
+        <div class="hud-instr-action"   id="hud-action">Waiting for GPS...</div>
+        <div class="hud-instr-detail"   id="hud-detail"></div>
+        <div class="hud-next-preview"   id="hud-preview"></div>
+      </div>
+      <div class="hud-instr-speed">
+        <div class="hud-spd-val"  id="hud-spd">0</div>
+        <div class="hud-spd-unit">km/h</div>
+        <div class="hud-tgt" id="hud-tgt" title="Recorded avg of this leg"></div>
+      </div>
+    </div>
+
+    <!-- Compass -->
+    <div class="hud-compass">
+      <div class="hud-compass-arrow" id="hud-compass">↑</div>
+      <div class="hud-compass-deg"   id="hud-cdeg">N</div>
+    </div>
+    <!-- Voice toggle -->
+    <div id="hud-voice" onclick="toggleVoice()" title="Voice on/off" style="
+      position:absolute;right:12px;top:170px;z-index:910;pointer-events:auto;
+      background:rgba(13,17,23,.9);border:2px solid var(--green);border-radius:50%;
+      width:46px;height:46px;display:none;align-items:center;justify-content:center;
+      cursor:pointer;font-size:20px;transition:all .2s;user-select:none">🔊</div>
+
+    <!-- Route progress strip -->
+    <div class="hud-strip">
+      <div class="hud-slbl" id="hud-pct">0%</div>
+      <div class="hud-sbar"><div class="hud-sfill" id="hud-sfill" style="width:0%"></div></div>
+      <div class="hud-slbl" id="hud-left">— remaining</div>
+    </div>
+  </div>
+
+  <!-- Sheet toggle button -->
+  <div class="hud-toggle" id="hud-toggle" onclick="toggleHudPanel()">📍 Stops</div>
+
+  <!-- Floating stops panel -->
+  <div class="hud-stops-panel" id="hud-sp">
+    <div class="hud-sp-head">
+      Route stops
+      <span style="cursor:pointer;color:var(--red);font-size:18px" onclick="toggleHudPanel()">✕</span>
+    </div>
+    <div id="hud-sp-list" style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch"></div>
+  </div>
+
+  <!-- Hidden camera input -->
+  <input type="file" id="cam-input" accept="image/*" capture="environment"
+         style="display:none" onchange="handleCameraPhoto(this)">
+
+  <!-- Recording indicator -->
+  <div class="rec-ind" id="rec-ind">
+    <div class="rec-dot"></div>
+    <div>
+      <div class="rec-label">Recording route</div>
+      <div class="rec-stats"       id="rec-stats">0 pts · 0.0 km</div>
+      <div class="rec-stops-count" id="rec-sc">0 stops detected</div>
+    </div>
+    <button class="btn stop-nav" style="padding:5px 10px;font-size:11px;min-height:30px" onclick="toggleRec()">■ Stop</button>
+  </div>
+
+  <!-- Stop events + camera prompt -->
+  <div class="cam-prompt" id="cam-prompt">
+    <div class="cam-prompt-title">📍 Stop <span id="cam-stop-num">1</span> detected</div>
+
+    <div class="cam-events-title">Events at this stop</div>
+    <div class="cam-events-row">
+      <button class="evt-btn" id="evt-door"  onclick="toggleStopEvent('openDoor')">
+        🚪<br>Open Door
+      </button>
+      <button class="evt-btn" id="evt-knee" onclick="toggleStopEvent('kneeling')">
+        ♿<br>Kneeling
+      </button>
+    </div>
+
+    <div class="cam-divider"></div>
+    <div class="cam-prompt-sub">Take a photo so the driver recognises this stop</div>
+    <div class="cam-prompt-btns">
+      <button class="btn primary" style="flex:2;font-size:13px;padding:10px 8px"
+              onclick="openCamera()">📷 Photo</button>
+      <button class="btn go"      style="flex:2;font-size:13px;padding:10px 8px"
+              onclick="confirmStopEvents()">✓ Done</button>
+    </div>
+  </div>
+
+  <!-- Stop photo overlay (shown when approaching a stop in navigation) -->
+  <div class="stop-photo-ov" id="stop-photo-ov">
+    <div class="stop-photo-header">
+      <div>
+        <div class="stop-photo-name"  id="spo-name">Stop</div>
+        <div class="stop-photo-badge" id="spo-badge">Approaching — 200 m</div>
+      </div>
+      <div class="stop-photo-close" onclick="closeStopPhoto()">✕</div>
+    </div>
+    <img class="stop-photo-img" id="spo-img" src="" alt="Stop photo">
+    <div class="stop-photo-none" id="spo-none">No photo available for this stop</div>
+  </div>
+
+  <!-- Arriving alert -->
+  <div class="arriving" id="arriving"></div>
+
+  <!-- Install banner -->
+  <div class="install-banner" id="install-banner">
+    <p>📲 Instalar <strong style="color:var(--accent)">GPX Navigator Pro</strong> como app?</p>
+    <div class="install-btns">
+      <button class="btn primary" style="flex:1" onclick="doInstall()">✓ Instalar</button>
+      <button class="btn" style="flex:1" onclick="hideInstall()">✕ No</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM SHEET -->
+  <div class="sheet peek" id="sheet"
+    ontouchstart="shTS(event)" ontouchmove="shTM(event)" ontouchend="shTE(event)">
+    <div class="sheet-handle" onclick="toggleSheetCollapse()"></div>
+    <div class="peek" onclick="toggleSheet()">
+      <span id="peek-icon" style="font-size:22px;flex-shrink:0">🗺️</span>
+      <div class="peek-left">
+        <div class="peek-name" id="peek-name">Load a GPX file</div>
+        <div class="peek-sub"  id="peek-sub">Tap 📂 to open a file</div>
+      </div>
+      <div class="peek-dist" id="peek-dist"></div>
+    </div>
+
+    <div class="sheet-tabs">
+      <div class="stab active" id="stab-rota"     onclick="switchTab('rota',true)">Route</div>
+      <div class="stab"        id="stab-nav"      onclick="switchTab('nav',true)">GPS</div>
+      <div class="stab"        id="stab-paradas"  onclick="switchTab('paradas',true)">Stops<span id="stops-badge" style="font-size:9px;color:var(--accent)"></span></div>
+      <div class="stab"        id="stab-gravadas" onclick="switchTab('gravadas',true)">Recordings<span id="rec-badge" style="font-size:9px;color:var(--red)"></span></div>
+      <div class="stab stab-chev" id="sheet-chev" onclick="toggleSheetCollapse()" title="Expand / collapse">⌃</div>
+    </div>
+
+    <!-- ROTA PANE -->
+    <div class="pane active" id="pane-rota" style="overflow-y:auto">
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" accept=".gpx,.json" onchange="loadGPX(this)">
+        <div class="icon">📂</div>
+        <strong>Load GPX</strong>
+        <p>.gpx or .json · recorded cycles &amp; converter output</p>
+      </div>
+      <div id="route-details" style="display:none;flex-direction:column">
+        <div class="route-info">
+          <div class="ri-grid">
+            <div class="ri-item"><div class="ril">Distance</div><div class="riv" id="ri-dist">—</div></div>
+            <div class="ri-item"><div class="ril">Track points</div><div class="riv" id="ri-pts">—</div></div>
+            <div class="ri-item"><div class="ril">Stops</div><div class="riv" id="ri-wpts">—</div></div>
+            <div class="ri-item"><div class="ril">Planned time</div><div class="riv" id="ri-tprog">—</div></div>
+            <div class="ri-item"><div class="ril">Turns</div><div class="riv" id="ri-turns">—</div></div>
+            <div class="ri-item"><div class="ril">Maneuvers</div><div class="riv" id="ri-maneuvers">—</div></div>
+          </div>
+        </div>
+        <div style="padding:0 14px 14px;display:flex;gap:8px">
+          <button class="btn" style="flex:1" onclick="el('gpx-file').click()">↺ Change file</button>
+          <button class="btn go" style="flex:1" id="btn-nav2" onclick="startNav()" disabled>▶ Navigate</button>
+        </div>
+      </div>
+      <div class="empty" id="no-route">
+        <div class="icon">🗺️</div>
+        <p>Load a <strong style="color:var(--accent)">.gpx</strong> file to see the route with turn-by-turn navigation and planned stops.</p>
+      </div>
+    </div>
+
+    <!-- GPS PANE -->
+    <div class="pane" id="pane-nav">
+      <div class="nav-section">
+        <div class="gps-status" id="gps-status">
+          <div class="gps-dot wait" id="gps-dot"></div>
+          <span id="gps-text">GPS not started</span>
+        </div>
+        <div class="nav-field"><label>Arrival radius (m)</label>
+          <input type="range" min="5" max="100" value="10" id="rng-radius" oninput="el('val-radius').textContent=this.value+'m'">
+          <span class="val" id="val-radius">10m</span></div>
+        <div class="nav-field"><label>Auto-start timer</label>
+          <input type="range" min="0" max="1" step="1" value="1" id="rng-auto" oninput="el('val-auto').textContent=['No','Yes'][+this.value]">
+          <span class="val" id="val-auto">Sim</span></div>
+        <div class="nav-field"><label>Auto-stop timer</label>
+          <input type="range" min="0" max="1" step="1" value="1" id="rng-autostop" oninput="el('val-autostop').textContent=['No','Yes'][+this.value]">
+          <span class="val" id="val-autostop">Sim</span></div>
+        <div class="nav-field"><label>Follow vehicle</label>
+          <input type="range" min="0" max="1" step="1" value="1" id="rng-follow" oninput="el('val-follow').textContent=['No','Yes'][+this.value]">
+          <span class="val" id="val-follow">Sim</span></div>
+        <div class="nav-field"><label>Zoom</label>
+          <input type="range" min="14" max="19" value="17" id="rng-zoom" oninput="el('val-zoom').textContent=this.value">
+          <span class="val" id="val-zoom">17</span></div>
+        <div class="nav-field"><label>Rec stop speed (km/h)</label>
+          <input type="range" min="1" max="15" value="5" id="rng-recvel" oninput="el('val-recvel').textContent=this.value">
+          <span class="val" id="val-recvel">5</span></div>
+        <div class="nav-field"><label>Simulator speed (x)</label>
+          <input type="range" min="1" max="20" value="5" id="rng-sim" oninput="el('val-sim').textContent=this.value+'x'">
+          <span class="val" id="val-sim">5x</span>
+        </div>
+        <button class="btn" id="btn-simstop" style="display:none;width:100%;margin:4px 0 10px;border-color:#a371f7;color:#a371f7" onclick="stopSim()">■ Stop simulation</button>
+        <div class="nav-field"><label>Rec stop min. duration (s)</label>
+          <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
+          <span class="val" id="val-recdur">5s</span></div>
+        <div style="display:flex;gap:8px;padding-top:4px">
+          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="startNav()">▶ Start GPS</button>
+          <button class="btn stop-nav" id="btn-stop3" style="flex:1;display:none" onclick="stopNav()">■ Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARADAS PANE -->
+    <div class="pane" id="pane-paradas">
+      <div class="stops-list" id="stops-list">
+        <div class="empty" id="stops-empty">
+          <div class="icon">📍</div>
+          <p>Load a GPX file with detected stops.</p>
+        </div>
+      </div>
+      <div class="stops-bar">
+        <button class="btn go" onclick="startAllTimers()">▶ Todos</button>
+        <button class="btn"    onclick="resetAllTimers()">↺ Reset</button>
+        <button class="btn"    onclick="exportCSV()">↓ CSV</button>
+      </div>
+    </div>
+
+    <!-- GRAVADAS PANE -->
+    <div class="pane" id="pane-gravadas">
+      <div class="rec-list" id="rec-list">
+        <div class="empty" id="rec-empty">
+          <div class="icon">⏺</div>
+          <p>Tap <strong style="color:var(--red)">⏺ Rec</strong> to record a new route. Stops are detected automatically by speed.</p>
+        </div>
+      </div>
+      <div class="stops-bar">
+        <button class="btn" style="flex:1" onclick="el('json-file').click()">📥 Import JSON</button>
+        <button class="btn primary" style="flex:1" onclick="exportAllRecs()">📤 Export All</button>
+        <input type="file" id="json-file" accept=".json,application/json" style="display:none" onchange="importRecsJSON(this)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+// ── PWA ────────────────────────────────────────────────
+let deferredInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;el('install-banner').style.display='flex'});
+function doInstall(){if(!deferredInstall)return;deferredInstall.prompt();deferredInstall.userChoice.then(()=>{deferredInstall=null;hideInstall()})}
+function hideInstall(){el('install-banner').style.display='none'}
+window.addEventListener('appinstalled',hideInstall);
+
+// ── STATE ──────────────────────────────────────────────
+let map, routeLayer, routeDoneLayer, routeAheadLayer, routeRemainLayer, recLayer;
+let posMarker, accCircle;
+let stops=[], stopMarkers={};
+let extraMarkers=[];      // start/end dots + recording stop pins (were orphaned)
+
+// ── Cycle analytics ───────────────────────────────────
+function fmtDur(sec){
+  if(sec==null||isNaN(sec))return'—';
+  const h=Math.floor(sec/3600),m=Math.round(sec%3600/60);
+  return h?`${h}h ${String(m).padStart(2,'0')}m`:`${m} min`;
+}
+
+// Elevation gain: median-smoothed altitude + climb accumulator with 2 m
+// hysteresis. A per-sample threshold would discard gentle climbs entirely
+// (1 Hz sampling on a slow grade gives deltas far below any noise floor).
+function calcElevGain(points){
+  const src=(points||[]).filter(p=>p.alt!=null&&!isNaN(+p.alt)).map(p=>+p.alt);
+  if(src.length<10||src.length<(points.length*0.5))return null; // GPS without altitude
+  const sm=src.map((_,i)=>{
+    const w=src.slice(Math.max(0,i-2),i+3).slice().sort((a,b)=>a-b);
+    return w[Math.floor(w.length/2)];
+  });
+  let gain=0,base=sm[0];
+  for(let i=1;i<sm.length;i++){
+    if(sm[i]<base)base=sm[i];                       // track local minimum
+    else if(sm[i]-base>=2){gain+=sm[i]-base;base=sm[i];} // climbed past noise band
+  }
+  return Math.round(gain);
+}
+
+// ── GTA / VBC duty-cycle classification ──────────────
+// The GTA score = how many of the 5 VBC criteria the recorded cycle meets.
+// Classes per the VBC reference table: City (Ci1-3), Commuter (Co1-2),
+// Long Haul (LH1-2). Criteria: stops/km, overall avg speed (incl. idle),
+// drive speed (excl. idle), max speed, idle %.
+const VBC_CLASSES=[
+  {id:'Ci1',spk:[5,10],    spd:[1,15],   dspd:[0,23],  vmax:[5,50],   idle:[36,50]},
+  {id:'Ci2',spk:[2.5,5],   spd:[15,23],  dspd:[23,32], vmax:[50,60],  idle:[27,36]},
+  {id:'Ci3',spk:[1.5,2.5], spd:[23,33],  dspd:[32,42], vmax:[60,70],  idle:[17,27]},
+  {id:'Co1',spk:[1,1.5],   spd:[33,45],  dspd:[42,54], vmax:[70,90],  idle:[17,23]},
+  {id:'Co2',spk:[0.1,1],   spd:[45,55],  dspd:[54,63], vmax:[90,100], idle:[12,17]},
+  {id:'LH1',spk:[0,0],     spd:[55,65],  dspd:[63,74], vmax:[90,100], idle:[0,12]},
+  {id:'LH2',spk:[0,0],     spd:[65,120], dspd:[74,120],vmax:[100,120],idle:[0,12]},
+];
+
+function calcCycleMetrics(points,nStops){
+  let moving=0,idle=0,dist=0,prev=null;const spd=[];
+  for(const p of points||[]){
+    if(prev){
+      const dt=(p.t-prev.t)/1000;
+      if(dt<=0||dt>30){prev=p;continue}
+      const d=haversine(prev.lat,prev.lng,p.lat,p.lng);dist+=d;
+      const k=d*1000/dt*3.6;spd.push(k);
+      if(k<2)idle+=dt;else moving+=dt;   // keep-alive points preserve dwell time
+    }
+    prev=p;
+  }
+  const total=moving+idle;
+  if(total<30||dist<0.1)return null;
+  // Robust max speed: median-of-3 kills single GPS glitches
+  let vmax=0;
+  if(spd.length>=3){
+    for(let i=1;i<spd.length-1;i++){
+      const m=[spd[i-1],spd[i],spd[i+1]].sort((a,b)=>a-b)[1];
+      if(m>vmax)vmax=m;
+    }
+  }else vmax=Math.max(0,...spd);
+  return{dist:+dist.toFixed(2),time_s:Math.round(total),
+    avg:+(dist/(total/3600)).toFixed(1),
+    drive:moving>0?+(dist/(moving/3600)).toFixed(1):0,
+    vmax:Math.round(vmax),
+    idlePct:+(idle/total*100).toFixed(1),
+    stopsKm:+((nStops||0)/dist).toFixed(2)};
+}
+
+const VBC_CRIT_LABELS={spk:'stops/km',spd:'avg speed',dspd:'drive speed',vmax:'max speed',idle:'idle %'};
+function calcGTAScore(points,stopsArr){
+  const m=calcCycleMetrics(points,(stopsArr||[]).length);
+  if(!m)return{cls:'—',matched:null,total:5,metrics:null,detail:null};
+  const inR=(v,r)=>v>=r[0]&&v<=r[1];
+  let best=null;
+  for(const c of VBC_CLASSES){
+    const d={spk:inR(m.stopsKm,c.spk),spd:inR(m.avg,c.spd),
+      dspd:inR(m.drive,c.dspd),vmax:inR(m.vmax,c.vmax),idle:inR(m.idlePct,c.idle)};
+    const matched=Object.values(d).filter(Boolean).length;
+    if(!best||matched>best.matched)best={cls:c.id,matched,detail:d};
+  }
+  return{cls:best.cls,matched:best.matched,total:5,metrics:m,detail:best.detail};
+}
+
+// Per-segment average speeds between recorded stops (for replay pacing)
+function calcSegments(points,stops){
+  if(!points?.length||!stops?.length)return[];
+  const segs=[];let depT=points[0].t;
+  [...stops].sort((a,b)=>a.t-b.t).forEach((st,k)=>{
+    let d=0,prev=null;
+    for(const p of points){
+      if(p.t<depT)continue;if(p.t>st.t)break;
+      if(prev)d+=haversine(prev.lat,prev.lng,p.lat,p.lng);
+      prev=p;
+    }
+    const t=(st.t-depT)/1000;
+    segs.push({toStop:k+1,dist_km:+d.toFixed(2),time_s:Math.round(t),
+      avg_kmh:(t>3&&d>0.01)?+(d/(t/3600)).toFixed(1):null});
+    depT=st.t+(st.dur_s||0)*1000;
+  });
+  return segs;
+}
+let routePts=[];          // [{lat,lon}] full route
+let totalRouteDist=0;
+let maneuvers=[];         // computed turn-by-turn instructions
+let navActive=false, watchId=null, currentPos=null, currentHeading=null;
+let arrivingTmr=null;
+const insideStop=new Set();
+
+// Recording state
+let isRec=false, recPoints=[], recStops=[], recStopCandidate=null;
+let savedRecs=[];
+let pendingPhotoStopIdx=-1;
+
+// ── Settings persistence (spec §3.2) ─────────────────
+const SETTINGS_KEY='gpx-nav-settings';
+const SETTING_IDS=['rng-radius','rng-auto','rng-autostop','rng-follow','rng-zoom','rng-recvel','rng-recdur'];
+function saveSettings(){
+  try{
+    const s={};SETTING_IDS.forEach(id=>{const e=el(id);if(e)s[id]=e.value;});
+    localStorage.setItem(SETTINGS_KEY,JSON.stringify(s));
+  }catch(e){}
+}
+function refreshSettingLabels(){
+  const yn=v=>['No','Yes'][+v]||'—';
+  if(el('val-radius'))el('val-radius').textContent=el('rng-radius').value+'m';
+  if(el('val-auto'))el('val-auto').textContent=yn(el('rng-auto').value);
+  if(el('val-autostop'))el('val-autostop').textContent=yn(el('rng-autostop').value);
+  if(el('val-follow'))el('val-follow').textContent=yn(el('rng-follow').value);
+  if(el('val-zoom'))el('val-zoom').textContent=el('rng-zoom').value;
+  if(el('val-recvel'))el('val-recvel').textContent=el('rng-recvel').value;
+  if(el('val-recdur'))el('val-recdur').textContent=el('rng-recdur').value+'s';
+}
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');
+    SETTING_IDS.forEach(id=>{const e=el(id);if(e&&s[id]!=null)e.value=s[id];});
+  }catch(e){}
+  refreshSettingLabels();
+  SETTING_IDS.forEach(id=>el(id)?.addEventListener('change',saveSettings));
+}
+loadSettings();
+
+// ── Persist recordings across page reloads ───────────
+let _quotaWarned=false;
+function checkQuota(){
+  try{
+    let bytes=0;
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      bytes+=((k?.length||0)+(localStorage.getItem(k)||'').length)*2;
+    }
+    if(bytes>3.5*1024*1024&&!_quotaWarned){
+      _quotaWarned=true;
+      alert(`Storage ${(bytes/1048576).toFixed(1)} MB of ~5 MB used.\nExport All + delete old cycles, or new photos/cycles may fail to save.`);
+    }
+    return bytes;
+  }catch(e){return 0;}
+}
+
+function saveRecordings(){
+  try{
+    localStorage.setItem('gpx-nav-recs', JSON.stringify(
+      savedRecs.filter(Boolean).map(r=>({
+        name:r.name, dist:+(r.dist??0)||0,
+        date:r.date instanceof Date?r.date.toISOString():r.date,
+        elev:r.elev??null, time_s:r.time_s??null, score:r.score??null,
+        // alt kept (0.1 m) — dropping it silently destroyed elevation gain on reload
+        points:r.points.map(p=>({lat:p.lat,lng:p.lng,t:p.t,
+          ...(p.alt!=null&&!isNaN(+p.alt)?{alt:Math.round(p.alt*10)/10}:{})})),
+        stops:r.stops.map(s=>({lat:s.lat,lng:s.lng,t:s.t,dur_s:s.dur_s,photo:s.photo||null,events:s.events||[]}))
+      }))
+    ));
+    checkQuota();
+  }catch(e){
+    if(/quota/i.test(e.name||'')||/quota/i.test(e.message||'')){
+      alert('Storage FULL — this cycle was NOT saved.\nExport All, delete old cycles and try again.');
+    }else console.warn('Recordings not saved:',e.message);
+  }
+}
+
+// ════ P0.1 — Crash recovery: in-flight recording flushed every 30 s ════
+const INFLIGHT_KEY='gpx-nav-inflight';
+let _lastFlush=0;
+function flushInflight(){
+  try{localStorage.setItem(INFLIGHT_KEY,JSON.stringify({t:Date.now(),points:recPoints,stops:recStops}));}
+  catch(e){/* quota alert already covers this */}
+}
+function checkInflightRecovery(){
+  try{
+    const raw=localStorage.getItem(INFLIGHT_KEY);if(!raw)return;
+    const d=JSON.parse(raw);
+    localStorage.removeItem(INFLIGHT_KEY);
+    if(!Array.isArray(d?.points)||d.points.length<2)return;
+    const dist=calcDistRaw(d.points);
+    if(!confirm(`Unsaved recording found (${d.points.length} pts · ${dist.toFixed(2)} km · ${d.stops?.length||0} stops).\nRecover it?`))return;
+    const rec={name:'Recovered '+new Date(d.t).toLocaleString('en-GB'),
+      points:d.points,stops:d.stops||[],date:new Date(d.t),dist,
+      score:calcGTAScore(d.points,d.stops||[]),elev:calcElevGain(d.points),
+      time_s:Math.round((d.points[d.points.length-1].t-d.points[0].t)/1000)};
+    savedRecs.push(rec);renderRecCard(rec,savedRecs.length-1);
+    el('rec-badge').textContent=` (${savedRecs.filter(Boolean).length})`;
+    el('rec-empty').style.display='none';
+    saveRecordings();
+  }catch(e){console.warn('Recovery failed:',e.message);}
+}
+
+function loadStoredRecordings(){
+  try{
+    const raw=localStorage.getItem('gpx-nav-recs');
+    if(!raw)return;
+    const parsed=JSON.parse(raw);
+    parsed.forEach(r=>{
+      const rec={...r,date:new Date(r.date)};
+      savedRecs.push(rec);
+      renderRecCard(rec,savedRecs.length-1);
+    });
+    if(savedRecs.length){
+      el('rec-badge').textContent=` (${savedRecs.length})`;
+      el('rec-empty').style.display='none';
+    }
+  }catch(e){console.warn('Recordings not loaded:',e.message);}
+}
+let photoPreviewStopId=null;  // which stop photo is showing in overlay
+
+// ── Photo helpers ────────────────────────────────────
+function openCamera(){
+  clearTimeout(camPromptTimer);
+  el('cam-input').value='';
+  el('cam-input').click();
+}
+
+let pendingStopEvents=[];
+let camPromptTimer=null;   // auto-dismiss handle — cancelled when user interacts
+
+function toggleStopEvent(evt){
+  clearTimeout(camPromptTimer);
+  const idx=pendingStopEvents.indexOf(evt);
+  if(idx>=0)pendingStopEvents.splice(idx,1);
+  else pendingStopEvents.push(evt);
+  el('evt-door').classList.toggle('active',pendingStopEvents.includes('openDoor'));
+  el('evt-knee').classList.toggle('active',pendingStopEvents.includes('kneeling'));
+}
+
+function confirmStopEvents(){
+  clearTimeout(camPromptTimer);
+  // Save selected events to this stop
+  if(pendingPhotoStopIdx>=0&&pendingPhotoStopIdx<recStops.length){
+    recStops[pendingPhotoStopIdx].events=[...pendingStopEvents];
+    saveRecordings();
+  }
+  pendingStopEvents=[];
+  // Reset button states
+  el('evt-door').classList.remove('active');
+  el('evt-knee').classList.remove('active');
+  el('cam-prompt').classList.remove('on');
+  pendingPhotoStopIdx=-1;
+}
+
+function skipPhoto(){
+  confirmStopEvents(); // treat skip as confirm with no events/photo
+}
+
+async function handleCameraPhoto(input){
+  const file=input.files[0];if(!file)return;
+  const b64=await compressPhoto(file,800);
+  if(b64&&pendingPhotoStopIdx>=0&&pendingPhotoStopIdx<recStops.length){
+    recStops[pendingPhotoStopIdx].photo=b64;
+    updateStopMarkerPhoto(pendingPhotoStopIdx);
+    el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected (${recStops.filter(s=>s.photo).length} with photo)`;
+    speakText('Photo saved for stop '+(pendingPhotoStopIdx+1));
+    saveRecordings();
+  }
+  // Keep the prompt open and pendingPhotoStopIdx intact so the driver can
+  // still toggle 🚪/♿ events — they are saved when "✓ Done" is tapped.
+}
+
+function compressPhoto(file,maxPx=800){
+  return new Promise(resolve=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const scale=Math.min(1,maxPx/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg',0.72));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);}
+    img.src=url;
+  });
+}
+
+function updateStopMarkerPhoto(stopIdx){
+  // Redraw marker to show camera icon indicating photo exists
+  // (markers are standalone L.marker, we rebuild the icon)
+}
+
+// ── Stop photo overlay (navigation mode) ─────────────
+let photoAutoClose=null;
+function showStopPhoto(stop,distM){
+  if(!stop||!stop.photo) return; // no photo — nothing to show
+  const ov=el('stop-photo-ov');
+  el('spo-name').textContent=stop.name||`Stop ${stop.id}`;
+  el('spo-badge').textContent=distM<50?'At stop':`${Math.round(distM)} m ahead`;
+  el('spo-img').src=stop.photo;
+  el('spo-img').style.display='block';
+  el('spo-none').style.display='none';
+  ov.classList.add('on');
+  photoPreviewStopId=stop.id;
+  // Auto-close after 12s so it doesn't block the screen
+  clearTimeout(photoAutoClose);
+  photoAutoClose=setTimeout(closeStopPhoto,12000);
+}
+function closeStopPhoto(){
+  el('stop-photo-ov').classList.remove('on');
+  photoPreviewStopId=null;
+}
+
+// ── Wake Lock (keep screen on during nav/rec) ──
+let wakeLock=null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator))return;
+  try{
+    wakeLock=await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release',()=>{
+      if(document.visibilityState==='visible'&&(navActive||isRec)) requestWakeLock();
+    });
+    console.log('[WakeLock] Screen kept on');
+  }catch(e){console.warn('[WakeLock]',e.message);}
+}
+function releaseWakeLock(){
+  if(wakeLock){wakeLock.release();wakeLock=null;}
+}
+// Re-acquire when tab becomes visible again
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&(navActive||isRec)) requestWakeLock();
+});
+
+// ── Cumulative distance cache for fast route progress ──
+let routeCumDist=[];   // routeCumDist[i] = km from pt[0] to pt[i]
+let lastRouteIdx=0;    // last known route index — prevents backward jumps on bidirectional roads
+
+function buildCumDist(pts){
+  routeCumDist=[0];
+  for(let i=1;i<pts.length;i++)
+    routeCumDist.push(routeCumDist[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+}
+
+// ── Voice guidance ───────────────────────────────────
+let voiceOn=true;
+let lastVoiceKey='';          // maneuver-bracket dedup (maybeSpeak ONLY)
+let destinationAnnounced=false;
+const evtAnnounced=new Set();  // stop ids whose events were already announced
+let lastVoiceManeuver='';     // tracks when maneuver changes
+
+function toggleVoice(){
+  voiceOn=!voiceOn;
+  const btn=el('hud-voice');
+  if(btn){btn.textContent=voiceOn?'🔊':'🔇';btn.style.borderColor=voiceOn?'var(--green)':'var(--red)';}
+  if(!voiceOn&&window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+// Spec §11.2: semantic key (numbers → #) + 10 s cooldown per key.
+// The old version cancelled the CURRENT utterance before EVERY speak, so any
+// repeated trigger cut speech mid-word in a loop ("stop one stop one ...").
+const _spokenAt={};
+function speakText(text,priority=false){
+  if(!voiceOn||!window.speechSynthesis)return;
+  const key=text.replace(/\d+/g,'#');
+  const now=Date.now();
+  // Cooldown applies to EVERYTHING (priority included) — defence in depth:
+  // even if an upstream guard breaks, the same sentence can never loop.
+  if(_spokenAt[key]&&now-_spokenAt[key]<10000)return;
+  // Crude queue cap: if something is speaking AND more is pending, drop
+  // non-priority messages instead of piling up stale instructions.
+  if(!priority&&window.speechSynthesis.speaking&&window.speechSynthesis.pending)return;
+  _spokenAt[key]=now;
+  if(priority)window.speechSynthesis.cancel(); // urgent: replace current speech
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='en-US';u.rate=1.0;u.pitch=1.0;u.volume=1.0;
+  window.speechSynthesis.speak(u);
+}
+// Chrome-Android watchdog: synthesis silently pauses on long sessions
+setInterval(()=>{try{if(window.speechSynthesis?.speaking)window.speechSynthesis.resume()}catch(e){}},5000);
+
+function maybeSpeak(manType, label, distM){
+  if(!voiceOn)return;
+  // Determine distance bracket
+  let bracket='';
+  let text='';
+  if(distM>600)return;
+  if(distM>350)      {bracket='500';text=`In 500 meters, ${label}`;}
+  else if(distM>120) {bracket='200';text=`In ${Math.round(distM/10)*10} meters, ${label}`;}
+  else if(distM>20)  {bracket='close';text=`${label} ahead`;}
+  else               {bracket='now';text=`${label} now`;}
+  const key=`${manType}_${bracket}`;
+  if(key===lastVoiceKey)return; // already announced
+  lastVoiceKey=key;
+  // Reset key when maneuver changes
+  if(manType!==lastVoiceManeuver){lastVoiceKey=key;lastVoiceManeuver=manType;}
+  speakText(text);
+}
+
+// ── GPS speed fallback (Android often returns speed=null when stopped) ──
+let lastGPSForSpeed=null;
+let _speedBuf=[];      // 5-point moving average for speed
+let _headBuf=[];       // 4-point circular mean for heading
+
+function smoothSpeed(raw){
+  if(raw==null||raw>200){
+    return _speedBuf.length?_speedBuf[_speedBuf.length-1]:0;
+  }
+  _speedBuf.push(raw);
+  if(_speedBuf.length>5)_speedBuf.shift();
+  return _speedBuf.reduce((a,b)=>a+b,0)/_speedBuf.length;
+}
+
+function smoothHeading(raw){
+  if(raw==null||isNaN(raw))return currentHeading;
+  _headBuf.push(raw);
+  if(_headBuf.length>4)_headBuf.shift();
+  const sin=_headBuf.reduce((a,h)=>a+Math.sin(h*Math.PI/180),0);
+  const cos=_headBuf.reduce((a,h)=>a+Math.cos(h*Math.PI/180),0);
+  return((Math.atan2(sin,cos)*180/Math.PI)+360)%360;
+}
+function calcSpeedFromPoints(lat,lng){
+  const now=Date.now();
+  if(!lastGPSForSpeed) return null;
+  const dt=(now-lastGPSForSpeed.t)/3600000; // hours
+  if(dt<=0||dt>15/3600) return null;        // ignore gaps >15s
+  return haversine(lastGPSForSpeed.lat,lastGPSForSpeed.lng,lat,lng)/dt; // km/h
+}
+
+// ── MAP ────────────────────────────────────────────────
+map=L.map('map',{center:[-15,-50],zoom:5,zoomControl:false,tap:true,rotate:true,rotateControl:false,touchRotate:false,shiftKeyRotate:false});
+loadStoredRecordings();
+checkInflightRecovery();
+checkQuota();
+setTimeout(()=>{try{map.invalidateSize();}catch(e){}},600);
+// Ensure map tiles render correctly after initial layout
+setTimeout(()=>{try{map.invalidateSize();}catch(e){}},500);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+
+// ── CSS-based heading-up map rotation ─────────────
+// Rotates the OUTER #map container (2x oversized, vehicle kept at centre by
+// setView). Leaflet's internal pane transforms are never touched, so there is
+// no feedback loop with Leaflet's own pan/zoom animations — the previous
+// approach read the pane's computed transform mid-animation and wrote stale
+// interpolated positions back, drifting until the view was lost.
+let _lastBearing=0;
+function setMapBearing(deg){
+  const c=map.getContainer();if(!c)return;
+  // Unwrap across 0/360 so the CSS transition never spins the long way round
+  let d=deg;
+  while(d-_lastBearing>180)d-=360;
+  while(d-_lastBearing<-180)d+=360;
+  c.style.transform=(d%360===0)?'':`rotate(${d}deg)`;
+  c.classList.toggle('rotated',d%360!==0);
+  _lastBearing=d;
+}
+// Map tile layers — Voyager default (readable), Dark for night
+const TILES={
+  day: {
+    url:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    label:'☀️'
+  },
+  night: {
+    url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    label:'🌙'
+  }
+};
+// Fit bounds compensating the 2x oversized container: fitBounds fills the
+// whole (invisible) container, so zoom out 1 level to fit the visible quarter.
+function fitRouteBounds(b){
+  try{
+    if(!b||!b.isValid())return false;
+    map.fitBounds(b,{padding:[20,20]});
+    map.setZoom(map.getZoom()-1,{animate:false});
+    return true;
+  }catch(e){return false;}
+}
+
+let currentTile='day';
+let tileLayer=L.tileLayer(TILES.day.url,{
+  attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+}).addTo(map);
+
+function toggleMapStyle(){
+  currentTile=currentTile==='day'?'night':'day';
+  map.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(TILES[currentTile].url,{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(map);
+  // TileLayer goes under other layers — bring route/markers to front
+  [routeLayer,routeRemainLayer,routeDoneLayer,routeAheadLayer,recLayer].forEach(l=>l?.bringToFront());
+  Object.values(stopMarkers).forEach(m=>m?.bringToFront?.());
+  const btn=el('map-style-btn');
+  if(btn) btn.textContent=TILES[currentTile==='day'?'night':'day'].label;
+}
+
+// ── SHEET ──────────────────────────────────────────────
+let shState='peek',tsY=0;
+function toggleSheet(){shState=shState==='expanded'?'mid':'expanded';applySheet()}
+function toggleSheetCollapse(){shState=(shState==='peek'||shState==='hidden')?'mid':'peek';applySheet()}
+function applySheet(){
+  const s=el('sheet');
+  s.classList.remove('expanded','mid','hidden','peek');
+  s.classList.add(shState);
+  const ch=el('sheet-chev');
+  if(ch)ch.textContent=(shState==='peek'||shState==='hidden')?'⌃':'⌄';
+  setTimeout(()=>{try{map.invalidateSize();}catch(e){}},320);
+}
+function shTS(e){tsY=e.touches[0]?.clientY||0}
+function shTM(e){if(e.target.closest('.stops-list,.rec-list,.nav-section')&&shState==='expanded')return;e.preventDefault()}
+function shTE(e){
+  const dy=(e.changedTouches[0]?.clientY||tsY)-tsY;
+  if(Math.abs(dy)<25)return;
+  if(dy>0) shState=(shState==='expanded')?'mid':'peek';   // swipe down: expanded→mid→peek
+  else     shState=(shState==='peek'||shState==='hidden')?'mid':'expanded'; // swipe up
+  applySheet();
+}
+
+function switchTab(n,fromUser){
+  // Tapping the already-active tab collapses the sheet — aux panes must not
+  // block the map. Programmatic calls (fromUser undefined) never collapse.
+  if(fromUser&&el('stab-'+n).classList.contains('active')&&(shState==='mid'||shState==='expanded')){
+    shState='peek';applySheet();return;
+  }
+  ['rota','nav','paradas','gravadas'].forEach(t=>{
+    el('stab-'+t).classList.toggle('active',t===n);
+    el('pane-'+t).classList.toggle('active',t===n);
+  });
+  if(shState==='peek'||shState==='hidden'){shState='mid';applySheet()}
+}
+
+// Floating panel during nav
+let hudPanelOpen=false;
+function toggleHudPanel(){
+  hudPanelOpen=!hudPanelOpen;
+  el('hud-sp').classList.toggle('on',hudPanelOpen);
+  if(hudPanelOpen) renderHudPanel();
+}
+function renderHudPanel(){
+  const c=el('hud-sp-list');c.innerHTML='';
+  // Show only the CURRENT stop + NEXT upcoming stop (not the full list)
+  const current=stops.find(s=>s.state==='current');
+  const next=stops.find(s=>s.state==='waiting');
+  const toShow=[current,next].filter(Boolean);
+  const total=stops.length, done=stops.filter(s=>s.state==='done').length;
+  // Progress header
+  const hdr=document.createElement('div');
+  hdr.style.cssText='padding:6px 12px;font-size:11px;font-family:var(--mono);color:var(--muted);border-bottom:1px solid var(--border)';
+  hdr.textContent=`Stop ${done+1} of ${total} · ${done} done`;
+  c.appendChild(hdr);
+  toShow.forEach(s=>{
+    const row=document.createElement('div');
+    const delta=s.elapsed-(s.dur_s||0);
+    const timerTxt=s.elapsed>0||s.state==='current'?fmtTime(s.elapsed):'—';
+    const planned=s.dur_s?`/${fmtTime(s.dur_s)}`:'';
+    const timerCls=s.running?'running':delta>0&&s.elapsed>0?'over':'';
+    row.className=`hud-stop-row ${s.state}`;
+    row.innerHTML=`
+      <div class="hud-sr-num ${s.state==='done'?'done':s.state==='current'?'current':'waiting'}">
+        ${s.state==='done'?'✓':s.id}
+      </div>
+      <div class="hud-sr-name">${s.name}${(s.events||[]).map(e=>
+        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':'⚡'}</span>`
+      ).join('')}</div>
+      <div class="hud-sr-timer ${timerCls}">${timerTxt}${s.state==='current'?planned:''}</div>
+      ${s.state==='current'?`
+        <button class="hud-sr-done-btn"
+          onclick="markDone(${s.id});renderHudPanel();speakText('Stop ${s.id} done')">
+          ✓ Next
+        </button>`:''}`;
+    c.appendChild(row);
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  TURN-BY-TURN ENGINE
+// ══════════════════════════════════════════════════════
+
+// Compute angle difference (-180 to +180)
+function angleDiff(a,b){let d=b-a;while(d>180)d-=360;while(d<-180)d+=360;return d}
+
+// Classify angle difference into maneuver type (spec §7.4)
+function classifyTurn(diff){
+  const a=Math.abs(diff),right=diff>0;
+  if(a<20)  return{type:'straight',icon:'↑',label:'Continue straight',cls:'straight'};
+  if(a>=150)return{type:'uturn',icon:'↩',label:'Make a U-turn',cls:'turn'};
+  if(a>=100)return right?{type:'shr',icon:'⤵',label:'Sharp right',cls:'turn'}
+                        :{type:'shl',icon:'⤴',label:'Sharp left',cls:'turn'};
+  if(a>=35) return right?{type:'right',icon:'→',label:'Turn right',cls:'turn'}
+                        :{type:'left',icon:'←',label:'Turn left',cls:'turn'};
+  return right?{type:'sr',icon:'↗',label:'Slight right',cls:'straight'}
+              :{type:'sl',icon:'↖',label:'Slight left',cls:'straight'};
+}
+
+// Build maneuvers array from route points
+// Returns [{idx, lat, lon, distFromStart, icon, label, cls}]
+function buildManeuvers(pts){
+  const result=[];
+  const SMOOTH=5;      // average over N points to reduce noise
+  const MIN_TURN=28;   // degrees to call it a real turn
+  const MIN_SEP=0.04;  // km minimum between maneuvers
+
+  if(pts.length>SMOOTH*2){
+    // Cumulative distance per point
+    const cums=[0];
+    for(let i=1;i<pts.length;i++)
+      cums.push(cums[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+
+    // Smoothed bearing change at each point.
+    // MIN_LEG: bearings over windows shorter than ~8 m are GPS-jitter noise
+    // (vehicle parked at a stop) — they produced phantom U-turns exactly at
+    // stop locations, announced right when the driver departed.
+    const MIN_LEG=0.008; // km
+    const diffs=new Array(pts.length).fill(0);
+    for(let i=SMOOTH;i<pts.length-SMOOTH;i++){
+      const d1=haversine(pts[i-SMOOTH].lat,pts[i-SMOOTH].lon,pts[i].lat,pts[i].lon);
+      const d2=haversine(pts[i].lat,pts[i].lon,pts[i+SMOOTH].lat,pts[i+SMOOTH].lon);
+      if(d1<MIN_LEG||d2<MIN_LEG)continue; // unreliable bearing — leave diff at 0
+      const b1=brng(pts[i-SMOOTH].lat,pts[i-SMOOTH].lon,pts[i].lat,pts[i].lon);
+      const b2=brng(pts[i].lat,pts[i].lon,pts[i+SMOOTH].lat,pts[i+SMOOTH].lon);
+      diffs[i]=angleDiff(b1,b2);
+    }
+
+    // Register only LOCAL PEAKS of |diff| — taking the first threshold
+    // crossing splits a single 90° corner into two "slight" turns.
+    let lastManeuverDist=-Infinity;
+    for(let i=SMOOTH;i<pts.length-SMOOTH;i++){
+      const a=Math.abs(diffs[i]);
+      if(a<MIN_TURN)continue;
+      if(a<Math.abs(diffs[i-1])||a<Math.abs(diffs[i+1]))continue; // not the apex
+      if(cums[i]-lastManeuverDist<MIN_SEP)continue;
+      const m=classifyTurn(diffs[i]);
+      if(m.type!=='straight'){
+        result.push({idx:i,lat:pts[i].lat,lon:pts[i].lon,distFromStart:cums[i],...m});
+        lastManeuverDist=cums[i];
+      }
+    }
+  }
+
+  // Add arrival at end
+  result.push({
+    idx:pts.length-1,lat:pts[pts.length-1].lat,lon:pts[pts.length-1].lon,
+    distFromStart:totalRouteDist,type:'arrive',icon:'🏁',label:'Arrived at destination',cls:'arrive'
+  });
+
+  return result;
+}
+
+// Find maneuver to show based on current route index
+function getNextManeuver(curIdx,curDistFromStart){
+  const radius=+el('rng-radius').value||10;
+
+  // Find nearest non-done stop within 4x radius
+  const nextStop=stops.filter(s=>s.state!=='done').find(s=>{
+    const d=haversine(currentPos.lat,currentPos.lng,s.lat,s.lng)*1000;
+    return d<radius*4;
+  });
+
+  const upcoming=maneuvers.filter(m=>m.idx>curIdx&&m.distFromStart>curDistFromStart);
+  const nextMan=upcoming[0]||null;
+
+  if(nextStop){
+    const stopDist=haversine(currentPos.lat,currentPos.lng,nextStop.lat,nextStop.lng)*1000;
+    const manDist=nextMan?haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000:Infinity;
+    if(stopDist<manDist){
+      // AT the stop (inside arrival radius) — show live timer + tap Done to continue
+      if(stopDist<=radius&&nextStop.state==='current'){
+        const elapsed=fmtTime(nextStop.elapsed);
+        const planned=nextStop.dur_s?` / ${fmtTime(nextStop.dur_s)}`:'';
+        return{dist:0,icon:'⏸',
+          label:nextStop.running?`⏱ ${elapsed}${planned}`:'At stop — tap Done',
+          detail:`${nextStop.name} · tap "✓ Done — Next →" to continue`,
+          cls:'stop',type:'stop'};
+      }
+      // Approaching stop
+      return{dist:stopDist,icon:'⏸',label:'Make a stop',
+        detail:nextStop.name+(nextStop.dur_s?` · Planned: ${fmtTime(nextStop.dur_s)}`:''),
+        cls:'stop',type:'stop'};
+    }
+  }
+
+  if(!nextMan) return{dist:0,icon:'🏁',label:'Destination reached',detail:'',cls:'arrive',type:'arrive'};
+  const distM=haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000;
+  const afterTxt=upcoming[1]?`Then: ${upcoming[1].label}`:'';
+  return{dist:distM,icon:nextMan.icon,label:nextMan.label,detail:afterTxt,cls:nextMan.cls,type:nextMan.type};
+}
+
+// Format distance for instruction
+function fmtDist(m){
+  if(m<20)  return'here';
+  if(m<1000)return Math.round(m/10)*10+' m';
+  return(m/1000).toFixed(1)+' km';
+}
+
+// ── GPX LOAD ───────────────────────────────────────────
+function loadGPX(input){
+  const file=input.files[0];if(!file)return;
+  if(/\.json$/i.test(file.name)){importRecsJSON(input);return}
+  const fr=new FileReader();fr.onload=e=>parseGPX(e.target.result,file.name);fr.readAsText(file);
+  input.value='';
+}
+
+function clearMapLayers(){
+  [routeLayer,routeDoneLayer,routeAheadLayer,routeRemainLayer,recLayer].forEach(l=>{if(l)map.removeLayer(l)});
+  routeLayer=routeDoneLayer=routeAheadLayer=routeRemainLayer=recLayer=null;
+  Object.values(stopMarkers).forEach(m=>map.removeLayer(m));
+  stopMarkers={};
+  extraMarkers.forEach(m=>{try{map.removeLayer(m)}catch(e){}});
+  extraMarkers=[];
+}
+
+function parseGPX(xml,filename){
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  const trkpts=doc.querySelectorAll('trkpt');
+  const pts=[];
+  trkpts.forEach(p=>{
+    const lat=parseFloat(p.getAttribute('lat')),lon=parseFloat(p.getAttribute('lon'));
+    const timeEl=p.querySelector('time');
+    if(!isNaN(lat)&&!isNaN(lon)) pts.push({lat,lon,t:timeEl?new Date(timeEl.textContent):null});
+  });
+  if(pts.length<2){alert('Invalid GPX or no track points.');return}
+
+  clearMapLayers();
+  stops=[];insideStop.clear();el('stops-list').innerHTML='';
+  destinationAnnounced=false;evtAnnounced.clear();departGate=null;
+
+  routePts=pts;buildCumDist(pts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+  lastRouteIdx=0;
+
+  // Draw layers
+  const ll=pts.map(p=>[p.lat,p.lon]);
+  routeLayer    =L.polyline(ll,{color:'rgba(240,165,0,.1)',weight:5}).addTo(map);
+  routeAheadLayer=L.polyline(ll,{color:'#f0a500',weight:5,opacity:.95}).addTo(map);
+  routeRemainLayer=L.polyline([],{color:'rgba(240,165,0,.3)',weight:3,opacity:.6,dashArray:'6 4'}).addTo(map);
+  routeDoneLayer =L.polyline([],{color:'#555',weight:4,opacity:.5}).addTo(map);
+  fitRouteBounds(routeLayer.getBounds());
+
+  // Start / end markers
+  const dot=c=>L.divIcon({html:`<div style="background:${c};width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px ${c}"></div>`,className:'',iconAnchor:[7,7]});
+  extraMarkers.push(L.marker(ll[0],{icon:dot('#3fb950')}).addTo(map).bindTooltip('Start'));
+  extraMarkers.push(L.marker(ll[ll.length-1],{icon:dot('#f85149')}).addTo(map).bindTooltip('End'));
+
+  // Waypoints → stops
+  doc.querySelectorAll('wpt').forEach((w,i)=>{
+    const lat=parseFloat(w.getAttribute('lat')),lon=parseFloat(w.getAttribute('lon'));
+    if(isNaN(lat)||isNaN(lon))return;
+    const name=w.querySelector('name')?.textContent||`Stop ${i+1}`;
+    const desc=w.querySelector('desc')?.textContent||'';
+    const cmt =w.querySelector('cmt')?.textContent||'';
+    let dur_s=0;
+    const durEl=w.querySelector('duracao_s');if(durEl)dur_s=parseInt(durEl.textContent)||0;
+    if(!dur_s){const m1=cmt.match(/duracao_s=(\d+)/);if(m1)dur_s=parseInt(m1[1]);}
+    if(!dur_s){const m2=desc.match(/Dura[çc][aã]o:\s*([\d.]+)\s*min/i);if(m2)dur_s=Math.round(parseFloat(m2[1])*60)}
+    // Stop events (🚪/♿) — exported by this app, read back on load
+    const events=[];
+    if(w.querySelector('openDoor')||/openDoor/i.test(desc))events.push('openDoor');
+    if(w.querySelector('kneeling')||/kneeling/i.test(desc))events.push('kneeling');
+    const id=i+1;
+    stops.push({id,name,lat,lng:lon,dur_s,elapsed:0,running:false,intervalId:null,state:'waiting',desc,events});
+    stopMarkers[id]=L.marker([lat,lon],{icon:mkStopIcon(id,'waiting')}).addTo(map)
+      .bindPopup(`<strong>${name}</strong>${dur_s?`<br><small style="color:#888;font-family:var(--mono)">⏱ ${fmtTime(dur_s)}</small>`:''}`,{maxWidth:180});
+    renderCard(stops[stops.length-1]);
+  });
+
+  // Build turn-by-turn maneuvers
+  maneuvers=buildManeuvers(pts);
+
+  // Stats
+  const totalProg=stops.reduce((a,s)=>a+s.dur_s,0);
+  el('ri-dist').textContent=totalRouteDist>=1?totalRouteDist.toFixed(2)+' km':(totalRouteDist*1000).toFixed(0)+' m';
+  el('ri-pts').textContent=pts.length;
+  el('ri-wpts').textContent=stops.length;
+  el('ri-tprog').textContent=fmtTime(totalProg);
+  el('ri-turns').textContent=maneuvers.filter(m=>m.type!=='straight'&&m.type!=='arrive').length;
+  el('ri-maneuvers').textContent=maneuvers.length;
+  el('h-dist').textContent=totalRouteDist>=1?totalRouteDist.toFixed(1)+'km':(totalRouteDist*1000).toFixed(0)+'m';
+  el('h-prog').textContent=totalProg?fmtTime(totalProg):'—';el('h-real').textContent='00:00:00';
+  el('h-stops').textContent=`0/${stops.length}`;
+  el('stops-badge').textContent=stops.length?` (${stops.length})`:'';
+  el('no-route').style.display='none';el('route-details').style.display='flex';
+  if(el('upload-zone'))el('upload-zone').style.display='none';
+  if(el('stops-empty'))el('stops-empty').style.display=stops.length?'none':'';
+  el('btn-nav').disabled=false;el('btn-nav2').disabled=false;
+  el('peek-icon').textContent='🗺️';el('peek-name').textContent=filename;
+  el('peek-sub').textContent=`${stops.length} stops · ${maneuvers.filter(m=>m.type!=='arrive').length} maneuvers`;
+  updSummaryBar();switchTab('rota');shState='peek';applySheet();
+}
+
+// ── STOP CARDS ─────────────────────────────────────────
+// Bigger 10"-readable pins. The NEXT pending stop pulses amber, the stop the
+// vehicle is currently at pulses green — the driver sees the target at a glance.
+function mkStopIcon(id,state,isNext){
+  const colors={waiting:'#f0a500',current:'#3fb950',done:'#555'};
+  const lbl=state==='done'?'✓':id;const c=colors[state]||'#f0a500';
+  const SZ=state==='done'?30:(isNext||state==='current'?46:38);
+  const cls=state==='current'?'mk-pulse-g':(isNext?'mk-pulse-a':'');
+  return L.divIcon({
+    html:`<div class="${cls}" style="background:${c};color:${state==='done'?'#aaa':'#000'};width:${SZ}px;height:${SZ}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:${state==='done'?12:17}px;font-weight:800">${lbl}</span></div>`,
+    className:'',iconSize:[SZ,SZ],iconAnchor:[SZ/2,SZ],popupAnchor:[0,-SZ-4]
+  });
+}
+function refreshStopIcons(){
+  const next=stops.find(x=>x.state!=='done');
+  stops.forEach(x=>stopMarkers[x.id]?.setIcon(mkStopIcon(x.id,x.state,x===next&&x.state!=='current')));
+}
+function renderCard(s){
+  if(el('stops-empty')) el('stops-empty').style.display='none';
+  const card=document.createElement('div');
+  card.className=`stop-card state-waiting`;card.id=`sc-${s.id}`;
+  card.innerHTML=cardHTML(s);el('stops-list').appendChild(card);
+}
+function cardHTML(s){
+  const hp=s.dur_s>0;
+  return `
+  <div class="sc-head">
+    <div class="sc-num waiting" id="scnum-${s.id}">${s.id}</div>
+    <div class="sc-name">${s.name}${s.photo?' 📷':''}${(s.events||[]).map(e=>
+      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':''}</span>`
+    ).join('')}</div>
+    <span class="sc-badge waiting" id="scst-${s.id}">Waiting</span>
+  </div>
+  <div class="sc-times">
+    <div class="sc-time-col">
+      <div class="sc-time-label">PLANNED</div>
+      <div class="sc-time-val">${hp?fmtTime(s.dur_s):'—'}</div>
+      ${hp?`<div class="sc-delta" id="scd-${s.id}"></div>`:''}
+    </div>
+    <div class="sc-time-col real">
+      <div class="sc-time-label">ACTUAL</div>
+      <div class="sc-time-val" id="td-${s.id}">00:00:00</div>
+    </div>
+  </div>
+  ${hp?`<div class="sc-prog"><div class="sc-prog-bg"><div class="sc-prog-fill" id="scb-${s.id}" style="width:0%;background:var(--green)"></div></div></div>`:''}
+  <div class="sc-ctrl">
+    <button class="tbtn go"  id="tbgo-${s.id}" onclick="startTimer(${s.id})">▶</button>
+    <button class="tbtn ps"  id="tbps-${s.id}" onclick="pauseTimer(${s.id})" style="display:none">⏸</button>
+    <button class="tbtn rst" onclick="resetTimer(${s.id})">↺</button>
+    <div class="sc-btns">
+      <button class="sc-btn" onclick="focusStop(${s.id})">🎯 View</button>
+      <button class="sc-btn" onclick="markDone(${s.id})">✓ Done</button>
+      ${s.photo?`<button class="sc-btn" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0)" style="color:var(--accent);border-color:var(--accent)">📷</button>`:''}
+    </div>
+  </div>
+  ${s.photo?`<img class="sc-photo" src="${s.photo}" alt="Stop photo" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0)">`:''}`;
+}
+
+function updCardProgress(s){
+  if(!s.dur_s)return;
+  const pct=Math.min((s.elapsed/s.dur_s)*100,110);
+  const bar=el(`scb-${s.id}`);
+  if(bar){bar.style.width=Math.min(pct,100)+'%';bar.style.background=pct<90?'var(--green)':pct<100?'var(--accent)':'var(--red)'}
+  const delta=s.elapsed-s.dur_s;
+  const dEl=el(`scd-${s.id}`);
+  if(dEl&&s.elapsed>0){dEl.className=`sc-delta ${delta<=0?'ok':delta<60?'warn':'over'}`;dEl.textContent=delta<=0?`−${fmtTime(-delta)} ahead`:`+${fmtTime(delta)} delay`}
+  const tdEl=el(`td-${s.id}`);
+  if(tdEl)tdEl.className=`sc-time-val${s.running?' running':s.elapsed>0?' paused':''}${delta>0&&s.elapsed>0?' over':''}`;
+}
+function updCardState(s){
+  const card=el(`sc-${s.id}`);if(!card)return;
+  card.className=`stop-card state-${s.state==='current'&&s.dur_s>0&&s.elapsed>s.dur_s?'over':s.state}`;
+  const num=el(`scnum-${s.id}`);if(num)num.className=`sc-num ${s.state==='waiting'?'waiting':s.state==='current'?'current':'done'}`;
+  const st=el(`scst-${s.id}`);
+  if(st){st.className=`sc-badge ${s.state}`;st.textContent={waiting:'Waiting',current:'At stop',done:'Done'}[s.state]}
+  refreshStopIcons(); // re-evaluates which stop is NEXT (pulsing highlight)
+}
+
+// ── TIMERS ─────────────────────────────────────────────
+function startTimer(id){
+  const s=stops.find(s=>s.id===id);if(!s||s.running)return;
+  s.running=true;s.state='current';
+  s.intervalId=setInterval(()=>{
+    s.elapsed++;
+    const d=el(`td-${id}`);if(d)d.textContent=fmtTime(s.elapsed);
+    updCardProgress(s);updTotals();if(hudPanelOpen)renderHudPanel();
+    // Auto-complete when planned time is reached
+    if(s.dur_s>0&&s.elapsed>=s.dur_s&&s.running){
+      clearInterval(s.intervalId);s.running=false;
+      setTimeout(()=>{
+        markDone(s.id);
+        closeStopPhoto();
+        if(hudPanelOpen)renderHudPanel();
+        showAlert('arrived','✓ Stop '+s.id+' — time complete. Proceed to next stop.');
+        speakText('Stop '+s.id+' time complete. Proceed to the next stop.',true);
+      },800);
+    }
+  },1000);
+  const d=el(`td-${id}`);if(d)d.className='sc-time-val running';
+  el(`tbgo-${id}`).style.display='none';el(`tbps-${id}`).style.display='';
+  updCardState(s);updSummaryBar();
+}
+function pauseTimer(id){
+  const s=stops.find(s=>s.id===id);if(!s||!s.running)return;
+  s.running=false;clearInterval(s.intervalId);
+  const d=el(`td-${id}`);if(d)d.className='sc-time-val paused';
+  el(`tbgo-${id}`).style.display='';el(`tbps-${id}`).style.display='none';
+}
+function resetTimer(id){
+  pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
+  s.elapsed=0;s.state='waiting';
+  const d=el(`td-${id}`);if(d){d.textContent='00:00:00';d.className='sc-time-val'}
+  const bar=el(`scb-${id}`);if(bar)bar.style.width='0%';
+  const dEl=el(`scd-${id}`);if(dEl)dEl.textContent='';
+  updCardState(s);updTotals();updSummaryBar();
+}
+function markDone(id){
+  pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
+  s.state='done';insideStop.delete(id);
+  departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
+  updCardState(s);updSummaryBar();
+  if(hudPanelOpen)renderHudPanel();
+}
+function startAllTimers(){stops.forEach(s=>{if(s.state!=='done')startTimer(s.id)})}
+function resetAllTimers(){stops.forEach(s=>resetTimer(s.id))}
+function updTotals(){
+  const real=stops.reduce((a,s)=>a+s.elapsed,0),prog=stops.reduce((a,s)=>a+s.dur_s,0);
+  el('h-real').textContent=fmtTime(real);
+  const d=real-prog;el('h-real').className=`tstat-v${d>120?' over':d>0?' warn':' ok'}`;
+}
+function updSummaryBar(){
+  const done=stops.filter(s=>s.state==='done').length,n=stops.length;
+  const real=stops.reduce((a,s)=>a+s.elapsed,0),prog=stops.reduce((a,s)=>a+s.dur_s,0);
+  const delta=real-prog,pct=prog?(real/prog)*100:0;
+  el('h-stops').textContent=`${done}/${n}`;
+  el('sb-done').textContent=`${done}/${n}`;
+  el('sb-prog').textContent=prog?fmtTime(prog):'—';
+  el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
+  const sfill=el('sb-fill');
+  if(sfill){sfill.style.width=Math.min(pct,100)+'%';sfill.style.background=pct<90?'var(--green)':pct<100?'var(--accent)':'var(--red)';}
+  if(prog&&real>0){
+    const dv=el('sb-delta'),lv=el('sb-dlbl');
+    dv.className=`sb-val ${delta<=0?'ok':delta<120?'warn':'over'}`;
+    dv.textContent=delta<=0?'−'+fmtTime(-delta):'+'+fmtTime(delta);
+    lv.textContent=delta<=0?'ahead':'delay';
+    lv.style.color=delta<=0?'var(--green)':delta<120?'var(--accent)':'var(--red)';
+  }
+}
+
+// ── NAVIGATION ─────────────────────────────────────────
+function startNav(){
+  if(navActive)return;
+  if(!navigator.geolocation){alert('Geolocation not available.');return}
+  navActive=true;
+  // Reset per-run state — without this, a 2nd run of the same route
+  // starts with lastRouteIdx stuck at the end and matching never recovers.
+  lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
+  lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
+  refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
+  el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
+  el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
+  el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
+  el('sum-bar').classList.add('on');
+  shState='hidden';applySheet();
+  requestWakeLock();
+  el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
+  setGPS('wait','Waiting for GPS...');
+  watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+}
+function stopNav(){
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+  navActive=false;
+  el('btn-nav').style.display='';el('btn-nav2').style.display='';
+  el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
+  el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  el('hud-sp').classList.remove('on');hudPanelOpen=false;
+  el('sum-bar').classList.remove('on');
+  stopSim(true); // never leave a simulation feeding a stopped navigation
+  // Reset map to north-up (spec 5.3)
+  setMapBearing(0);_lastBearing=0;
+  if(el('nsc'))el('nsc').style.display='none';
+  shState='mid';applySheet();
+  if(!isRec) releaseWakeLock();
+  setGPS('wait','GPS stopped');
+}
+
+function onGPS(pos){
+  const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
+  currentPos={lat,lng};
+  if(heading!=null&&!isNaN(heading)) currentHeading=smoothHeading(heading)??heading
+
+  // Speed: prefer GPS value, fallback to distance-based calculation
+  const rawSpd=speed!=null?speed*3.6:calcSpeedFromPoints(lat,lng);
+  const spdKmh=smoothSpeed(rawSpd);  // smoothed — for display
+  const rawKmh=rawSpd!=null?rawSpd:0; // raw — for stop detection
+  lastGPSForSpeed={lat,lng,t:Date.now()};
+  el('hud-spd').textContent=spdKmh!=null?Math.round(spdKmh):'—';
+  // Pacing target: recorded avg speed of the leg towards the next pending stop
+  if(navActive&&el('hud-tgt')){
+    const _nx=stops.find(x=>x.state!=='done');
+    el('hud-tgt').textContent=_nx?.seg_avg!=null?`Ø ${_nx.seg_avg} km/h`:'';
+  }
+  setGPS('active',`Prec: ${accuracy?.toFixed(0)||'?'} m`);
+
+  // Compass
+  if(currentHeading!=null){
+    const dirs=['N','NE','L','SE','S','SO','O','NO'];
+    el('hud-compass').textContent=['↑','↗','→','↘','↓','↙','←','↖'][Math.round(((currentHeading%360)+360)%360/45)%8];
+    el('hud-cdeg').textContent=dirs[Math.round(((currentHeading%360)+360)%360/45)%8];
+  }
+
+  // Position marker
+  const hasHdg=currentHeading!=null&&!isNaN(currentHeading);
+  const mHtml=hasHdg
+    ?`<div style="font-size:28px;line-height:1;transform:rotate(${currentHeading}deg);filter:drop-shadow(0 0 5px rgba(88,166,255,.8))">▲</div>`
+    :`<div style="width:14px;height:14px;background:var(--blue);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 0 rgba(88,166,255,.6);animation:pulse 2s infinite"></div>`;
+  const icon=L.divIcon({html:mHtml,className:'',iconAnchor:[hasHdg?14:7,hasHdg?14:7]});
+  if(!posMarker) posMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);
+  else{posMarker.setLatLng([lat,lng]);posMarker.setIcon(icon)}
+
+  if(accCircle)map.removeLayer(accCircle);
+  accCircle=L.circle([lat,lng],{radius:accuracy,color:'#58a6ff',fillColor:'#58a6ff',fillOpacity:.07,weight:1,opacity:.3}).addTo(map);
+
+  if(+el('rng-follow').value===1){
+    const zoom=+el('rng-zoom').value;
+    if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
+      // Heading-up: rotate map to put direction of travel at top
+      setMapBearing(-currentHeading); // negative = rotate map opposite to heading
+      // Offset center slightly behind vehicle (show more route ahead)
+      const hr=currentHeading*Math.PI/180;
+      const offM=40; // metres behind
+      const dLat=Math.cos(hr+Math.PI)*offM/111320;
+      const dLng=Math.sin(hr+Math.PI)*offM/(111320*Math.cos(lat*Math.PI/180));
+      map.setView([lat+dLat,lng+dLng],zoom,{animate:true,duration:.4,noMoveStart:true});
+    }else{
+      setMapBearing(0); // north-up when stopped
+      map.setView([lat,lng],zoom,{animate:true,duration:.5});
+    }
+  }
+
+  // Route remaining + turn-by-turn
+  const{nearIdx,distFromStart}=nearestRoutePoint(lat,lng);
+  updRouteRemaining(nearIdx,distFromStart);
+  updInstruction(nearIdx,distFromStart);
+  // Announce arrival at destination
+  if(routePts.length&&nearIdx>=routePts.length-3&&!destinationAnnounced){
+    destinationAnnounced=true;speakText('You have arrived at your destination',true);
+  }
+
+  // Arrival check (rawKmh passed in — it's local to this function)
+  checkArrival(lat,lng,rawKmh);
+  updNextStopCard(lat,lng);
+
+  // Recording stop detection
+  if(isRec){
+    const velThreshold=+el('rng-recvel').value;
+    const durThreshold=+el('rng-recdur').value;
+    // spdKmh=null means GPS didn't report speed — assume 0 (stopped)
+    const velKmh=rawKmh; // use raw (unsmoothed) speed for stop detection
+
+    if(velKmh<velThreshold){
+      if(!recStopCandidate){
+        recStopCandidate={lat,lng,t:Date.now()};
+        el('rec-sc').textContent='🔴 Slowing down...';
+      } else {
+        const stopDur=Math.round((Date.now()-recStopCandidate.t)/1000);
+        // Show live countdown immediately
+        if(!recStopCandidate.marked){
+          const remaining=Math.max(0,durThreshold-stopDur);
+          el('rec-sc').textContent=remaining>0
+            ?`🔴 Stopped: ${stopDur}s / ${durThreshold}s (${remaining}s to register)`
+            :'📍 Registering stop...';
+        }
+        if(stopDur>=durThreshold&&!recStopCandidate.marked){
+          recStopCandidate.marked=true;
+          // Mark this as a stop waypoint
+          const stopT=recStopCandidate.t; // when vehicle first stopped
+          const stopEntry={lat,lng,t:Date.now(),dur_s:0,startT:stopT,events:[],photo:null};
+          recStops.push(stopEntry);
+          // Visual marker on map
+          const sNum=recStops.length;
+          const stopIcon=L.divIcon({
+            html:`<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+              <div style="background:#f85149;color:#fff;font-size:11px;font-weight:700;font-family:monospace;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6)">⏸ P${sNum}</div>
+              <div style="width:12px;height:12px;background:#f85149;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px #f85149"></div>
+            </div>`,
+            className:'',iconAnchor:[24,20]
+          });
+          extraMarkers.push(L.marker([lat,lng],{icon:stopIcon,zIndexOffset:900}).addTo(map));
+          el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected`;
+          // Prompt camera for photo of this stop
+          pendingPhotoStopIdx=recStops.length-1;
+          el('cam-stop-num').textContent=recStops.length;
+          el('cam-prompt').classList.add('on');
+          // Auto-dismiss prompt after 15s if user ignores
+          clearTimeout(camPromptTimer);
+          camPromptTimer=setTimeout(()=>{if(el('cam-prompt').classList.contains('on'))skipPhoto();},15000);
+        }
+      }
+    } else {
+      // Leaving a stop — record duration
+      if(recStopCandidate?.marked&&recStops.length>0){
+        const lastStop=recStops[recStops.length-1];
+        lastStop.dur_s=Math.round((Date.now()-lastStop.startT)/1000);
+      }
+      if(recStopCandidate&&!recStopCandidate.marked){
+        // Was slowing but didn't reach threshold — reset counter
+        el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected${recStops.filter(s=>s.photo).length?' ('+recStops.filter(s=>s.photo).length+' with photo)':''}`;
+      }
+      recStopCandidate=null;
+    }
+
+    // Decimation: while parked, GPS jitter would add hundreds of noise
+    // points (phantom km, fake maneuvers, bloated files). Record only when
+    // moved >= 3 m, with a 10 s keep-alive point for time continuity.
+    const lastRP=recPoints[recPoints.length-1];
+    const movedM=lastRP?haversine(lastRP.lat,lastRP.lng,lat,lng)*1000:Infinity;
+    if(!lastRP||movedM>=3||Date.now()-lastRP.t>=10000){
+      recPoints.push({lat,lng,t:Date.now(),speed:speed,alt:altitude});
+      // Draw live track
+      if(!recLayer){recLayer=L.polyline([[lat,lng]],{color:'#58a6ff',weight:3,opacity:.85}).addTo(map)}
+      else recLayer.addLatLng([lat,lng]);
+    }
+    const recDist=calcDistRaw(recPoints);
+    el('rec-stats').textContent=`${recPoints.length} pts · ${recDist.toFixed(2)} km`;
+    if(Date.now()-_lastFlush>30000){_lastFlush=Date.now();flushInflight();} // crash recovery
+  }
+}
+function onGPSErr(err){
+  const m={1:'Permission denied',2:'Position unavailable',3:'GPS timeout'};
+  setGPS('error',m[err.code]||'Erro GPS');
+}
+
+// ── ROUTE REMAINING ────────────────────────────────────
+// ── GPS SIMULATOR (dev tool) ──────────────────────────
+// Replays a recorded cycle through onGPS as if it were live GPS — speed and
+// heading derived from the recorded points. Lets new app versions be tested
+// at a desk against real, physically-driven cycles, at 1x-20x speed.
+let simTimer=null,simIdx=0,simRec=null;
+
+function startSim(idx){
+  const rec=savedRecs[idx];
+  if(!rec||!rec.points||rec.points.length<2){alert('Recording has no points to simulate.');return}
+  stopSim(true);
+  simRec=rec;simIdx=0;
+  // Real GPS off while simulating — the two must never interleave
+  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
+  el('btn-simstop').style.display='';
+  showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
+  stepSim();
+}
+
+function stepSim(){
+  if(!simRec)return;
+  const pts=simRec.points;
+  if(simIdx>=pts.length){
+    showAlert('departed','■ Simulation finished');
+    stopSim();return;
+  }
+  const p=pts[simIdx],prev=pts[simIdx-1];
+  let heading=null,speed=null;
+  if(prev){
+    const dt=(p.t-prev.t)/1000;
+    if(dt>0)speed=haversine(prev.lat,prev.lng,p.lat,p.lng)*1000/dt; // m/s
+    heading=brng(prev.lat,prev.lng,p.lat,p.lng);
+  }
+  onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
+    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t});
+  setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
+  simIdx++;
+  const next=pts[simIdx];
+  if(next){
+    const mult=Math.max(1,+el('rng-sim').value||5);
+    const wait=Math.min(4000,Math.max(40,(next.t-p.t)/mult));
+    simTimer=setTimeout(stepSim,wait);
+  }else simTimer=setTimeout(stepSim,300);
+}
+
+function stopSim(silent){
+  clearTimeout(simTimer);simTimer=null;
+  const was=simRec;simRec=null;simIdx=0;
+  el('btn-simstop').style.display='none';
+  if(was&&!silent){
+    setGPS('wait','SIM stopped');
+    // Resume real GPS if navigation is still active
+    if(navActive&&watchId==null&&navigator.geolocation){
+      watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
+        {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+    }
+  }
+}
+
+// ── Next Stop Card updater (called every GPS tick while navigating) ──
+function updNextStopCard(lat,lng){
+  const c=el('nsc');if(!c)return;
+  const next=navActive?stops.find(x=>x.state!=='done'):null;
+  if(!next){c.style.display='none';return}
+  // Compact glanceable time: mm:ss, hours only when >= 1h
+  const fmtC=t=>{const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=Math.floor(t%60);
+    return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0');};
+  c.style.display='block';
+  const done=stops.filter(x=>x.state==='done').length;
+  el('nsc-count').textContent=`${Math.min(done+1,stops.length)}/${stops.length}`;
+  if(next.state==='current'){
+    c.classList.add('atstop');
+    el('nsc-title').textContent=next.dur_s?'AT STOP · TIME LEFT':'AT STOP · ELAPSED';
+    const v=next.dur_s?Math.max(0,next.dur_s-next.elapsed):next.elapsed;
+    el('nsc-dist').textContent=fmtC(v);
+  }else{
+    c.classList.remove('atstop');
+    el('nsc-title').textContent='NEXT STOP';
+    const dM=haversine(lat,lng,next.lat,next.lng)*1000;
+    el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
+  }
+  el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
+  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':'♿').join(' ');
+  el('nsc-leg').textContent=next.seg_avg!=null?`leg Ø ${next.seg_avg} km/h`:'';
+  const ph=el('nsc-photo');
+  if(next.photo&&next.photo.length>10){if(ph.src!==next.photo)ph.src=next.photo;ph.style.display='block';}
+  else ph.style.display='none';
+}
+function nscPhotoTap(){
+  const next=stops.find(x=>x.state!=='done');
+  if(next?.photo)showStopPhoto(next,0);
+}
+
+function nearestRoutePoint(lat,lng){
+  if(!routePts.length||!routeCumDist.length)return{nearIdx:0,distFromStart:0};
+
+  // Windowed search: look AHEAD of last known position only.
+  // This prevents confusing a street driven in one direction with
+  // the same street driven in the opposite direction later in the route.
+  const AHEAD=500;   // wider window — handles long segments between stops
+  const BACK=3;      // minimal backtrack — prevents bidirectional confusion
+
+  const from=Math.max(0, lastRouteIdx-BACK);
+  const to  =Math.min(routePts.length-1, lastRouteIdx+AHEAD);
+
+  let minIdx=from, minDist=Infinity;
+  for(let i=from;i<=to;i++){
+    let d=haversine(lat,lng,routePts[i].lat,routePts[i].lon);
+    // Direction penalty (spec 7.1): up to 60 m (0.06 km) for route points
+    // whose local bearing opposes the vehicle heading — disambiguates
+    // bidirectional roads driven in both directions on the same route.
+    if(currentHeading!=null&&i<routePts.length-1){
+      const segB=brng(routePts[i].lat,routePts[i].lon,routePts[i+1].lat,routePts[i+1].lon);
+      const dAng=Math.abs(angleDiff(segB,currentHeading)); // 0..180
+      d+=(dAng/180)*0.06;
+    }
+    if(d<minDist){minDist=d;minIdx=i;}
+  }
+
+  // Only advance, never jump backward by more than BACK
+  lastRouteIdx=Math.max(from, minIdx);
+  return{nearIdx:lastRouteIdx, distFromStart:routeCumDist[lastRouteIdx]};
+}
+
+function findNextStopRouteIdx(fromIdx){
+  const ns=stops.find(s=>s.state!=='done');
+  if(!ns||!routePts.length)return routePts.length-1;
+  let best=fromIdx,bestD=Infinity;
+  const end=Math.min(routePts.length,fromIdx+600);
+  for(let i=fromIdx;i<end;i++){
+    const d=haversine(routePts[i].lat,routePts[i].lon,ns.lat,ns.lng);
+    if(d<bestD){bestD=d;best=i;}
+  }
+  return best;
+}
+
+function updRouteRemaining(nearIdx,distFromStart){
+  if(!routePts.length)return;
+  const done=routePts.slice(0,nearIdx+1).map(p=>[p.lat,p.lon]);
+  // Segmented: bright = to next stop; dim dashed = rest of route
+  const segEnd=findNextStopRouteIdx(nearIdx);
+  const segment=routePts.slice(nearIdx,segEnd+1).map(p=>[p.lat,p.lon]);
+  const remain =routePts.slice(segEnd).map(p=>[p.lat,p.lon]);
+  routeDoneLayer.setLatLngs(done.length>1?done:[]);
+  routeAheadLayer.setLatLngs(segment.length>1?segment:done.length?[done[done.length-1]]:[] );
+  if(routeRemainLayer)routeRemainLayer.setLatLngs(remain.length>1?remain:[]);
+}
+
+function updInstruction(nearIdx,distFromStart){
+  if(!currentPos)return;
+  // GPS-only mode (Start GPS without a route loaded)
+  if(!routePts.length){
+    el('hud-icon-arrow').textContent='📡';
+    el('hud-icon').className='hud-instr-icon straight';
+    el('hud-icon-lbl').textContent='GPS';
+    el('hud-dist').textContent='';
+    el('hud-action').textContent='No route loaded';
+    el('hud-detail').textContent='Load a GPX or recording to navigate';
+    return;
+  }
+  const{dist,icon,label,detail,cls,type}=getNextManeuver(nearIdx,distFromStart);
+  const distM=dist;
+
+  // ── Arrow icon ──
+  el('hud-icon-arrow').textContent=icon;
+  el('hud-icon').className=`hud-instr-icon ${cls}`;
+
+  // Short label under icon
+  const iconLabels={straight:'STRAIGHT',right:'RIGHT',left:'LEFT',sr:'SLIGHT RT',
+    sl:'SLIGHT LT',shr:'SHARP RT',shl:'SHARP LT',uturn:'U-TURN',stop:'STOP',arrive:'ARRIVE'};
+  el('hud-icon-lbl').textContent=iconLabels[type]||'';
+
+  // ── Distance with urgency color ──
+  const distEl=el('hud-dist');
+  distEl.textContent=distM>0?fmtDist(distM):'';
+  distEl.className='hud-instr-dist '+(distM>200?'far':distM>50?'medium':'close');
+
+  el('hud-action').textContent=label;
+  el('hud-detail').textContent=detail||'';
+
+  // ── Route progress strip (% done + distance remaining) ──
+  if(totalRouteDist>0){
+    const pct=Math.max(0,Math.min(100,(distFromStart/totalRouteDist)*100));
+    el('hud-pct').textContent=Math.round(pct)+'%';
+    el('hud-sfill').style.width=pct.toFixed(1)+'%';
+    const leftKm=Math.max(0,totalRouteDist-distFromStart);
+    el('hud-left').textContent=(leftKm>=1?leftKm.toFixed(1)+' km':Math.round(leftKm*1000)+' m')+' remaining';
+  }
+
+  // ── Next-after-next preview ──
+  const upcoming=maneuvers.filter(m=>m.idx>nearIdx&&m.distFromStart>distFromStart);
+  const nextNext=upcoming[1]; // [0] is current next, [1] is the one after
+  const previewEl=el('hud-preview');
+  if(nextNext&&nextNext.type!=='arrive'){
+    const d2=haversine(currentPos.lat,currentPos.lng,nextNext.lat,nextNext.lon)*1000;
+    previewEl.textContent=`then ${nextNext.icon} ${nextNext.label} in ${fmtDist(d2)}`;
+    previewEl.classList.add('visible');
+  } else {
+    previewEl.classList.remove('visible');
+  }
+
+  // ── Voice guidance ──
+  if(distM>0&&distM<600) maybeSpeak(type||cls,label,distM);
+
+  // Update peek bar
+  el('peek-icon').textContent=icon;
+  el('peek-name').textContent=label;
+  el('peek-sub').textContent=dist>0?fmtDist(dist):'';
+  el('peek-dist').textContent='';
+}
+
+// ── ARRIVAL / DEPARTURE ────────────────────────────────
+// Departure gate: set when a stop completes. Blocks the NEXT co-located stop
+// (same physical spot — multi-lap cycles) from arriving until the vehicle
+// has actually left. Cleared once distance from the gate exceeds the radius.
+let departGate=null;
+
+function checkArrival(lat,lng,rawKmh){
+  if(!stops.length)return;
+  const radius=+el('rng-radius').value;
+  const autoStart=+el('rng-auto').value===1;
+  const autoStop=+el('rng-autostop').value===1;
+  // Speed-aware arrival radius: when slowing down near stop, expand detection zone
+  const effectiveRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
+
+  // Clear the gate once the vehicle physically left the completed stop
+  if(departGate&&haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius)
+    departGate=null;
+
+  // ── SEQUENCE-AWARE ARRIVAL: only the NEXT pending stop can arrive ──
+  // Test cycles visit the same physical location on every lap; distance-only
+  // matching marked ALL co-located stops as arrived (and completed) at once.
+  const next=stops.find(s=>s.state!=='done');
+  if(next){
+    const dNext=haversine(lat,lng,next.lat,next.lng)*1000;
+
+    // Pre-show photo + announce events of the next stop at 200m
+    if(dNext<=200&&dNext>effectiveRadius){
+      if(next.photo&&next.photo.length>10&&photoPreviewStopId!==next.id){
+        showStopPhoto(next,dNext);
+      }
+      if(next.events?.length&&!evtAnnounced.has(next.id)){
+        evtAnnounced.add(next.id);
+        const msgs=[];
+        if(next.events.includes('openDoor'))msgs.push('open doors');
+        if(next.events.includes('kneeling'))msgs.push('kneeling');
+        if(msgs.length)speakText(`Stop ${next.id}: ${msgs.join(' and ')} required`,true);
+      }
+    }
+
+    // Gate check: same-spot next-lap stop must wait for a real departure first
+    const gated=departGate&&haversine(departGate.lat,departGate.lng,next.lat,next.lng)*1000<30;
+
+    if(!gated&&dNext<=effectiveRadius&&!insideStop.has(next.id)){
+      insideStop.add(next.id);
+      showAlert('arrived',`📍 ${next.name}${next.dur_s?' · '+fmtTime(next.dur_s):''}`);
+      if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
+      next.state='current';updCardState(next);
+      if(autoStart&&!next.running)startTimer(next.id);
+      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
+      el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+      if(!hudPanelOpen) toggleHudPanel();
+      else renderHudPanel();
+    }
+  }
+
+  // ── DEPARTURE: any stop the vehicle is currently inside ──
+  [...insideStop].forEach(id=>{
+    const s=stops.find(x=>x.id===id);
+    if(!s){insideStop.delete(id);return;}
+    const distM=haversine(lat,lng,s.lat,s.lng)*1000;
+    if(distM>effectiveRadius*1.2){
+      insideStop.delete(id);
+      if(autoStop&&s.running){
+        pauseTimer(id);markDone(id);
+        showAlert('departed',`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
+        if(photoPreviewStopId===id)closeStopPhoto();
+      }
+    }
+  });
+}
+function showAlert(type,msg){
+  const a=el('arriving');a.className=`arriving ${type}`;a.textContent=msg;a.style.display='block';
+  clearTimeout(arrivingTmr);arrivingTmr=setTimeout(()=>{a.style.display='none'},4000);
+}
+
+// ── RECORDING ──────────────────────────────────────────
+function toggleRec(){if(!isRec)startRec();else stopRec()}
+
+function startRec(){
+  if(!navigator.geolocation){alert('Geolocation not available.');return}
+  // ← Clear existing GPX map layers before recording
+  clearMapLayers();
+  stops=[];insideStop.clear();el('stops-list').innerHTML='';el('stops-badge').textContent='';
+  routePts=[];maneuvers=[];totalRouteDist=0;
+
+  isRec=true;recPoints=[];recStops=[];recStopCandidate=null;
+  try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){}
+  _lastFlush=Date.now();
+  shState='hidden';applySheet();
+  el('rec-ind').classList.add('on');
+  el('btn-rec').className='btn rec-on';el('btn-rec').textContent='⏹ Recording';
+  el('btn-nav').disabled=true;
+  if(el('btn-nav2'))el('btn-nav2').disabled=true;
+  if(el('btn-nav3'))el('btn-nav3').disabled=true;
+
+  if(watchId===null){
+    watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  }
+  requestWakeLock();
+  setGPS('active','Recording route...');
+}
+
+function stopRec(){
+  isRec=false;
+  // Close open stop if any
+  if(recStopCandidate?.marked&&recStops.length>0){
+    recStops[recStops.length-1].dur_s=Math.round((Date.now()-recStops[recStops.length-1].startT)/1000);
+  }
+  recStopCandidate=null;
+  el('rec-ind').classList.remove('on');
+  el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';
+  const hasRoute=routePts.length>1; // startRec clears the route — Nav needs one
+  el('btn-nav').disabled=!hasRoute;
+  if(el('btn-nav2'))el('btn-nav2').disabled=!hasRoute;
+  if(el('btn-nav3'))el('btn-nav3').disabled=false;
+  if(!navActive){releaseWakeLock();setMapBearing(0);_lastBearing=0;}
+
+  if(!navActive&&watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+
+  if(recPoints.length<2){alert('Route too short to save.');return}
+  const dist=calcDistRaw(recPoints);
+  const defName=`Cycle ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+  let name=null;
+  try{name=prompt('Cycle name:',defName);}catch(e){}
+  name=((name??defName)+'').trim()||defName;
+  const score=calcGTAScore(recPoints,recStops);
+  const elev=calcElevGain(recPoints);
+  const time_s=Math.round((recPoints[recPoints.length-1].t-recPoints[0].t)/1000);
+  const rec={name,points:[...recPoints],stops:[...recStops],date:new Date(),dist,score,elev,time_s};
+  savedRecs.push(rec);
+  const idx=savedRecs.length-1;
+  renderRecCard(rec,idx);
+  el('rec-badge').textContent=` (${savedRecs.length})`;
+  el('rec-empty').style.display='none';
+  try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){} // clean shutdown
+  saveRecordings(); // persist to localStorage
+  // Auto-load the recording just saved: route + stops appear on the map
+  // and ▶ Nav is ready — no need to hunt for the Load button.
+  loadRec(idx);
+  showAlert('arrived',`✓ ${name} · GTA ${score.cls}${score.matched!=null?' '+score.matched+'/5':''}${elev!=null?' · +'+elev+' m':''} · tap ▶ Nav`);
+  if(score.matched!=null)speakText(`Cycle saved. Class ${score.cls}, ${score.matched} of 5 criteria.`,true);
+}
+
+function renderRecCard(rec,idx){
+  if(!rec)return; // safety guard
+  const list=el('rec-list');
+  const card=document.createElement('div');
+  card.className='rec-card';card.id=`rcard-${idx}`;
+  // Lazy analytics for cycles recorded before these fields existed (memoised in-RAM)
+  let sc=rec.score;
+  if(!sc||sc.cls===undefined)sc=rec.score=calcGTAScore(rec.points||[],rec.stops||[]);
+  if(rec.elev===undefined)rec.elev=calcElevGain(rec.points||[]);
+  const dur=rec.time_s??(rec.points?.length>1?Math.round((rec.points[rec.points.length-1].t-rec.points[0].t)/1000):null);
+  const dt=rec.date instanceof Date?rec.date:new Date(rec.date);
+  const tip=sc?.detail?Object.entries(sc.detail).map(([k,ok])=>`${VBC_CRIT_LABELS[k]} ${ok?'✓':'✗'}`).join(' · '):'';
+  const bcls=sc?.matched==null?'':sc.matched>=5?'m5':sc.matched===4?'m4':sc.matched===3?'m3':'m0';
+  const badge=sc?.matched!=null?`<span class="score-badge ${bcls}" title="${tip}">${sc.cls} ${sc.matched}/5</span>`:'';
+  card.innerHTML=`
+    <div class="rec-card-head">
+      <span style="font-size:20px">🛤️</span>
+      <div style="flex:1;min-width:0">
+        <div class="rec-card-name">${rec.name} ${badge}</div>
+        <div class="rec-card-meta">${(rec.dist??0).toFixed(2)} km · ${fmtDur(dur)} · ${rec.stops.length} stop${rec.stops.length===1?'':'s'}${rec.elev!=null?' · ⛰ +'+rec.elev+' m':''}</div>
+        <div class="rec-card-meta">${sc?.metrics?`Ø ${sc.metrics.avg} · drv ${sc.metrics.drive} · max ${sc.metrics.vmax} km/h · ${sc.metrics.stopsKm} st/km · idle ${sc.metrics.idlePct}%`:''} ${isNaN(dt)?'':'· '+dt.toLocaleDateString('en-GB')}</div>
+      </div>
+    </div>
+    <div class="rec-card-btns">
+      <button class="btn go"      style="flex:1;font-size:11px;padding:8px 4px" onclick="loadRec(${idx})">📂 Load</button>
+      <button class="btn primary" style="flex:1;font-size:11px;padding:8px 4px" onclick="dlRecGPX(${idx})">↓ GPX</button>
+      <button class="btn"         style="flex:1;font-size:11px;padding:8px 4px;border-color:var(--blue);color:var(--blue)" onclick="shareRec(${idx})">📤 JSON</button>
+      <button class="btn"         style="font-size:11px;padding:8px 6px;border-color:#a371f7;color:#a371f7" title="Replay this cycle as live GPS (dev)" onclick="startSim(${idx})">▶ SIM</button>
+      <button class="btn"         style="font-size:11px;padding:8px 8px;border-color:var(--red);color:var(--red)" onclick="delRec(${idx})">✕</button>
+    </div>`;
+  list.insertBefore(card,list.firstChild);
+}
+
+function loadRec(idx){
+  const rec=savedRecs[idx];
+  if(!rec){alert('Recording not found. It may have been lost after a page reload.\nRecord a new route.');return;}
+
+  try{
+    clearMapLayers();
+
+    // ── Route track ────────────────────────────────────
+    // Support both {lat,lng} (GPS recorded) and {lat,lon} (GPX parsed)
+    const pts=rec.points.map(p=>({lat:+p.lat,lon:+(p.lng??p.lon)}))
+                        .filter(p=>!isNaN(p.lat)&&!isNaN(p.lon));
+    if(pts.length<2){alert('Recorded route has fewer than 2 valid points.');return;}
+
+    routePts=pts;
+    buildCumDist(routePts);
+    totalRouteDist=routeCumDist[routeCumDist.length-1]||rec.dist||0;
+    lastRouteIdx=0;
+
+    const ll=pts.map(p=>[p.lat,p.lon]);
+    routeLayer    =L.polyline(ll,{color:'rgba(88,166,255,.25)',weight:6}).addTo(map);
+    routeAheadLayer=L.polyline(ll,{color:'#58a6ff',weight:4}).addTo(map);
+    routeRemainLayer=L.polyline([],{color:'rgba(88,166,255,.35)',weight:3,opacity:.6,dashArray:'6 4'}).addTo(map);
+    routeDoneLayer =L.polyline([],{color:'#444',weight:4}).addTo(map);
+
+    // ── Stops ─────────────────────────────────────────
+    stops=[];insideStop.clear();stopMarkers={};
+    destinationAnnounced=false;evtAnnounced.clear();departGate=null;
+    const segs=calcSegments(rec.points,rec.stops); // recorded pacing per leg
+    const sl=el('stops-list');if(sl)sl.innerHTML='';
+
+    (rec.stops||[]).forEach((s,i)=>{
+      if(s==null||isNaN(+s.lat)||isNaN(+s.lng))return; // skip invalid
+      const id=i+1;
+      const hasPhoto=!!(s.photo&&s.photo.length>10);
+      const lbl=hasPhoto?`📷 P${id}`:`⏸ P${id}`;
+      const icon=L.divIcon({
+        html:`<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div style="background:#f85149;color:#fff;font-size:11px;font-weight:700;
+            font-family:monospace;padding:2px 7px;border-radius:10px;
+            white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6)">${lbl}</div>
+          <div style="width:12px;height:12px;background:#f85149;border:2px solid #fff;
+            border-radius:50%;box-shadow:0 0 6px #f85149"></div></div>`,
+        className:'',iconAnchor:[24,20]
+      });
+      const m=L.marker([+s.lat,+s.lng],{icon,zIndexOffset:900}).addTo(map);
+      const navStop={id,name:`Stop ${id}`,lat:+s.lat,lng:+s.lng,
+        dur_s:s.dur_s||0,elapsed:0,running:false,intervalId:null,state:'waiting',
+        photo:s.photo||null,events:s.events||[],
+        seg_avg:segs[i]?.avg_kmh??null,seg_dist:segs[i]?.dist_km??null};
+      stops.push(navStop);
+      stopMarkers[id]=m;
+      if(sl) renderCard(navStop);
+    });
+
+    // ── Update all UI stats (safe — guard every element) ─
+    const totalProg=stops.reduce((a,s)=>a+(s.dur_s||0),0);
+    const setT=(id,v)=>{const e=el(id);if(e)e.textContent=v;};
+    const setS=(id,v)=>{const e=el(id);if(e)e.style.display=v;};
+    setT('h-dist',totalRouteDist>=1?totalRouteDist.toFixed(1)+'km':(totalRouteDist*1000).toFixed(0)+'m');
+    setT('h-stops',`0/${stops.length}`);
+    setT('h-prog',totalProg?fmtTime(totalProg):'—');
+    setT('h-real','00:00:00');
+    setT('stops-badge',stops.length?` (${stops.length})`:'');
+    setS('stops-empty',stops.length?'none':'');
+
+    maneuvers=buildManeuvers(routePts);
+    try{
+      const b=routeLayer.getBounds();
+      if(!fitRouteBounds(b)) map.setView([pts[0].lat,pts[0].lon],15);
+    }catch(fe){map.setView([pts[0].lat,pts[0].lon],15);}
+    el('btn-nav').disabled=false;
+    try{if(el('btn-nav2'))el('btn-nav2').disabled=false;}catch(e){}
+    el('peek-icon').textContent='🛤️';
+    el('peek-name').textContent=rec.name;
+    el('peek-sub').textContent=`${(rec.dist||0).toFixed(2)} km · ${stops.length} stops · tap ▶ Nav to start`;
+    el('no-route') && (el('no-route').style.display='none');
+    el('route-details') && (el('route-details').style.display='flex');
+    if(el('upload-zone'))el('upload-zone').style.display='none';
+    updSummaryBar();
+    switchTab('rota');shState='peek';applySheet();
+  }catch(err){
+    console.error('loadRec failed:',err);
+    // Show which step failed + the error
+    alert('Error loading recording (please report):\n'+err.message+'\n\nHint: try deleting the recording and recording again.');
+  }
+}
+
+function dlRecGPX(idx){
+  const rec=savedRecs[idx];if(!rec)return;
+  let xml=`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="GPX Navigator Pro">\n<metadata><name>${rec.name}</name><time>${(rec.date instanceof Date?rec.date:new Date(rec.date)).toISOString()}</time></metadata>\n`;
+  // Waypoints (detected stops with duration)
+  rec.stops.forEach((s,i)=>{
+    const evts=s.events||[];
+    const evtTxt=evts.length?' · '+evts.join(', '):'';
+    xml+=`<wpt lat="${(+s.lat).toFixed(8)}" lon="${(+s.lng).toFixed(8)}">\n`;
+    xml+=`  <name>Stop ${i+1}</name>\n`;
+    xml+=`  <desc>Duration: ${s.dur_s?fmtTime(s.dur_s):'unknown'}${evtTxt}</desc>\n`;
+    xml+=`  <cmt>duracao_s=${s.dur_s||0}</cmt>\n`;
+    xml+=`  <duracao_s>${s.dur_s||0}</duracao_s>\n`;
+    if(evts.includes('openDoor'))xml+=`  <openDoor>1</openDoor>\n`;
+    if(evts.includes('kneeling'))xml+=`  <kneeling>1</kneeling>\n`;
+    xml+=`  <time>${new Date(s.t).toISOString()}</time>\n`;
+    xml+=`</wpt>\n`;
+  });
+  // Track
+  xml+=`<trk><name>${rec.name}</name><trkseg>\n`;
+  rec.points.forEach(p=>{
+    xml+=`<trkpt lat="${(+p.lat).toFixed(8)}" lon="${(+p.lng).toFixed(8)}">`;
+    if(p.alt!=null)xml+=`<ele>${(+p.alt).toFixed(1)}</ele>`;
+    xml+=`<time>${new Date(p.t).toISOString()}</time>`;
+    if(p.speed!=null)xml+=`<extensions><speed>${(p.speed*3.6).toFixed(2)}</speed></extensions>`;
+    xml+=`</trkpt>\n`;
+  });
+  xml+=`</trkseg></trk>\n</gpx>`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([xml],{type:'application/gpx+xml'}));
+  a.download=rec.name.replace(/[^a-z0-9]/gi,'_')+'.gpx';a.click();
+}
+
+// ── JSON export / import of all recordings (spec §13) ──
+function recToPlain(r){
+  return{name:r.name, dist:+(r.dist??0)||0,
+    date:r.date instanceof Date?r.date.toISOString():r.date,
+    points:r.points, stops:r.stops,
+    elev:r.elev??null, time_s:r.time_s??null, score:r.score??null};
+}
+
+// Share ONE recording as .json — uses Android share sheet (WhatsApp/Drive/
+// e-mail) when available, falls back to a normal download.
+async function shareRec(idx){
+  const rec=savedRecs[idx];if(!rec)return;
+  const json=JSON.stringify([recToPlain(rec)]);
+  const fname=rec.name.replace(/[^a-z0-9]/gi,'_')+'.json';
+  try{
+    const file=new File([json],fname,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:rec.name});
+      return;
+    }
+  }catch(e){if(e.name==='AbortError')return;/* user cancelled */}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+  a.download=fname;a.click();
+}
+
+function exportAllRecs(){
+  const recs=savedRecs.filter(Boolean);
+  if(!recs.length){alert('No recordings to export.');return}
+  const data=JSON.stringify(recs.map(recToPlain));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download=`gpx_nav_recordings_${new Date().toISOString().slice(0,10)}.json`;a.click();
+}
+
+function importRecsJSON(input){
+  const file=input.files[0];if(!file)return;
+  const fr=new FileReader();
+  fr.onload=e=>{
+    try{
+      let arr=JSON.parse(e.target.result);
+      if(!Array.isArray(arr))arr=[arr];
+      // Normalisers — tolerant to script-generated files:
+      // lat/lon or lat/lng; t as ISO string or epoch ms; dist optional.
+      const nT=t=>typeof t==='string'?(Date.parse(t)||Date.now()):(+t||Date.now());
+      const nPt=p=>({lat:+p.lat,lng:+(p.lng??p.lon),t:nT(p.t),
+        alt:(p.alt??p.ele)!=null?+(p.alt??p.ele):null});
+      const nSt=s=>({lat:+s.lat,lng:+(s.lng??s.lon),t:nT(s.t),
+        dur_s:+(s.dur_s??s.duracao_s??0)||0,
+        photo:s.photo||null,events:Array.isArray(s.events)?s.events:[]});
+      let n=0;
+      arr.forEach(r=>{
+        if(!r||!Array.isArray(r.points)||r.points.length<2)return;
+        const points=r.points.map(nPt).filter(p=>!isNaN(p.lat)&&!isNaN(p.lng));
+        if(points.length<2)return;
+        const stops=(Array.isArray(r.stops)?r.stops:[]).map(nSt).filter(s=>!isNaN(s.lat)&&!isNaN(s.lng));
+        const rec={
+          name:r.name||'Imported route',
+          dist:+(r.dist??0)||calcDistRaw(points),
+          date:new Date(r.date||Date.now()),
+          points,stops,
+          elev:r.elev??undefined,time_s:r.time_s??undefined,score:r.score??undefined
+        };
+        savedRecs.push(rec);renderRecCard(rec,savedRecs.length-1);n++;
+      });
+      if(n){
+        el('rec-badge').textContent=` (${savedRecs.filter(Boolean).length})`;
+        el('rec-empty').style.display='none';
+        saveRecordings();switchTab('gravadas');
+        alert(`${n} recording${n>1?'s':''} imported.`);
+      }else alert('No valid recordings found in this JSON.');
+    }catch(err){alert('Invalid JSON file: '+err.message);}
+  };
+  fr.readAsText(file);input.value='';
+}
+
+function delRec(idx){
+  const rec=savedRecs[idx];
+  if(rec&&!confirm(`Delete "${rec.name}"?`))return;
+  savedRecs[idx]=null;el(`rcard-${idx}`)?.remove();
+  saveRecordings(); // persist — otherwise the recording reappears after reload
+  const n=savedRecs.filter(Boolean).length;
+  el('rec-badge').textContent=n?` (${n})`:'';
+  if(!n)el('rec-empty').style.display='';
+}
+
+// ── MISC ───────────────────────────────────────────────
+function focusStop(id){
+  const s=stops.find(s=>s.id===id);if(!s)return;
+  map.setView([s.lat,s.lng],17,{animate:true});stopMarkers[id]?.openPopup();
+  el('hud-sp').classList.remove('on');hudPanelOpen=false;
+  shState='mid';applySheet();
+}
+function exportCSV(){
+  if(!stops.length){alert('No stops to export.');return}
+  const h='ID,Name,Lat,Lon,Planned,Actual,Delta,Status';
+  const rows=stops.map(s=>{const d=s.elapsed-s.dur_s;return`${s.id},"${s.name}",${s.lat.toFixed(6)},${s.lng.toFixed(6)},${fmtTime(s.dur_s)},${fmtTime(s.elapsed)},${s.dur_s?(d>=0?'+':'-')+fmtTime(Math.abs(d)):'—'},${s.state}`});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([[h,...rows].join('\n')],{type:'text/csv'}));
+  a.download='stops_report.csv';a.click();
+}
+
+// ── MATH ───────────────────────────────────────────────
+function haversine(la1,lo1,la2,lo2){
+  const R=6371,r=Math.PI/180;
+  const dLat=(la2-la1)*r,dLon=(lo2-lo1)*r;
+  const a=Math.sin(dLat/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function brng(la1,lo1,la2,lo2){
+  const r=Math.PI/180,dLon=(lo2-lo1)*r;
+  return Math.atan2(Math.sin(dLon)*Math.cos(la2*r),Math.cos(la1*r)*Math.sin(la2*r)-Math.sin(la1*r)*Math.cos(la2*r)*Math.cos(dLon))*180/Math.PI;
+}
+function calcDist(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);return t}
+function calcDistRaw(pts){let t=0;for(let i=1;i<pts.length;i++)t+=haversine(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);return t}
+function fmtTime(s){if(!s||isNaN(s))return'00:00:00';s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return[h,m,sc].map(v=>String(v).padStart(2,'0')).join(':')}
+function fmtDurMs(ms){return fmtTime(Math.floor(ms/1000))}
+function el(id){return document.getElementById(id)}
+function setGPS(state,msg){el('gps-dot').className='gps-dot '+state;el('gps-text').textContent=msg}
+
+// Drag & drop
+map.getContainer().addEventListener('dragover',e=>e.preventDefault());
+map.getContainer().addEventListener('drop',e=>{
+  e.preventDefault();const f=e.dataTransfer.files[0];
+  if(f?.name.endsWith('.gpx')){const r=new FileReader();r.onload=ev=>parseGPX(ev.target.result,f.name);r.readAsText(f)}
+});
+</script>
+</body>
+</html>

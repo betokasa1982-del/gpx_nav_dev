@@ -1,0 +1,27 @@
+{
+  "name": "GPX Navigator DEV",
+  "short_name": "GPX DEV",
+  "id": "/gpx_nav_dev/",
+  "description": "Development build with GPS simulator — duty cycle testing",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#a371f7",
+  "categories": ["navigation", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
