@@ -873,3 +873,38 @@ console.log('49. sim 2-lap real-data completes all stops OK — '+done+'/'+stops
 })();
 
 console.log('ALL v23-DEV TESTS PASSED');
+
+// ══ TEST 50: live metrics robust to timestamp gaps + dwell counts as idle ══
+(function(){
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+el('rng-sim').value='20';el('rng-radius').value='10';el('rng-auto').value='1';
+__promptReply='1';
+let now=0;const queue=[];let nid=1;
+const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+global.clearInterval=global.clearTimeout;
+startSim(idx);
+if(el('lap-modal').classList.contains('on')){_lapChoice=1;el('lap-custom').value='';confirmLaps();}
+let it=0;
+while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+  if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+  if(simRec===null)break;}
+global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+// Real recorded route is 2.295 km — live.dist must be close, not zero
+console.assert(live.dist>2.0,'live.dist did not accumulate: '+live.dist.toFixed(3));
+console.assert(live.moving>30,'moving did not accumulate: '+live.moving);
+console.assert(live.idle>30,'dwell not counted as idle: '+live.idle);
+// avg total < avg driving because of idle
+const avgT=parseFloat(el('lcm-avg').textContent),avgD=parseFloat(el('lcm-drv').textContent);
+console.assert(avgT<avgD,'avg total not below driving: '+avgT+' vs '+avgD);
+console.assert(!isNaN(avgD)&&avgD>0,'avg driving missing: '+el('lcm-drv').textContent);
+delete global.__promptReply;navActive=false;
+console.log('50. live metrics accumulate over real cycle OK — dist '+live.dist.toFixed(2)+'km drv '+el('lcm-drv').textContent+' avg '+el('lcm-avg').textContent);
+})();
+
+console.log('ALL v24-DEV TESTS PASSED');

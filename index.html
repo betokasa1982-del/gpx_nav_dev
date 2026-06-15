@@ -1818,7 +1818,12 @@ function markDone(id){
   departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
   departGateDist=live.dist;          // route-progress baseline for clearing the gate
   // Resume simulation point advancement if it was paused for this dwell
-  if(simMode&&_simPausedAtStop){_simPausedAtStop=false;clearTimeout(simTimer);simTimer=setTimeout(stepSim,120);}
+  if(simMode&&_simPausedAtStop){
+    _simPausedAtStop=false;
+    // The dwell time elapsed while paused counts as idle for the live metrics.
+    if(s.dur_s>0)live.idle+=s.dur_s;
+    clearTimeout(simTimer);simTimer=setTimeout(stepSim,120);
+  }
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -2312,15 +2317,17 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   if(!active){if(el('lcm'))el('lcm').style.display='none';return}
   const p=el('lcm');if(!p)return;p.style.display='block';
   el('lcm-title').textContent=isRec?'LIVE · RECORDING':'LIVE CYCLE';
-  // Distance + time accumulation (ignore long gaps / GPS dropouts)
+  // Distance + time accumulation. Use the delta between GPS fixes, but clamp it
+  // so recorded-timestamp gaps (decimated dwells, sim lap offsets) can't either
+  // inject a 10^7-second jump or stall accumulation. The distance is always real
+  // (haversine between fixes); only the time term is clamped.
   if(live.last){
-    const dt=(ts-live.lastT)/1000;
-    if(dt>0&&dt<30){
-      const d=haversine(live.last.lat,live.last.lng,lat,lng);
-      live.dist+=d;
-      const k=kmh!=null?kmh:d*1000/dt*3.6;
-      if(k<2)live.idle+=dt;else live.moving+=dt;
-    }
+    let dt=(ts-live.lastT)/1000;
+    if(!isFinite(dt)||dt<=0||dt>30)dt=1; // treat anomalous gaps as a 1 s step
+    const d=haversine(live.last.lat,live.last.lng,lat,lng);
+    live.dist+=d;
+    const k=kmh!=null?kmh:d*1000/dt*3.6;
+    if(k<2)live.idle+=dt;else live.moving+=dt;
   }
   live.last={lat,lng};live.lastT=ts;
   // Stops: nav = arrivals (state machine); recording = detected stops so far
@@ -2332,9 +2339,9 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   const avgTot=total>0?live.dist/(total/3600):0;
   const avgDrv=live.moving>0?live.dist/(live.moving/3600):0;
   const idlePct=total>0?live.idle/total*100:0;
-  el('lcm-spk').textContent=km>0.05?spk.toFixed(1):'—';
-  el('lcm-drv').textContent=live.moving>5?avgDrv.toFixed(1)+' km/h':'—';
-  el('lcm-avg').textContent=total>5?avgTot.toFixed(1)+' km/h':'—';
+  el('lcm-spk').textContent=km>0.02?spk.toFixed(1):'—';
+  el('lcm-drv').textContent=live.moving>2?avgDrv.toFixed(1)+' km/h':'—';
+  el('lcm-avg').textContent=total>2?avgTot.toFixed(1)+' km/h':'—';
   el('lcm-extra').textContent=`${km.toFixed(2)} km · ${Math.round(idlePct)}%`;
 }
 
