@@ -428,3 +428,54 @@ navActive=false;stops=[];
 console.log('29. big event cue OK');
 
 console.log('ALL v12-DEV TESTS PASSED');
+
+// ══ TEST 30: hand brake event flows through nav + GPX ══
+stops=[{id:1,name:'P1',lat:57.80,lng:11.97,dur_s:20,elapsed:0,running:false,intervalId:null,
+  state:'waiting',events:['handBrake','openDoor'],seg_avg:null,photo:null}];
+stopMarkers={1:{setIcon(){}}};navActive=true;el('rng-radius').value='10';
+updNextStopCard(57.7993,11.97); // ~78 m
+console.assert(el('nsc-evt').textContent.includes('🅿️'),'NSC handBrake FAIL: '+el('nsc-evt').textContent);
+console.assert(el('evt-cue').innerHTML.includes('🅿️'),'cue handBrake FAIL');
+// handBrake persists through save/load round-trip
+savedRecs.length=0;
+savedRecs.push({name:'HB',dist:1,date:new Date(),points:[{lat:57.8,lng:11.97,t:1},{lat:57.81,lng:11.97,t:2}],
+  stops:[{lat:57.80,lng:11.97,t:1,dur_s:20,events:['handBrake','openDoor']}]});
+saveRecordings();
+const hb=JSON.parse(localStorage.getItem('gpx-nav-recs'))[0];
+console.assert(hb.stops[0].events.includes('handBrake'),'handBrake persist FAIL: '+JSON.stringify(hb.stops[0].events));
+navActive=false;stops=[];
+console.log('30. hand brake event OK');
+
+// ══ TEST 31: multi-lap circular navigation ══
+fake=realNow();routePts=[];
+const c31x=57.70,c31y=11.97,R31=0.003;
+for(let i=0;i<=72;i++){const a=i/72*2*Math.PI;routePts.push({lat:c31x+R31*Math.cos(a),lon:c31y+R31*Math.sin(a)});}
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+console.assert(isCircularRoute(),'circular detect FAIL');
+// one base stop
+stops=[{id:1,name:'S1',lat:c31x+R31,lng:c31y,dur_s:15,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
+stopMarkers={1:{setIcon(){},addTo(){return this}}};
+global.__promptReply='3'; navActive=false;
+startNav();
+console.assert(totalLaps===3,'lap count FAIL: '+totalLaps);
+console.assert(stops.length===3,'lap stops expansion FAIL: '+stops.length);
+console.assert(stops[0].name==='L1·S1'&&stops[2].name==='L3·S1','lap labels FAIL: '+stops.map(s=>s.name));
+console.assert(stops.every(s=>s.state==='waiting'),'lap stops not reset');
+delete global.__promptReply;
+navActive=false;
+console.log('31. multi-lap navigation OK — 3 laps × 1 stop =',stops.length,'stops');
+
+// ══ TEST 32: non-circular route does NOT prompt for laps ══
+routePts=[];for(let i=0;i<=50;i++)routePts.push({lat:57.70+i*0.001,lon:11.97}); // straight line
+buildCumDist(routePts);totalRouteDist=routeCumDist[routeCumDist.length-1];
+console.assert(!isCircularRoute(),'straight route flagged circular FAIL');
+stops=[{id:1,name:'S1',lat:57.72,lng:11.97,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting',events:[]}];
+stopMarkers={1:{setIcon(){},addTo(){return this}}};
+global.__promptReply='9'; navActive=false; // would be used IF prompted
+startNav();
+console.assert(totalLaps===1,'straight route got laps FAIL: '+totalLaps);
+console.assert(stops.length===1,'straight route stops changed FAIL');
+delete global.__promptReply;navActive=false;
+console.log('32. non-circular no-prompt OK');
+
+console.log('ALL v13-DEV TESTS PASSED');

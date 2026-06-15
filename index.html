@@ -640,6 +640,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
       <button class="evt-btn" id="evt-knee" onclick="toggleStopEvent('kneeling')">
         ♿<br>Kneeling
       </button>
+      <button class="evt-btn" id="evt-hand" onclick="toggleStopEvent('handBrake')">
+        🅿️<br>Hand Brake
+      </button>
     </div>
 
     <div class="cam-divider"></div>
@@ -1064,6 +1067,7 @@ function toggleStopEvent(evt){
   else pendingStopEvents.push(evt);
   el('evt-door').classList.toggle('active',pendingStopEvents.includes('openDoor'));
   el('evt-knee').classList.toggle('active',pendingStopEvents.includes('kneeling'));
+  el('evt-hand').classList.toggle('active',pendingStopEvents.includes('handBrake'));
 }
 
 function confirmStopEvents(){
@@ -1077,6 +1081,7 @@ function confirmStopEvents(){
   // Reset button states
   el('evt-door').classList.remove('active');
   el('evt-knee').classList.remove('active');
+  el('evt-hand').classList.remove('active');
   el('cam-prompt').classList.remove('on');
   pendingPhotoStopIdx=-1;
 }
@@ -1417,7 +1422,7 @@ function renderHudPanel(){
         ${s.state==='done'?'✓':s.id}
       </div>
       <div class="hud-sr-name">${s.name}${(s.events||[]).map(e=>
-        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':'⚡'}</span>`
+        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':e==='handBrake'?'🅿️':'⚡'}</span>`
       ).join('')}</div>
       <div class="hud-sr-timer ${timerCls}">${timerTxt}${s.state==='current'?planned:''}</div>
       ${s.state==='current'?`
@@ -1612,6 +1617,7 @@ function parseGPX(xml,filename){
     const events=[];
     if(w.querySelector('openDoor')||/openDoor/i.test(desc))events.push('openDoor');
     if(w.querySelector('kneeling')||/kneeling/i.test(desc))events.push('kneeling');
+    if(w.querySelector('handBrake')||/handBrake/i.test(desc))events.push('handBrake');
     const id=i+1;
     stops.push({id,name,lat,lng:lon,dur_s,elapsed:0,running:false,intervalId:null,state:'waiting',desc,events});
     stopMarkers[id]=L.marker([lat,lon],{icon:mkStopIcon(id,'waiting')}).addTo(map)
@@ -1672,7 +1678,7 @@ function cardHTML(s){
   <div class="sc-head">
     <div class="sc-num waiting" id="scnum-${s.id}">${s.id}</div>
     <div class="sc-name">${s.name}${s.photo?' 📷':''}${(s.events||[]).map(e=>
-      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':''}</span>`
+      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':e==='handBrake'?'🅿️ Brake':''}</span>`
     ).join('')}</div>
     <span class="sc-badge waiting" id="scst-${s.id}">Waiting</span>
   </div>
@@ -1793,10 +1799,57 @@ function updSummaryBar(){
 }
 
 // ── NAVIGATION ─────────────────────────────────────────
+let totalLaps=1, currentLap=1, baseStops=null;
+
+function buildLapStops(){
+  if(!baseStops||totalLaps<2)return;
+  const expanded=[];
+  for(let lap=0;lap<totalLaps;lap++){
+    baseStops.forEach((bs,k)=>{
+      const id=lap*baseStops.length+k+1;
+      expanded.push({...bs,id,
+        name:`L${lap+1}·S${k+1}`,
+        lapNum:lap+1,
+        state:'waiting',elapsed:0,running:false,intervalId:null});
+    });
+  }
+  stops=expanded;
+  // Rebuild markers + cards for the expanded set
+  Object.values(stopMarkers).forEach(m=>{try{map.removeLayer(m)}catch(e){}});
+  stopMarkers={};
+  const sl=el('stops-list');if(sl)sl.innerHTML='';
+  stops.forEach(st=>{
+    stopMarkers[st.id]=L.marker([st.lat,st.lng],{icon:mkStopIcon(st.id,'waiting')}).addTo(map);
+    if(typeof renderCard==='function')renderCard(st);
+  });
+  refreshStopIcons&&refreshStopIcons();
+}
+
+function isCircularRoute(){
+  if(routePts.length<10)return false;
+  const a=routePts[0],b=routePts[routePts.length-1];
+  return haversine(a.lat,a.lon,b.lat,b.lon)*1000<60; // ends within 60 m of start
+}
+
 function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
+  // Multi-lap: on a circular route, ask how many laps to drive. Each lap
+  // re-arms the same physical stops (sequential arrival + departure gate
+  // already handle same-spot stops across laps).
+  totalLaps=1;currentLap=1;baseStops=null;
+  if(isCircularRoute()&&stops.length){
+    let n=null;
+    try{n=prompt(`Circular route detected.\nHow many laps (turns) to drive?`,'1');}catch(e){}
+    if(n===null)return; // cancelled
+    totalLaps=Math.max(1,Math.min(50,parseInt(n)||1));
+    if(totalLaps>1){
+      baseStops=stops.map(s=>({...s})); // snapshot one lap
+      buildLapStops(); // expand to totalLaps copies
+    }
+  }
   navActive=true;
+  if(totalLaps>1)speakText(`Starting. ${totalLaps} laps.`,true);
   // Reset per-run state — without this, a 2nd run of the same route
   // starts with lastRouteIdx stuck at the end and matching never recovers.
   lastRouteIdx=0;routeMaxIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
@@ -1808,7 +1861,6 @@ function startNav(){
   el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
   el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
   el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
-  el('sum-bar').classList.add('on');
   shState='hidden';applySheet();
   requestWakeLock();goFullscreen();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
@@ -1823,7 +1875,6 @@ function stopNav(){
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   el('hud-sp').classList.remove('on');hudPanelOpen=false;
-  el('sum-bar').classList.remove('on');
   stopSim(true); // never leave a simulation feeding a stopped navigation
   if(el('lcm'))el('lcm').style.display='none';
   // Reset map to north-up (spec 5.3)
@@ -2064,6 +2115,13 @@ function updNextStopCard(lat,lng){
   c.style.display='block';
   const done=stops.filter(x=>x.state==='done').length;
   el('nsc-count').textContent=`${Math.min(done+1,stops.length)}/${stops.length}`;
+  // Lap indicator on circular multi-lap runs
+  if(totalLaps>1){
+    const lap=next.lapNum||Math.floor(done/(stops.length/totalLaps))+1;
+    el('nsc-title').textContent=next.state==='current'
+      ?(next.dur_s?'AT STOP · TIME LEFT':'AT STOP · ELAPSED')
+      :`NEXT · LAP ${lap}/${totalLaps}`;
+  }
   if(next.state==='current'){
     c.classList.add('atstop');
     el('nsc-title').textContent=next.dur_s?'AT STOP · TIME LEFT':'AT STOP · ELAPSED';
@@ -2076,14 +2134,14 @@ function updNextStopCard(lat,lng){
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
   }
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
-  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':'♿').join(' ');
+  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':e==='kneeling'?'♿':'🅿️').join(' ');
   el('nsc-leg').textContent=next.seg_avg!=null?`leg Ø ${next.seg_avg} km/h`:'';
   const cue=el('evt-cue');
   if(cue){
     const dM=next.state==='current'?0:haversine(lat,lng,next.lat,next.lng)*1000;
     const evs=next.events||[];
     if(evs.length&&dM<=120){
-      cue.innerHTML=evs.map(e=>`<span>${e==='openDoor'?'🚪':'♿'}</span>`).join('');
+      cue.innerHTML=evs.map(e=>`<span>${e==='openDoor'?'🚪':e==='kneeling'?'♿':'🅿️'}</span>`).join('');
       cue.classList.add('on');
     }else cue.classList.remove('on');
   }
@@ -2280,6 +2338,7 @@ function checkArrival(lat,lng,rawKmh){
         const msgs=[];
         if(next.events.includes('openDoor'))msgs.push('open doors');
         if(next.events.includes('kneeling'))msgs.push('kneeling');
+        if(next.events.includes('handBrake'))msgs.push('hand brake');
         if(msgs.length)speakText(`Stop ${next.id}: ${msgs.join(' and ')} required`,true);
       }
     }
@@ -2523,6 +2582,7 @@ function dlRecGPX(idx){
     xml+=`  <duracao_s>${s.dur_s||0}</duracao_s>\n`;
     if(evts.includes('openDoor'))xml+=`  <openDoor>1</openDoor>\n`;
     if(evts.includes('kneeling'))xml+=`  <kneeling>1</kneeling>\n`;
+    if(evts.includes('handBrake'))xml+=`  <handBrake>1</handBrake>\n`;
     xml+=`  <time>${new Date(s.t).toISOString()}</time>\n`;
     xml+=`</wpt>\n`;
   });
