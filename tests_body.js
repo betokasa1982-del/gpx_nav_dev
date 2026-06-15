@@ -1021,3 +1021,35 @@ console.log('54. circular start matches the START not the END OK — '+Math.roun
 })();
 
 console.log('ALL v28-DEV TESTS PASSED');
+
+// ══ TEST 55: asymmetric radii — stop at depot (route passes ~21m) still releases ══
+(function(){
+const fs=require('fs');
+const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const r=Array.isArray(rec)?rec[0]:rec;
+savedRecs.push(r);const idx=savedRecs.length-1;
+el('rng-sim').value='15';el('rng-radius').value='10';el('rng-auto').value='1';el('rng-autostop').value='1';
+let now=0;const queue=[];let nid=1;
+const A=global.setTimeout,B=global.setInterval,C=global.clearInterval,D=global.clearTimeout;
+global.setTimeout=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,id,type:'to'});return id;};
+global.setInterval=(fn,ms)=>{const id=nid++;queue.push({time:now+(ms||0),fn,ms:ms||1,id,type:'iv'});return id;};
+global.clearTimeout=(id)=>{const i=queue.findIndex(q=>q.id===id);if(i>=0)queue.splice(i,1);};
+global.clearInterval=global.clearTimeout;
+startSim(idx);
+let it=0;
+while(queue.length&&it<200000){it++;queue.sort((a,b)=>a.time-b.time);const ev=queue.shift();now=ev.time;
+  if(ev.type==='iv'){ev.fn();queue.push({...ev,time:now+ev.ms});}else ev.fn();
+  if(simRec===null)break;}
+global.setTimeout=A;global.setInterval=B;global.clearInterval=C;global.clearTimeout=D;
+const done=stops.filter(s=>s.state==='done').length;
+// The depot stop (stop 1) must complete — it was sticking because the route only
+// passes ~21m from it and the old 1.2× expanded departure ring never cleared.
+console.assert(stops[0].state==='done','stop 1 (depot) stuck — did not release');
+console.assert(done===6,'not all stops completed: '+done+'/6');
+// No stop should have a live setInterval running in sim
+console.assert(stops.every(s=>!s.intervalId),'a stop kept a realtime interval in sim');
+navActive=false;
+console.log('55. asymmetric radii release depot stop OK — '+done+'/6, no realtime timers');
+})();
+
+console.log('ALL v29-DEV TESTS PASSED');

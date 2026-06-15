@@ -512,6 +512,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 </style>
 </head>
 <body>
+<div id="sim-debug" style="display:none;position:fixed;bottom:60px;left:8px;z-index:5000;
+  background:rgba(0,0,0,.85);color:#3fb950;font-family:monospace;font-size:13px;
+  padding:8px 12px;border-radius:8px;border:1px solid #3fb950;line-height:1.5;
+  pointer-events:none;white-space:pre"></div>
+
 
 <!-- TOPBAR -->
 <div class="topbar">
@@ -1548,8 +1553,10 @@ function getNextManeuver(curIdx,curDistFromStart){
     const stopDist=haversine(currentPos.lat,currentPos.lng,nextStop.lat,nextStop.lng)*1000;
     const manDist=nextMan?haversine(currentPos.lat,currentPos.lng,nextMan.lat,nextMan.lon)*1000:Infinity;
     if(stopDist<manDist){
-      // AT the stop (inside arrival radius) — show live timer + tap Done to continue
-      if(stopDist<=radius&&nextStop.state==='current'){
+      // AT the stop — trust the state machine (checkArrival set state='current'
+      // using the arrival radius). Re-deriving "at stop" from a different radius
+      // here made the HUD and the state machine disagree.
+      if(nextStop.state==='current'){
         const elapsed=fmtTime(nextStop.elapsed);
         const planned=nextStop.dur_s?` / ${fmtTime(nextStop.dur_s)}`:'';
         return{dist:0,icon:'⏸',
@@ -1772,6 +1779,16 @@ function updCardState(s){
 function startTimer(id){
   const s=stops.find(s=>s.id===id);if(!s||s.running)return;
   s.running=true;s.state='current';
+  // SIMULATION: do NOT start a real-time interval. The stop is completed by the
+  // player's route progress (see checkArrival departure). A 1 s wall-clock timer
+  // here would desync from the fast-replaying player and freeze the UI at a stop.
+  if(simMode){
+    const d=el(`td-${id}`);if(d)d.className='sc-time-val running';
+    const go=el(`tbgo-${id}`),ps=el(`tbps-${id}`);
+    if(go)go.style.display='none';if(ps)ps.style.display='';
+    updCardState(s);updSummaryBar();
+    return;
+  }
   s.intervalId=setInterval(()=>{
     s.elapsed++;
     const d=el(`td-${id}`);if(d)d.textContent=fmtTime(s.elapsed);
@@ -2018,7 +2035,13 @@ function onGPS(pos){
 
   if(+el('rng-follow').value===1){
     const zoom=+el('rng-zoom').value;
-    if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
+    // During SIM the points arrive fast; animating + rotating the map on every
+    // sample saturates the Android renderer and can mask/stall actual progress.
+    // Use instant, north-up updates while simulating.
+    if(simMode){
+      setMapBearing(0);
+      map.setView([lat,lng],zoom,{animate:false});
+    }else if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
       // Heading-up: rotate map to put direction of travel at top
       setMapBearing(-currentHeading); // negative = rotate map opposite to heading
       // Offset center slightly behind vehicle (show more route ahead)
@@ -2177,6 +2200,16 @@ function beginSim(idx,laps){
   simStartedNav=!navActive;       // remember if WE turned navigation on
   if(!navActive)startNav(1);      // the UI player replays the recorded cycle once
   if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
+  // ── FULL CLEAN RESET ── so a dirty prior state on the tablet can't be inherited.
+  insideStop.clear();
+  departGate=null;departGateDist=0;
+  destinationAnnounced=false;evtAnnounced.clear();
+  live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
+  lastRouteIdx=0;routeMaxIdx=0;lapStartDist=0;currentLap=1;
+  currentHeading=null;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
+  stops.forEach(s=>{s.state='waiting';s.elapsed=0;s.running=false;
+    if(s.intervalId){clearInterval(s.intervalId);s.intervalId=null;}
+    delete s._enterDist;updCardState(s);});
   simRec=rec;simIdx=0;simStartIdx=0;
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
@@ -2189,6 +2222,18 @@ function beginSim(idx,laps){
 // desk without driving. It is NOT a re-execution of navigation: it simply feeds
 // recorded points into onGPS at a chosen speed and lets the normal navigation
 // react. No private lap counter, no accelerated dwell timer, no pause-at-stop.
+function updSimDebug(){
+  const d=el('sim-debug');if(!d)return;
+  if(!simMode){d.style.display='none';return;}
+  d.style.display='block';
+  const s1=stops[0]||{};
+  const done=stops.filter(x=>x.state==='done').length;
+  d.textContent=
+    'SIM '+(+el('rng-sim').value)+'x  idx '+simIdx+'/'+(simRec?simRec.points.length:0)+'\n'+
+    'stops done '+done+'/'+stops.length+'  cur '+(stops.find(x=>x.state==='current')?.name||'-')+'\n'+
+    'routeIdx '+lastRouteIdx+'  live '+live.dist.toFixed(2)+'km\n'+
+    'last step '+new Date().toLocaleTimeString('en-GB');
+}
 function stepSim(){
   if(!simRec)return;
   const pts=simRec.points;
@@ -2208,6 +2253,7 @@ function stepSim(){
   onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
     altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t,_sim:true});
   setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
+  updSimDebug();
   simIdx++;
   // Schedule the next point, compressing the recorded inter-point time by the
   // speed multiplier. The minimum step (120 ms ≈ 8 fps) guarantees the tablet UI
@@ -2482,8 +2528,14 @@ function checkArrival(lat,lng,rawKmh){
   const radius=+el('rng-radius').value;
   const autoStart=+el('rng-auto').value===1;
   const autoStop=+el('rng-autostop').value===1;
-  // Speed-aware arrival radius: when slowing down near stop, expand detection zone
-  const effectiveRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
+  // ARRIVAL radius expands at low speed so a slow approach still registers.
+  // DEPARTURE radius is kept TIGHT (= base radius) so the vehicle is considered
+  // "gone" as soon as it clears the stop — otherwise, with the arrival radius
+  // expanded to 18 m, the 1.2× departure ring reached 21.6 m and the recorded
+  // route (which only passes ~21 m from stop 1) never cleared it: the stop stayed
+  // "stuck". Asymmetric radii: easy to enter, easy to leave.
+  const arrivalRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
+  const departureRadius=radius;
 
   // Clear the gate once the vehicle physically left the completed stop, OR once
   // it has driven a short distance along the route since the gate was set. The
@@ -2504,7 +2556,7 @@ function checkArrival(lat,lng,rawKmh){
     const dNext=haversine(lat,lng,next.lat,next.lng)*1000;
 
     // Pre-show photo + announce events of the next stop at 200m
-    if(dNext<=200&&dNext>effectiveRadius){
+    if(dNext<=200&&dNext>arrivalRadius){
       if(next.photo&&next.photo.length>10&&photoPreviewStopId!==next.id){
         showStopPhoto(next,dNext);
       }
@@ -2521,8 +2573,9 @@ function checkArrival(lat,lng,rawKmh){
     // Gate check: same-spot next-lap stop must wait for a real departure first
     const gated=departGate&&haversine(departGate.lat,departGate.lng,next.lat,next.lng)*1000<30;
 
-    if(!gated&&dNext<=effectiveRadius&&!insideStop.has(next.id)){
+    if(!gated&&dNext<=arrivalRadius&&!insideStop.has(next.id)){
       insideStop.add(next.id);
+      next._enterDist=routeCumDist[lastRouteIdx]||0; // route km when we entered (sim departure)
       showAlert('arrived',`📍 ${next.name}${next.dur_s?' · '+fmtTime(next.dur_s):''}`);
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
@@ -2538,15 +2591,26 @@ function checkArrival(lat,lng,rawKmh){
     const s=stops.find(x=>x.id===id);
     if(!s){insideStop.delete(id);return;}
     const distM=haversine(lat,lng,s.lat,s.lng)*1000;
-    if(distM>effectiveRadius*1.2){
-      insideStop.delete(id);
-      // In the UI player the vehicle moving past the stop IS the dwell — complete
-      // it deterministically so the UI advances with the player, no realtime wait.
-      if(simMode&&s.state!=='done'){
+    const idx=stops.indexOf(s);
+    // SIMULATION: complete the stop by ROUTE PROGRESS, not euclidean distance.
+    // The recorded route may only pass ~21 m from a stop sitting at the depot,
+    // so a distance gate can stick forever. Once the player has advanced a little
+    // along the route past where it entered, the dwell is done — deterministic.
+    if(simMode&&s.state!=='done'){
+      const leftByDist=distM>departureRadius;
+      const leftByRoute=(routeCumDist[lastRouteIdx]-(s._enterDist??0))>0.02; // 20 m of route
+      if(leftByDist||leftByRoute){
+        insideStop.delete(id);
         pauseTimer(id);markDone(id);
         showAlert('departed',`✓ ${s.name}`);
         if(photoPreviewStopId===id)closeStopPhoto();
-      }else if(autoStop&&s.running){
+      }
+      return;
+    }
+    // REAL navigation: tight departure radius — easy to leave once clear.
+    if(distM>departureRadius){
+      insideStop.delete(id);
+      if(autoStop&&s.running){
         pauseTimer(id);markDone(id);
         showAlert('departed',`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
         if(photoPreviewStopId===id)closeStopPhoto();
