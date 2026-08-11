@@ -108,7 +108,38 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .nsc.atstop{border-left-color:#3fb950}
 .nsc-row{display:flex;justify-content:space-between;align-items:center;
   font-size:13px;margin-top:2px;color:#e6edf3}
-.nsc-evt{font-size:17px;letter-spacing:2px}
+.veh-icon{background:none;border:none}
+.veh-wrap{position:relative;width:46px;height:46px;display:flex;
+  align-items:center;justify-content:center;pointer-events:none}
+.veh-halo{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(88,166,255,.32) 0%,rgba(88,166,255,.14) 55%,transparent 72%);
+  animation:vehHalo 3.2s ease-in-out infinite}          /* slow, opacity only */
+@keyframes vehHalo{0%,100%{opacity:.55}50%{opacity:1}}
+.veh-bus{position:relative;line-height:0;transition:transform .35s linear;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.75))}
+.veh-wrap.neutral .veh-bus{opacity:.92}
+@media (prefers-reduced-motion:reduce){.veh-halo{animation:none;opacity:.8}}
+.nsc-evt{display:flex;gap:5px;align-items:center}
+/* Event chips — shape first, colour second, so they survive daylight and
+   greyscale. `compact` drops the caption on narrow screens (§11). */
+.evt-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;
+  border:1px solid var(--accent);border-radius:7px;color:var(--accent);
+  background:rgba(240,165,0,.10);font-size:11px;line-height:1;white-space:nowrap}
+.evt-chip b{font-weight:700;letter-spacing:.4px}
+.evt-chip.compact{padding:3px 5px;gap:0}
+.evt-chip svg{display:block}
+.nsc-events{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+.evt-inline{display:inline-flex;gap:3px;margin-left:5px;vertical-align:middle}
+.stop-event-badge{display:inline-flex;align-items:center;gap:3px}
+/* Recording buttons: ON/OFF must not rely on colour alone (§3). */
+.evt-btn{display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
+.evt-btn .evt-glyph{display:block;color:currentColor}
+.evt-btn .evt-name{font-size:11px;line-height:1.1}
+.evt-btn .evt-state{font-family:var(--mono);font-size:9px;letter-spacing:1px;
+  padding:1px 5px;border-radius:6px;border:1px solid currentColor;opacity:.75}
+.evt-btn.active{border-width:2px;background:rgba(63,185,80,.18);
+  color:var(--green);border-color:var(--green)}
+.evt-btn.active .evt-state{opacity:1;background:var(--green);color:#0d1117;border-color:var(--green)}
 .nsc-leg{color:#79b8ff;font-family:var(--mono);font-size:13px;font-weight:700}
 .nsc-photo{width:100%;height:96px;object-fit:cover;border-radius:8px;
   margin-top:8px;border:1px solid var(--border);cursor:pointer;
@@ -131,7 +162,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   .nsc{width:256px;top:235px;padding:12px 14px}
   .nsc-dist{font-size:50px}
   .nsc-row{font-size:15px}
-  .nsc-evt{font-size:21px}
+  .nsc-evt{gap:6px}
+  .evt-chip{font-size:12px;padding:4px 9px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:140px}
   .lcm{width:256px;top:495px;padding:11px 14px}
@@ -211,6 +243,11 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   backdrop-filter:blur(8px);
 }
 .hud-compass-arrow{font-size:26px;transition:transform .3s}
+.nav-debug{position:absolute;left:8px;top:8px;z-index:1200;display:none;
+  max-width:280px;max-height:56vh;overflow:auto;pointer-events:none;
+  background:rgba(6,10,16,.86);border:1px solid #2b3440;border-radius:8px;padding:7px 9px}
+.nav-debug.on{display:block}
+.nav-debug pre{margin:0;font:10px/1.35 var(--mono);color:#9fb4c9;white-space:pre-wrap}
 .hud-compass-deg{font-size:10px;font-family:var(--mono);color:var(--muted)}
 
 /* ── ROUTE PROGRESS (bottom strip) ── */
@@ -548,7 +585,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
       <div class="nsc-dist" id="nsc-dist">—</div>
       <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
       <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
-      <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="stop">
+      <div class="nsc-events" id="nsc-events" style="display:none"></div>
+    <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="Next stop photo — tap to enlarge">
     </div>
 
     <!-- Live cycle metrics: updated continuously during navigation -->
@@ -580,6 +618,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
     </div>
 
     <!-- Compass -->
+    <div class="nav-debug" id="nav-debug"><pre id="nav-debug-txt"></pre></div>
     <div class="hud-compass">
       <div class="hud-compass-arrow" id="hud-compass">↑</div>
       <div class="hud-compass-deg"   id="hud-cdeg">N</div>
@@ -631,12 +670,18 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
     <div class="cam-prompt-title">📍 Stop <span id="cam-stop-num">1</span> detected</div>
 
     <div class="cam-events-title">Events at this stop</div>
-    <div class="cam-events-row">
-      <button class="evt-btn" id="evt-door"  onclick="toggleStopEvent('openDoor')">
-        🚪<br>Open Door
+    <div class="cam-events-row" id="cam-events-row">
+      <button class="evt-btn" id="evt-door"  aria-pressed="false" onclick="toggleStopEvent('openDoor')">
+        <span class="evt-glyph" data-evt="openDoor"></span><span class="evt-name">Open Door</span>
+        <span class="evt-state">OFF</span>
       </button>
-      <button class="evt-btn" id="evt-knee" onclick="toggleStopEvent('kneeling')">
-        ♿<br>Kneeling
+      <button class="evt-btn" id="evt-knee"  aria-pressed="false" onclick="toggleStopEvent('kneeling')">
+        <span class="evt-glyph" data-evt="kneeling"></span><span class="evt-name">Kneeling</span>
+        <span class="evt-state">OFF</span>
+      </button>
+      <button class="evt-btn" id="evt-brake" aria-pressed="false" onclick="toggleStopEvent('handBrake')">
+        <span class="evt-glyph" data-evt="handBrake"></span><span class="evt-name">Hand Brake</span>
+        <span class="evt-state">OFF</span>
       </button>
     </div>
 
@@ -759,6 +804,9 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
         <div class="nav-field"><label>Rec stop min. duration (s)</label>
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
+        <div class="nav-field"><label>Navigation debug</label>
+          <input type="range" min="0" max="1" value="0" id="rng-navdbg" oninput="toggleNavDebug(+this.value===1)">
+          <span class="val" id="val-navdbg">Off</span></div>
         <div style="display:flex;gap:8px;padding-top:4px">
           <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="startNav()">▶ Start GPS</button>
           <button class="btn stop-nav" id="btn-stop3" style="flex:1;display:none" onclick="stopNav()">■ Stop</button>
@@ -812,6 +860,8 @@ window.addEventListener('appinstalled',hideInstall);
 
 // ── STATE ──────────────────────────────────────────────
 let map, routeLayer, routeDoneLayer, routeAheadLayer, routeRemainLayer, recLayer;
+// Casing (outline) layers — drawn under the matching main line for contrast.
+let routeAheadCasingLayer, routeDoneCasingLayer, routeRemainCasingLayer;
 let posMarker, accCircle;
 let stops=[], stopMarkers={};
 let extraMarkers=[];      // start/end dots + recording stop pins (were orphaned)
@@ -1055,13 +1105,83 @@ function openCamera(){
 let pendingStopEvents=[];
 let camPromptTimer=null;   // auto-dismiss handle — cancelled when user interacts
 
+/* ══ STOP EVENTS — single source of truth ═══════════════════════════════
+   Every surface (recording buttons, Next Stop Card, HUD list, stop cards,
+   voice, GPX) resolves events through here. An unknown event resolves to
+   null and is DROPPED — it must never fall through to another event's icon
+   or to a generic badge, which is what the old inline ternaries did.      */
+const STOP_EVENTS={
+  openDoor : {icon:'🚪', label:'Open Door',  shortLabel:'Door',  voice:'open doors', svg:'door'},
+  kneeling : {icon:'♿', label:'Kneeling',   shortLabel:'Knee',  voice:'kneeling',   svg:'knee'},
+  handBrake: {icon:'🅿️', label:'Hand Brake', shortLabel:'Brake', voice:'hand brake', svg:'brake'},
+};
+const STOP_EVENT_ORDER=['openDoor','kneeling','handBrake']; // canonical display order
+
+function getStopEventMeta(e){ return STOP_EVENTS[e]||null; }
+function getStopEventIcon(e){ const m=STOP_EVENTS[e]; return m?m.icon:''; }
+
+/* Known events only, always in canonical order — callers never sort or filter. */
+function normalizeStopEvents(events){
+  if(!Array.isArray(events))return[];
+  return STOP_EVENT_ORDER.filter(k=>events.includes(k));
+}
+
+/* Inline SVG glyphs: emojis render inconsistently across Android WebViews and
+   at 10" in daylight the shapes matter more than the colour. currentColor lets
+   each surface tint them. */
+const STOP_EVENT_SVG={
+  door :'<path d="M5 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="13.5" cy="12" r="1.2" fill="currentColor"/>',
+  knee :'<circle cx="12" cy="4.3" r="2" fill="currentColor"/><path d="M12 7v6h5M9.5 7 8 15a4.5 4.5 0 0 0 8 3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  brake:'<rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.3 17V7.6h3.4a2.9 2.9 0 0 1 0 5.8H9.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+};
+function stopEventSvg(e,size){
+  const m=STOP_EVENTS[e]; if(!m)return'';
+  const s=size||18;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true" focusable="false">${STOP_EVENT_SVG[m.svg]}</svg>`;
+}
+
+/* Chips used by the Next Stop Card and the stop cards. `compact` drops the
+   caption for narrow screens; the label stays as title/aria for accessibility. */
+function stopEventChips(events,opts){
+  const o=opts||{}, list=normalizeStopEvents(events);
+  if(!list.length)return'';
+  return list.map(e=>{
+    const m=STOP_EVENTS[e];
+    return `<span class="evt-chip${o.compact?' compact':''}" title="${m.label}" aria-label="${m.label}">`+
+           stopEventSvg(e,o.size||18)+
+           (o.compact?'':`<b>${m.shortLabel}</b>`)+`</span>`;
+  }).join('');
+}
+
+/* §19/§20 — one place builds the spoken sentence. */
+function stopEventVoicePhrase(events){
+  const v=normalizeStopEvents(events).map(e=>STOP_EVENTS[e].voice);
+  if(!v.length)return'';
+  if(v.length===1)return v[0];
+  return v.slice(0,-1).join(', ')+' and '+v[v.length-1];
+}
 function toggleStopEvent(evt){
   clearTimeout(camPromptTimer);
   const idx=pendingStopEvents.indexOf(evt);
   if(idx>=0)pendingStopEvents.splice(idx,1);
   else pendingStopEvents.push(evt);
-  el('evt-door').classList.toggle('active',pendingStopEvents.includes('openDoor'));
-  el('evt-knee').classList.toggle('active',pendingStopEvents.includes('kneeling'));
+  refreshEventButtons();
+}
+
+/* Buttons are ON/OFF, not colour-only: border, fill, a text state badge and
+   aria-pressed all move together so the state reads at a glance in daylight. */
+const EVT_BTN_ID={openDoor:'evt-door',kneeling:'evt-knee',handBrake:'evt-brake'};
+function refreshEventButtons(){
+  STOP_EVENT_ORDER.forEach(k=>{
+    const b=el(EVT_BTN_ID[k]); if(!b)return;
+    const on=pendingStopEvents.includes(k);
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-pressed',on?'true':'false');
+    const st=b.querySelector?b.querySelector('.evt-state'):null;
+    if(st)st.textContent=on?'ON':'OFF';
+    const g=b.querySelector?b.querySelector('.evt-glyph'):null;
+    if(g&&!g.innerHTML)g.innerHTML=stopEventSvg(k,22);
+  });
 }
 
 function confirmStopEvents(){
@@ -1072,9 +1192,7 @@ function confirmStopEvents(){
     saveRecordings();
   }
   pendingStopEvents=[];
-  // Reset button states
-  el('evt-door').classList.remove('active');
-  el('evt-knee').classList.remove('active');
+  refreshEventButtons();          // all three back to OFF, no residual state
   el('cam-prompt').classList.remove('on');
   pendingPhotoStopIdx=-1;
 }
@@ -1121,7 +1239,14 @@ function updateStopMarkerPhoto(stopIdx){
 
 // ── Stop photo overlay (navigation mode) ─────────────
 let photoAutoClose=null;
-function showStopPhoto(stop,distM){
+/* §13/§15/§16 — MANUAL ONLY.
+   The automatic callers (proximity at 200 m, and arrival) live inside
+   checkArrival(), which is frozen. Rather than edit the engine, the gate was
+   moved here: without manual:true this is a no-op, so those call sites can
+   stay byte-identical while no second overlay ever opens over the map. The
+   photo lives in the Next Stop Card; this is the tap-to-enlarge lightbox.  */
+function showStopPhoto(stop,distM,manual){
+  if(!manual) return;            // automatic invocations are ignored by design
   if(!stop||!stop.photo) return; // no photo — nothing to show
   const ov=el('stop-photo-ov');
   el('spo-name').textContent=stop.name||`Stop ${stop.id}`;
@@ -1131,9 +1256,9 @@ function showStopPhoto(stop,distM){
   el('spo-none').style.display='none';
   ov.classList.add('on');
   photoPreviewStopId=stop.id;
-  // Auto-close after 12s so it doesn't block the screen
+  // Opened deliberately, so it closes deliberately (or after a long grace).
   clearTimeout(photoAutoClose);
-  photoAutoClose=setTimeout(closeStopPhoto,12000);
+  photoAutoClose=setTimeout(closeStopPhoto,20000);
 }
 function closeStopPhoto(){
   el('stop-photo-ov').classList.remove('on');
@@ -1258,6 +1383,7 @@ function calcSpeedFromPoints(lat,lng){
 // ── MAP ────────────────────────────────────────────────
 map=L.map('map',{center:[-15,-50],zoom:5,zoomControl:false,tap:true,rotate:true,rotateControl:false,touchRotate:false,shiftKeyRotate:false});
 loadStoredRecordings();
+try{refreshEventButtons();}catch(e){} // paint the event glyphs once
 checkInflightRecovery();
 checkQuota();
 setTimeout(()=>{try{map.invalidateSize();}catch(e){}},600);
@@ -1271,6 +1397,7 @@ L.control.zoom({position:'bottomleft'}).addTo(map);
 // no feedback loop with Leaflet's own pan/zoom animations — the previous
 // approach read the pane's computed transform mid-animation and wrote stale
 // interpolated positions back, drifting until the view was lost.
+let headingSource='NONE';
 let _lastBearing=0;
 function setMapBearing(deg){
   const c=map.getContainer();if(!c)return;
@@ -1388,9 +1515,10 @@ function renderHudPanel(){
       <div class="hud-sr-num ${s.state==='done'?'done':s.state==='current'?'current':'waiting'}">
         ${s.state==='done'?'✓':s.id}
       </div>
-      <div class="hud-sr-name">${s.name}${(s.events||[]).map(e=>
-        `<span class="stop-event-badge">${e==='openDoor'?'🚪':e==='kneeling'?'♿':'⚡'}</span>`
-      ).join('')}</div>
+      <div class="hud-sr-name">${s.name}<span class="evt-inline">${
+        normalizeStopEvents(s.events).map(e=>
+          `<span class="stop-event-badge" title="${STOP_EVENTS[e].label}">${stopEventSvg(e,14)}</span>`
+        ).join('')}</span></div>
       <div class="hud-sr-timer ${timerCls}">${timerTxt}${s.state==='current'?planned:''}</div>
       ${s.state==='current'?`
         <button class="hud-sr-done-btn"
@@ -1425,40 +1553,78 @@ function classifyTurn(diff){
 // Returns [{idx, lat, lon, distFromStart, icon, label, cls}]
 function buildManeuvers(pts){
   const result=[];
-  const SMOOTH=5;      // average over N points to reduce noise
   const MIN_TURN=28;   // degrees to call it a real turn
   const MIN_SEP=0.04;  // km minimum between maneuvers
 
-  if(pts.length>SMOOTH*2){
+  if(pts.length>4){
     // Cumulative distance per point
     const cums=[0];
     for(let i=1;i<pts.length;i++)
       cums.push(cums[i-1]+haversine(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
 
-    // Smoothed bearing change at each point.
+    // ── DISTANCE-based bearing windows ──────────────────────────────────
+    // A fixed 5-point window means ~15 m on a dense track and ~500 m on a
+    // sparse one; the same corner then reads as a hairpin or as nothing.
+    // Windows are metres now (NAV.TURN_WIN_M each side), with a minimum
+    // point count so very dense tracks still average out GPS noise.
+    const WIN=NAV.TURN_WIN_M/1000; // km
+    // The window must grow by straight-line DISPLACEMENT, not by path length:
+    // inside a parked-jitter cluster the path grows a few metres per sample
+    // while the vehicle has not actually moved, and a bearing taken across
+    // two points 2 m apart is pure noise (this is what produced U-turns at
+    // stops). If the path runs far without displacing, the window is declared
+    // unreliable and the point is skipped.
+    const win=(i,dir)=>{
+      let j=i,n=0,path=0;
+      for(;;){
+        const k=j+dir;
+        if(k<0||k>pts.length-1)return{j,ok:false};
+        path+=Math.abs(cums[k]-cums[j]); j=k; n++;
+        const disp=haversine(pts[j].lat,pts[j].lon,pts[i].lat,pts[i].lon);
+        if(disp>=WIN&&n>=NAV.TURN_WIN_MIN_PTS)return{j,ok:true};
+        if(path>WIN*4||n>150)return{j,ok:false};
+      }
+    };
+    const backIdx=i=>win(i,-1).j;
+    const fwdIdx =i=>win(i, 1).j;
+
     // MIN_LEG: bearings over windows shorter than ~8 m are GPS-jitter noise
     // (vehicle parked at a stop) — they produced phantom U-turns exactly at
     // stop locations, announced right when the driver departed.
     const MIN_LEG=0.008; // km
     const diffs=new Array(pts.length).fill(0);
-    for(let i=SMOOTH;i<pts.length-SMOOTH;i++){
-      const d1=haversine(pts[i-SMOOTH].lat,pts[i-SMOOTH].lon,pts[i].lat,pts[i].lon);
-      const d2=haversine(pts[i].lat,pts[i].lon,pts[i+SMOOTH].lat,pts[i+SMOOTH].lon);
-      if(d1<MIN_LEG||d2<MIN_LEG)continue; // unreliable bearing — leave diff at 0
-      const b1=brng(pts[i-SMOOTH].lat,pts[i-SMOOTH].lon,pts[i].lat,pts[i].lon);
-      const b2=brng(pts[i].lat,pts[i].lon,pts[i+SMOOTH].lat,pts[i+SMOOTH].lon);
+    for(let i=1;i<pts.length-1;i++){
+      const A=win(i,-1), B=win(i,1);
+      if(!A.ok||!B.ok)continue;              // unreliable bearing — leave diff at 0
+      const a=A.j,b=B.j;
+      const d1=haversine(pts[a].lat,pts[a].lon,pts[i].lat,pts[i].lon);
+      const d2=haversine(pts[i].lat,pts[i].lon,pts[b].lat,pts[b].lon);
+      if(d1<MIN_LEG||d2<MIN_LEG)continue;
+      const b1=brng(pts[a].lat,pts[a].lon,pts[i].lat,pts[i].lon);
+      const b2=brng(pts[i].lat,pts[i].lon,pts[b].lat,pts[b].lon);
       diffs[i]=angleDiff(b1,b2);
     }
 
     // Register only LOCAL PEAKS of |diff| — taking the first threshold
     // crossing splits a single 90° corner into two "slight" turns.
     let lastManeuverDist=-Infinity;
-    for(let i=SMOOTH;i<pts.length-SMOOTH;i++){
+    for(let i=1;i<pts.length-1;i++){
       const a=Math.abs(diffs[i]);
       if(a<MIN_TURN)continue;
       if(a<Math.abs(diffs[i-1])||a<Math.abs(diffs[i+1]))continue; // not the apex
       if(cums[i]-lastManeuverDist<MIN_SEP)continue;
       const m=classifyTurn(diffs[i]);
+      // A U-turn must PERSIST: two ~parallel streets and GPS jitter both
+      // produce a momentary 150-180° reading. Require the direction change
+      // to still hold ~40 m further along the track.
+      if(m.type==='uturn'){
+        const far=fwdIdx(Math.min(pts.length-2,i+1));
+        let k=far,acc=0;
+        while(k<pts.length-1&&acc<0.04){acc+=cums[k+1]-cums[k];k++;}
+        const bIn =brng(pts[backIdx(i)].lat,pts[backIdx(i)].lon,pts[i].lat,pts[i].lon);
+        const bOut=brng(pts[i].lat,pts[i].lon,pts[k].lat,pts[k].lon);
+        if(acc<0.03||Math.abs(angleDiff(bIn,bOut))<120)continue; // jitter, not a U-turn
+      }
       if(m.type!=='straight'){
         result.push({idx:i,lat:pts[i].lat,lon:pts[i].lon,distFromStart:cums[i],...m});
         lastManeuverDist=cums[i];
@@ -1530,8 +1696,11 @@ function loadGPX(input){
 }
 
 function clearMapLayers(){
-  [routeLayer,routeDoneLayer,routeAheadLayer,routeRemainLayer,recLayer].forEach(l=>{if(l)map.removeLayer(l)});
+  [routeLayer,routeDoneLayer,routeAheadLayer,routeRemainLayer,recLayer,
+   routeAheadCasingLayer,routeDoneCasingLayer,routeRemainCasingLayer]
+    .forEach(l=>{if(l)map.removeLayer(l)});
   routeLayer=routeDoneLayer=routeAheadLayer=routeRemainLayer=recLayer=null;
+  routeAheadCasingLayer=routeDoneCasingLayer=routeRemainCasingLayer=null;
   Object.values(stopMarkers).forEach(m=>map.removeLayer(m));
   stopMarkers={};
   extraMarkers.forEach(m=>{try{map.removeLayer(m)}catch(e){}});
@@ -1558,10 +1727,16 @@ function parseGPX(xml,filename){
 
   // Draw layers
   const ll=pts.map(p=>[p.lat,p.lon]);
+  // Casing first (under), then the main line: a 7-8 px stroke inside an
+  // 11-12 px dark outline stays readable on light tiles, dark tiles and over
+  // motorways, which a single fat stroke does not.
   routeLayer    =L.polyline(ll,{color:'rgba(240,165,0,.1)',weight:5}).addTo(map);
-  routeAheadLayer=L.polyline(ll,{color:'#f0a500',weight:5,opacity:.95}).addTo(map);
-  routeRemainLayer=L.polyline([],{color:'rgba(240,165,0,.3)',weight:3,opacity:.6,dashArray:'6 4'}).addTo(map);
-  routeDoneLayer =L.polyline([],{color:'#555',weight:4,opacity:.5}).addTo(map);
+  routeDoneCasingLayer =L.polyline([],{color:'#12161c',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeRemainCasingLayer=L.polyline([],{color:'#12161c',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeAheadCasingLayer =L.polyline(ll,{color:'#12161c',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeDoneLayer =L.polyline([],{color:'#6b737d',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeRemainLayer=L.polyline([],{color:'rgba(240,165,0,.55)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
+  routeAheadLayer=L.polyline(ll,{color:'#ffb524',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
   fitRouteBounds(routeLayer.getBounds());
 
   // Start / end markers
@@ -1584,6 +1759,7 @@ function parseGPX(xml,filename){
     const events=[];
     if(w.querySelector('openDoor')||/openDoor/i.test(desc))events.push('openDoor');
     if(w.querySelector('kneeling')||/kneeling/i.test(desc))events.push('kneeling');
+    if(w.querySelector('handBrake')||/handBrake/i.test(desc))events.push('handBrake');
     const id=i+1;
     stops.push({id,name,lat,lng:lon,dur_s,elapsed:0,running:false,intervalId:null,state:'waiting',desc,events});
     stopMarkers[id]=L.marker([lat,lon],{icon:mkStopIcon(id,'waiting')}).addTo(map)
@@ -1592,6 +1768,11 @@ function parseGPX(xml,filename){
   });
 
   // Build turn-by-turn maneuvers
+  // Imported GPX has no timestamps → anchoring falls back to a monotonic
+  // forward geometric search, which still fixes out-and-back ambiguity.
+  buildRouteIndex();
+  resetMatcher();
+  anchorStopsToRoute(null);
   maneuvers=buildManeuvers(pts);
 
   // Stats
@@ -1643,9 +1824,10 @@ function cardHTML(s){
   return `
   <div class="sc-head">
     <div class="sc-num waiting" id="scnum-${s.id}">${s.id}</div>
-    <div class="sc-name">${s.name}${s.photo?' 📷':''}${(s.events||[]).map(e=>
-      `<span class="stop-event-badge">${e==='openDoor'?'🚪 Door':e==='kneeling'?'♿ Knee':''}</span>`
-    ).join('')}</div>
+    <div class="sc-name">${s.name}${s.photo?' 📷':''}${
+      normalizeStopEvents(s.events).map(e=>
+        `<span class="stop-event-badge" title="${STOP_EVENTS[e].label}">${stopEventSvg(e,14)} ${STOP_EVENTS[e].shortLabel}</span>`
+      ).join('')}</div>
     <span class="sc-badge waiting" id="scst-${s.id}">Waiting</span>
   </div>
   <div class="sc-times">
@@ -1667,10 +1849,10 @@ function cardHTML(s){
     <div class="sc-btns">
       <button class="sc-btn" onclick="focusStop(${s.id})">🎯 View</button>
       <button class="sc-btn" onclick="markDone(${s.id})">✓ Done</button>
-      ${s.photo?`<button class="sc-btn" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0)" style="color:var(--accent);border-color:var(--accent)">📷</button>`:''}
+      ${s.photo?`<button class="sc-btn" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0,true)" style="color:var(--accent);border-color:var(--accent)">📷</button>`:''}
     </div>
   </div>
-  ${s.photo?`<img class="sc-photo" src="${s.photo}" alt="Stop photo" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0)">`:''}`;
+  ${s.photo?`<img class="sc-photo" src="${s.photo}" alt="Stop photo" onclick="showStopPhoto(stops.find(x=>x.id===${s.id}),0,true)">`:''}`;
 }
 
 function updCardProgress(s){
@@ -1734,7 +1916,10 @@ function resetTimer(id){
 function markDone(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
   s.state='done';insideStop.delete(id);
-  departGate={lat:s.lat,lng:s.lng}; // next co-located stop must wait for departure
+  // Gate carries the stop's ROUTE position: leaving the circle is not enough,
+  // the vehicle must also have advanced along the recorded cycle.
+  departGate={lat:s.lat,lng:s.lng,routeDistanceM:s.routeDistanceM??null};
+  stopArrivalCandidate=null;
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
 }
@@ -1772,6 +1957,7 @@ function startNav(){
   // Reset per-run state — without this, a 2nd run of the same route
   // starts with lastRouteIdx stuck at the end and matching never recovers.
   lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
+  resetMatcher();if(!routeCumM.length)buildRouteIndex();
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
@@ -1806,15 +1992,59 @@ function stopNav(){
   setGPS('wait','GPS stopped');
 }
 
+/* ══ VEHICLE MARKER — rendering only ════════════════════════════════════
+   "Where am I?" must be answerable in under a second at 10" in daylight, so
+   the old 28 px ▲ is replaced by a 46 px bus silhouette with a contrast halo.
+   The heading is NOT computed here: this consumes whatever currentHeading /
+   getReliableHeading() already produced. When it is null the bus points up
+   (neutral) rather than spinning on noise.                                 */
+const VEHICLE_PX=46;
+
+function busSvg(){
+  return `<svg viewBox="0 0 40 40" width="${VEHICLE_PX}" height="${VEHICLE_PX}" aria-hidden="true">
+    <g stroke-linejoin="round" stroke-linecap="round">
+      <!-- body: front (windscreen) at the top -->
+      <rect x="11" y="5.5" width="18" height="29" rx="4.5"
+            fill="var(--blue,#58a6ff)" stroke="#fff" stroke-width="2.4"/>
+      <!-- windscreen marks the front unambiguously -->
+      <path d="M13.6 11.2c2-1.6 10.8-1.6 12.8 0v3.4H13.6z" fill="#fff" opacity=".95"/>
+      <!-- side windows -->
+      <rect x="13.4" y="17.2" width="4.6" height="5.2" rx="1" fill="#fff" opacity=".65"/>
+      <rect x="22" y="17.2" width="4.6" height="5.2" rx="1" fill="#fff" opacity=".65"/>
+      <!-- wheels -->
+      <rect x="9.4" y="19.5" width="2.6" height="6" rx="1.2" fill="#0d1117" opacity=".75"/>
+      <rect x="28" y="19.5" width="2.6" height="6" rx="1.2" fill="#0d1117" opacity=".75"/>
+      <!-- direction nose -->
+      <path d="M20 1.6 24.2 6h-8.4z" fill="#fff"/>
+    </g>
+  </svg>`;
+}
+
+/* Halo + rotation wrapper. Rotation is visual only. */
+function vehicleMarkerHtml(headingDeg){
+  const rot=(headingDeg==null||isNaN(headingDeg))?0:headingDeg;
+  const neutral=(headingDeg==null||isNaN(headingDeg));
+  return `<div class="veh-wrap${neutral?' neutral':''}">
+    <div class="veh-halo"></div>
+    <div class="veh-bus" style="transform:rotate(${rot}deg)">${busSvg()}</div>
+  </div>`;
+}
 function onGPS(pos){
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
-  if(heading!=null&&!isNaN(heading)) currentHeading=smoothHeading(heading)??heading
+  // Position history feeds the movement bearing — the only direction source
+  // that stays meaningful at low speed, where GPS heading spins freely.
+  _posHist.push({lat,lng,t:pos.timestamp||Date.now()});
+  if(_posHist.length>12)_posHist.shift();
 
   // Speed: prefer GPS value, fallback to distance-based calculation
   const rawSpd=speed!=null?speed*3.6:calcSpeedFromPoints(lat,lng);
   const spdKmh=smoothSpeed(rawSpd);  // smoothed — for display
   const rawKmh=rawSpd!=null?rawSpd:0; // raw — for stop detection
+  // Heading only where it is trustworthy; otherwise the travelled direction
+  const _hd=getReliableHeading(rawKmh,heading);
+  if(_hd.bearing!=null) currentHeading=(_hd.source==='GPS')?(smoothHeading(_hd.bearing)??_hd.bearing):_hd.bearing;
+  headingSource=_hd.source;
   lastGPSForSpeed={lat,lng,t:Date.now()};
   el('hud-spd').textContent=spdKmh!=null?Math.round(spdKmh):'—';
   // Pacing target: recorded avg speed of the leg towards the next pending stop
@@ -1831,17 +2061,21 @@ function onGPS(pos){
     el('hud-cdeg').textContent=dirs[Math.round(((currentHeading%360)+360)%360/45)%8];
   }
 
-  // Position marker
+  // Position marker — bus silhouette, oriented by the heading already computed
   const hasHdg=currentHeading!=null&&!isNaN(currentHeading);
-  const mHtml=hasHdg
-    ?`<div style="font-size:28px;line-height:1;transform:rotate(${currentHeading}deg);filter:drop-shadow(0 0 5px rgba(88,166,255,.8))">▲</div>`
-    :`<div style="width:14px;height:14px;background:var(--blue);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 0 rgba(88,166,255,.6);animation:pulse 2s infinite"></div>`;
-  const icon=L.divIcon({html:mHtml,className:'',iconAnchor:[hasHdg?14:7,hasHdg?14:7]});
-  if(!posMarker) posMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);
+  const icon=L.divIcon({html:vehicleMarkerHtml(hasHdg?currentHeading:null),
+                        className:'veh-icon',
+                        iconSize:[VEHICLE_PX,VEHICLE_PX],
+                        iconAnchor:[VEHICLE_PX/2,VEHICLE_PX/2]});
+  // zIndexOffset keeps the vehicle above every route layer, stop marker and
+  // the accuracy circle (§6/§13/§15) — stop markers use 900.
+  if(!posMarker) posMarker=L.marker([lat,lng],{icon,zIndexOffset:5000}).addTo(map);
   else{posMarker.setLatLng([lat,lng]);posMarker.setIcon(icon)}
 
   if(accCircle)map.removeLayer(accCircle);
   accCircle=L.circle([lat,lng],{radius:accuracy,color:'#58a6ff',fillColor:'#58a6ff',fillOpacity:.07,weight:1,opacity:.3}).addTo(map);
+  if(accCircle.bringToBack)accCircle.bringToBack();   // never over the vehicle
+  if(posMarker.setZIndexOffset)posMarker.setZIndexOffset(5000);
 
   if(+el('rng-follow').value===1){
     const zoom=+el('rng-zoom').value;
@@ -1861,7 +2095,7 @@ function onGPS(pos){
   }
 
   // Route remaining + turn-by-turn
-  const{nearIdx,distFromStart}=nearestRoutePoint(lat,lng);
+  const{nearIdx,distFromStart,match}=nearestRoutePoint(lat,lng,rawKmh,accuracy);
   updRouteRemaining(nearIdx,distFromStart);
   updInstruction(nearIdx,distFromStart);
   // Announce arrival at destination
@@ -1871,7 +2105,8 @@ function onGPS(pos){
 
   // Arrival check (rawKmh passed in — it's local to this function)
   const stopsBefore=stops.filter(x=>x.state!=='waiting').length;
-  checkArrival(lat,lng,rawKmh);
+  checkArrival(lat,lng,rawKmh,match,accuracy);
+  if(navDebug)renderNavDebug(lat,lng,accuracy,rawKmh,heading,match);
   updNextStopCard(lat,lng);
   updLiveMetrics(lat,lng,rawKmh,pos.timestamp,stopsBefore);
 
@@ -2041,11 +2276,25 @@ function updNextStopCard(lat,lng){
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
   }
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
-  el('nsc-evt').textContent=(next.events||[]).map(e=>e==='openDoor'?'🚪':'♿').join(' ');
+  // Events come from `next` only (§18): when a stop turns done the card is
+  // rebuilt for the following stop, so nothing from the previous one lingers.
+  const _ev=normalizeStopEvents(next.events);
+  el('nsc-evt').innerHTML=stopEventChips(_ev,{compact:true,size:16});
+  const _evb=el('nsc-events');
+  if(_evb){
+    _evb.innerHTML=_ev.length?stopEventChips(_ev,{size:20}):'';
+    _evb.style.display=_ev.length?'':'none';   // §UI-5: no empty events area
+  }
   el('nsc-leg').textContent=next.seg_avg!=null?`leg Ø ${next.seg_avg} km/h`:'';
+  // §12/§UI-13 — the Next Stop Card is the ONE photo surface during
+  // navigation, and it is cleared when the next stop has no photo.
   const ph=el('nsc-photo');
-  if(next.photo&&next.photo.length>10){if(ph.src!==next.photo)ph.src=next.photo;ph.style.display='block';}
-  else ph.style.display='none';
+  if(next.photo&&next.photo.length>10){
+    if(ph.src!==next.photo)ph.src=next.photo;
+    ph.style.display='block';
+  }else{
+    ph.removeAttribute('src'); ph.style.display='none';
+  }
 }
 function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   if(!navActive){if(el('lcm'))el('lcm').style.display='none';return}
@@ -2078,50 +2327,495 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
 
 function nscPhotoTap(){
   const next=stops.find(x=>x.state!=='done');
-  if(next?.photo)showStopPhoto(next,0);
+  if(next?.photo)showStopPhoto(next,0,true);   // manual → lightbox
 }
 
-function nearestRoutePoint(lat,lng){
-  if(!routePts.length||!routeCumDist.length)return{nearIdx:0,distFromStart:0};
+// ══════════════════════════════════════════════════════════════════════════
+// NAVIGATION ENGINE v2 — segment map-matching, route progress, stop anchors
+// ------------------------------------------------------------------------
+// Replaces point-nearest matching. The route is a cycle THIS vehicle already
+// drove, so we exploit privileged information: exact point order, cumulative
+// distance, stop order and recorded approach direction. Matching answers
+// "which route SEGMENT is consistent with position + direction + progress?"
+// instead of "which route POINT is closest?".
+// ══════════════════════════════════════════════════════════════════════════
 
-  // Windowed search: look AHEAD of last known position only.
-  // This prevents confusing a street driven in one direction with
-  // the same street driven in the opposite direction later in the route.
-  const AHEAD=500;   // wider window — handles long segments between stops
-  const BACK=3;      // minimal backtrack — prevents bidirectional confusion
+const NAV = {
+  BACK_M:            60,   // corridor behind current progress (GPS jitter absorb)
+  AHEAD_SLOW_M:     250,   // corridor ahead, <30 km/h
+  AHEAD_FAST_M:     600,   // corridor ahead, >70 km/h
+  GOOD_CROSS_M:      25,   // cross-track considered a solid match
+  HEAD_PEN_M:        70,   // max metres of penalty for 180° heading error
+  BACK_PEN_PER_M:   1.6,   // penalty weight for moving backwards along route
+  FWD_PEN_PER_M:   0.06,   // mild penalty for implausible forward leaps
+  JUMP_M:           250,   // beyond this, a progress change is a "jump"
+  JUMP_CONFIRM:       3,   // consecutive samples needed to accept a jump
+  RELOC_CROSS_M:     70,   // corridor match worse than this = maybe off-route
+  RELOC_CONFIRM:      4,   // samples before global relocalisation
+  ACC_GOOD_M:        12,   // accuracy at/below this = full trust
+  ACC_BAD_M:         45,   // accuracy at/above this = heavily discounted
+  MOVE_BRG_MIN_M:    12,   // min travelled distance for a movement bearing
+  HDG_TRUST_KMH:      5,   // below this, GPS heading is not trusted at all
+  HDG_FULL_KMH:      20,   // at/above this, GPS heading fully trusted
+  MIN_STOP_ALONG_TOL_M: 20,// floor for |routeProgress - stop.routeDistanceM|
+  MAX_STOP_ALONG_TOL_M: 60,// hard ceiling — bad GPS must never buy acceptance area
+  ARRIVE_CONFIRM:        2,// consecutive valid samples before a stop turns 'current'
+  STOP_DIR_MAX_DEG: 110,   // approach vs movement bearing max error
+  DEPART_PROGRESS_M: 60,   // route advance required to clear a departure gate
+  TURN_WIN_M:        15,   // bearing window each side for maneuver detection
+  TURN_WIN_MIN_PTS:   2,   // but never fewer than N points
+};
 
-  const from=Math.max(0, lastRouteIdx-BACK);
-  const to  =Math.min(routePts.length-1, lastRouteIdx+AHEAD);
+// ── route-derived caches (rebuilt on every route load) ──
+let routeCumM      = [];   // cumulative metres per point
+let routeSegBrg    = [];   // bearing of segment i → i+1
+let routeGrid      = null; // {cell, map:Map<key,int[]>} coarse spatial index
 
-  let minIdx=from, minDist=Infinity;
-  for(let i=from;i<=to;i++){
-    let d=haversine(lat,lng,routePts[i].lat,routePts[i].lon);
-    // Direction penalty (spec 7.1): up to 60 m (0.06 km) for route points
-    // whose local bearing opposes the vehicle heading — disambiguates
-    // bidirectional roads driven in both directions on the same route.
-    if(currentHeading!=null&&i<routePts.length-1){
-      const segB=brng(routePts[i].lat,routePts[i].lon,routePts[i+1].lat,routePts[i+1].lon);
-      const dAng=Math.abs(angleDiff(segB,currentHeading)); // 0..180
-      d+=(dAng/180)*0.06;
-    }
-    if(d<minDist){minDist=d;minIdx=i;}
+// ── live matching state ──
+let routeProgressM = 0;    // monotonic-ish distance travelled along the route
+let matchState     = null; // last accepted match object
+let _jumpCand      = null; // {alongM, n} pending big-jump confirmation
+let _relocN        = 0;    // consecutive poor corridor matches
+let stopArrivalCandidate = null; // {stopId,count,firstSeen,lastMatchDistance,confidence}
+let _posHist       = [];   // recent {lat,lng,t} for movement bearing
+let navDebug       = false;
+let navDebugLog    = [];   // ring buffer of matcher decisions
+let navAnchorWarning   = null; // STOP_TIMESTAMP_MISSING guardrail
+let anchorModeSummary  = null; // {timestamp,geometric,mode}
+let dedupDecision      = null; // {merged,dFL,reason} — circular start/end merge
+
+function resetMatcher(){
+  routeProgressM=0; matchState=null; _jumpCand=null; _relocN=0;
+  stopArrivalCandidate=null;
+  _posHist=[]; navDebugLog=[];
+}
+
+/* ── metres-per-degree at a latitude (local flat-earth approximation) ── */
+function mPerDegLng(lat){ return 111320*Math.cos(lat*Math.PI/180); }
+const M_PER_DEG_LAT = 111320;
+
+/* ── perpendicular projection of a point onto a segment, in metres ── */
+function projectToSegment(lat,lng,aLat,aLon,bLat,bLon){
+  const mLng=mPerDegLng(aLat);
+  const bx=(bLon-aLon)*mLng, by=(bLat-aLat)*M_PER_DEG_LAT;
+  const px=(lng -aLon)*mLng, py=(lat -aLat)*M_PER_DEG_LAT;
+  const L2=bx*bx+by*by;
+  let t = L2>0 ? (px*bx+py*by)/L2 : 0;
+  if(t<0)t=0; else if(t>1)t=1;
+  const dx=px-bx*t, dy=py-by*t;
+  return { t, crossM:Math.sqrt(dx*dx+dy*dy), segLenM:Math.sqrt(L2) };
+}
+
+/* ── build per-route caches + coarse grid (called once per route load) ── */
+function buildRouteIndex(){
+  routeCumM=[]; routeSegBrg=[]; routeGrid=null;
+  if(!routePts.length)return;
+  routeCumM=routeCumDist.map(km=>km*1000);
+  for(let i=0;i<routePts.length-1;i++){
+    routeSegBrg.push(brng(routePts[i].lat,routePts[i].lon,routePts[i+1].lat,routePts[i+1].lon));
+  }
+  // grid: ~100 m cells, segment start points only (segments are short after decimation)
+  const cell=0.001; // ≈111 m in latitude
+  const map=new Map();
+  for(let i=0;i<routePts.length-1;i++){
+    const k=Math.round(routePts[i].lat/cell)+'|'+Math.round(routePts[i].lon/cell);
+    let a=map.get(k); if(!a){a=[];map.set(k,a);} a.push(i);
+  }
+  routeGrid={cell,map};
+}
+
+/* ── candidate segment indices near a coordinate (grid lookup, O(1)-ish) ── */
+function gridCandidates(lat,lng){
+  if(!routeGrid)return null;
+  const {cell,map}=routeGrid, out=[];
+  const cy=Math.round(lat/cell), cx=Math.round(lng/cell);
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const a=map.get((cy+dy)+'|'+(cx+dx));
+    if(a)for(const i of a)out.push(i);
+  }
+  return out;
+}
+
+/* ── binary search: first point index with cumulative metres >= m ── */
+function idxAtMetres(m){
+  let lo=0, hi=routeCumM.length-1;
+  if(hi<0)return 0;
+  if(m<=routeCumM[0])return 0;
+  if(m>=routeCumM[hi])return hi;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(routeCumM[mid]<m)lo=mid+1; else hi=mid; }
+  return lo;
+}
+
+/* ── movement bearing from recent GPS history (robust: several samples) ── */
+function calculateMovementBearing(){
+  if(_posHist.length<2)return null;
+  const cur=_posHist[_posHist.length-1];
+  for(let i=_posHist.length-2;i>=0;i--){
+    const p=_posHist[i];
+    if(haversine(p.lat,p.lng,cur.lat,cur.lng)*1000>=NAV.MOVE_BRG_MIN_M)
+      return brng(p.lat,p.lng,cur.lat,cur.lng);
+  }
+  return null; // hasn't travelled far enough to say anything
+}
+
+/* ── heading with an explicit confidence gate ────────────────────────────
+   GPS heading is meaningless at walking pace: parked, it spins freely and
+   used to inject a full-strength direction penalty into the matcher.      */
+function getReliableHeading(speedKmh,gpsHeading){
+  const mov=calculateMovementBearing();
+  const v=speedKmh==null?0:speedKmh;
+  if(v<NAV.HDG_TRUST_KMH)
+    return {bearing:mov, weight:mov==null?0:0.35, source:mov==null?'NONE':'MOVEMENT'};
+  const gpsOk = gpsHeading!=null && !isNaN(gpsHeading);
+  const w = v>=NAV.HDG_FULL_KMH ? 1 : 0.3+0.7*(v-NAV.HDG_TRUST_KMH)/(NAV.HDG_FULL_KMH-NAV.HDG_TRUST_KMH);
+  if(gpsOk && mov!=null && Math.abs(angleDiff(gpsHeading,mov))>90)
+    return {bearing:mov, weight:w*0.8, source:'MOVEMENT'};  // GPS heading disagrees with travel
+  if(gpsOk) return {bearing:gpsHeading, weight:w, source:'GPS'};
+  if(mov!=null) return {bearing:mov, weight:w*0.9, source:'MOVEMENT'};
+  return {bearing:null, weight:0, source:'NONE'};
+}
+
+/* ── accuracy → trust factor 0.35..1 ── */
+function accFactor(accuracyM){
+  if(accuracyM==null)return 1;
+  if(accuracyM<=NAV.ACC_GOOD_M)return 1;
+  if(accuracyM>=NAV.ACC_BAD_M)return 0.35;
+  const r=(accuracyM-NAV.ACC_GOOD_M)/(NAV.ACC_BAD_M-NAV.ACC_GOOD_M);
+  return 1-0.65*r;
+}
+
+/* ── score one candidate segment ── */
+function scoreSegment(i,lat,lng,hdg,hdgW,accF){
+  const a=routePts[i], b=routePts[i+1];
+  if(!b)return null;
+  const pr=projectToSegment(lat,lng,a.lat,a.lon,b.lat,b.lon);
+  const alongM=routeCumM[i]+pr.segLenM*pr.t;
+  const segB=routeSegBrg[i];
+  const hErr = (hdg==null)?null:Math.abs(angleDiff(segB,hdg));
+
+  // distance term — inflated when GPS accuracy is poor so that a 20 m gap
+  // between two parallel streets stops being decisive at accuracy 50 m
+  let score = pr.crossM/accF;
+
+  // direction term — scaled by heading confidence, never dominant on its own
+  if(hErr!=null) score += (hErr/180)*NAV.HEAD_PEN_M*hdgW;
+
+  // progress continuity — backwards is expensive, forwards is mildly damped
+  const delta = alongM-routeProgressM;
+  score += delta<0 ? (-delta)*NAV.BACK_PEN_PER_M : delta*NAV.FWD_PEN_PER_M;
+
+  return { segmentIndex:i, index:(pr.t>0.5?i+1:i), t:pr.t,
+           crossTrackM:pr.crossM, alongM, routeBearing:segB,
+           headingError:hErr, score, delta };
+}
+
+/* ── MAIN: match a GPS fix to the recorded route ───────────────────────── */
+function matchPositionToRoute(lat,lng,heading,speedKmh,accuracyM){
+  if(!routePts.length||routeCumM.length<2)
+    return {index:0,segmentIndex:0,alongM:0,routeDistanceM:0,distFromStart:0,
+            crossTrackM:0,headingError:null,confidence:'LOW',score:0,reason:'NO_ROUTE'};
+
+  const hd   = getReliableHeading(speedKmh,heading);
+  const accF = accFactor(accuracyM);
+  const v    = speedKmh==null?0:speedKmh;
+  const aheadM = v<=30 ? NAV.AHEAD_SLOW_M
+               : v>=70 ? NAV.AHEAD_FAST_M
+               : NAV.AHEAD_SLOW_M+(NAV.AHEAD_FAST_M-NAV.AHEAD_SLOW_M)*(v-30)/40;
+
+  // ── candidate set 1: the corridor around current progress (primary) ──
+  const i0=idxAtMetres(routeProgressM-NAV.BACK_M);
+  const i1=idxAtMetres(routeProgressM+aheadM);
+  let best=null, second=null;
+  for(let i=i0;i<=i1&&i<routePts.length-1;i++){
+    const c=scoreSegment(i,lat,lng,hd.bearing,hd.weight,accF);
+    if(!c)continue;
+    if(!best||c.score<best.score){second=best;best=c;}
+    else if(!second||c.score<second.score)second=c;
   }
 
-  // Only advance, never jump backward by more than BACK
-  lastRouteIdx=Math.max(from, minIdx);
-  return{nearIdx:lastRouteIdx, distFromStart:routeCumDist[lastRouteIdx]};
+  // ── candidate set 2: global relocalisation, only when the corridor fails
+  //     for several consecutive samples (start mid-route, off-route, tunnel)
+  let relocated=false;
+  if(!best||best.crossTrackM>NAV.RELOC_CROSS_M){
+    _relocN++;
+    if(_relocN>=NAV.RELOC_CONFIRM){
+      const cand=gridCandidates(lat,lng);
+      if(cand&&cand.length){
+        let g=null;
+        for(const i of cand){
+          const c=scoreSegment(i,lat,lng,hd.bearing,hd.weight,accF);
+          // ignore progress term when relocalising — we admit we are lost
+          if(!c)continue;
+          const raw=c.crossTrackM/accF+(c.headingError!=null?(c.headingError/180)*NAV.HEAD_PEN_M*hd.weight:0);
+          if(!g||raw<g._raw){c._raw=raw;g=c;}
+        }
+        if(g&&(!best||g.crossTrackM<best.crossTrackM*0.6)){best=g;relocated=true;_relocN=0;}
+      }
+    }
+  } else _relocN=0;
+
+  if(!best){
+    const keep=matchState||{index:0,segmentIndex:0,alongM:routeProgressM};
+    return {...keep,confidence:'LOW',reason:'NO_CANDIDATE',
+            routeDistanceM:routeProgressM,distFromStart:routeProgressM/1000};
+  }
+
+  // ── large progress jumps need several consecutive confirmations ──
+  const jump=best.alongM-routeProgressM;
+  let accepted=true, reason='ACCEPT';
+  if(!relocated&&Math.abs(jump)>NAV.JUMP_M&&matchState){
+    if(_jumpCand&&Math.abs(_jumpCand.alongM-best.alongM)<NAV.JUMP_M){
+      _jumpCand.n++;
+      if(_jumpCand.n<NAV.JUMP_CONFIRM){accepted=false;reason='JUMP_PENDING';}
+      else _jumpCand=null;
+    } else { _jumpCand={alongM:best.alongM,n:1}; accepted=false; reason='JUMP_CANDIDATE'; }
+  } else if(Math.abs(jump)<=NAV.JUMP_M) _jumpCand=null;
+
+  // ── confidence ──
+  const margin = second?Math.abs(second.score-best.score):999;
+  let confidence='HIGH';
+  if(best.crossTrackM>NAV.GOOD_CROSS_M/accF || margin<4 || accF<0.5) confidence='MEDIUM';
+  if(best.crossTrackM>NAV.RELOC_CROSS_M || accF<=0.4 || !accepted)    confidence='LOW';
+
+  if(navDebug){
+    navDebugLog.push(`${accepted?'ACCEPT':'REJECT'} seg=${best.segmentIndex} `+
+      `xt=${best.crossTrackM.toFixed(1)}m hErr=${best.headingError==null?'—':best.headingError.toFixed(0)+'°'} `+
+      `dProg=${jump.toFixed(0)}m score=${best.score.toFixed(1)} conf=${confidence}`+
+      (accepted?'':' reason='+reason));
+    if(navDebugLog.length>40)navDebugLog.shift();
+  }
+
+  if(accepted){
+    // progress is monotonic apart from a small jitter allowance
+    routeProgressM = (best.alongM<routeProgressM-NAV.BACK_M && !relocated)
+      ? routeProgressM : best.alongM;
+    matchState={...best,confidence,reason,
+      routeDistanceM:best.alongM,distFromStart:best.alongM/1000,
+      headingSource:hd.source,movementBearing:calculateMovementBearing()};
+  } else if(matchState){
+    matchState={...matchState,confidence:'LOW',reason};
+  }
+
+  return matchState||{index:best.index,segmentIndex:best.segmentIndex,
+    alongM:best.alongM,routeDistanceM:best.alongM,distFromStart:best.alongM/1000,
+    crossTrackM:best.crossTrackM,headingError:best.headingError,
+    confidence,score:best.score,reason};
 }
 
+/* ── compatibility wrapper: existing callers keep their contract ── */
+function nearestRoutePoint(lat,lng,speedKmh,accuracyM){
+  if(!routePts.length||!routeCumDist.length)return{nearIdx:0,distFromStart:0};
+  if(!routeCumM.length)buildRouteIndex();
+  const m=matchPositionToRoute(lat,lng,currentHeading,speedKmh,accuracyM);
+  const nearIdx=Math.max(0,Math.min(routePts.length-1,m.index|0));
+  lastRouteIdx=nearIdx;                       // kept for legacy readers
+  return {nearIdx, distFromStart:(routeCumM[nearIdx]??0)/1000, match:m};
+}
+
+/* ── segment currently being driven: current position → next pending stop ── */
 function findNextStopRouteIdx(fromIdx){
   const ns=stops.find(s=>s.state!=='done');
   if(!ns||!routePts.length)return routePts.length-1;
+  // Anchored stop: exact — no geometric guessing on loops or out-and-back legs
+  if(ns.routeIndex!=null)
+    return Math.max(fromIdx,Math.min(routePts.length-1,ns.routeIndex));
+  // Fallback (unanchored GPX): forward search bounded by DISTANCE, not point count
+  const limitM=(routeCumM[fromIdx]??0)+8000;
   let best=fromIdx,bestD=Infinity;
-  const end=Math.min(routePts.length,fromIdx+600);
-  for(let i=fromIdx;i<end;i++){
+  for(let i=fromIdx;i<routePts.length&&(routeCumM[i]??0)<=limitM;i++){
     const d=haversine(routePts[i].lat,routePts[i].lon,ns.lat,ns.lng);
     if(d<bestD){bestD=d;best=i;}
   }
   return best;
+}
+
+/* ── anchor each stop to the route: index, distance-along, approach bearing ──
+   Timestamps are exact when the route IS the recording; geometry is the
+   fallback for imported GPX. Anchoring is what makes an out-and-back stop
+   distinguishable from the identical coordinate on the return leg.        */
+/* ── anchor each stop to the route: index, distance-along, approach bearing ──
+   TWO EXPLICIT MODES, never mixed:
+
+     internal recording  → points carry t AND the stop carries t/startT
+                         → TIMESTAMP anchoring (exact, order-preserving)
+     external GPX        → no timestamps anywhere
+                         → GEOMETRIC fallback (monotonic forward search)
+
+   routeDistanceM is defined as: the position along the route at the moment
+   the vehicle STARTED the stop (startT), not the moment detection was
+   confirmed several seconds later. Anchoring is what makes an out-and-back
+   stop distinguishable from the identical coordinate on the return leg.
+
+   NOTE on the recorded stop position: startT is the instant the vehicle first
+   dropped below the stop-speed threshold, while lat/lng is its position when
+   the duration threshold was met. The gap is bounded by
+   (rec stop speed) x (rec stop min duration) — about 7 m at the defaults
+   (5 km/h, 5 s). routeDistanceM follows startT; lat/lng stays the
+   confirmation position, which is where the vehicle actually stands.       */
+/* ── is (first,last) the SAME depot event opening and closing the cycle? ──
+   No depot flag exists in the data model and none is invented here. The
+   evidence used is what a recording already carries:
+
+     • the two stops are co-located                     (geometry, as before)
+     • the TRACK starts at the first stop and ENDS at the last one
+     • with timestamps: nothing happened away from that place before the
+       first stop began, nor after the last stop began
+
+   Co-location alone is NOT proof. A street driven in both directions puts two
+   genuinely different events on the same coordinate — that is the whole reason
+   the navigation engine exists — so a bare distance test would delete the
+   return-leg stop. Per the "prefer an extra stop over a false merge" rule,
+   anything short of full evidence leaves both stops in place.               */
+function isDepotPair(pts,first,last){
+  const NEAR=30, LOOP=60;                       // metres
+  if(!Array.isArray(pts)||pts.length<2)return false;
+  const P=o=>({lat:+o.lat,lng:+(o.lng??o.lon)});
+  const d=(a,b)=>{const x=P(a),y=P(b);return haversine(x.lat,x.lng,y.lat,y.lng)*1000;};
+  const p0=pts[0], pN=pts[pts.length-1];
+
+  if(d(first,last)>=NEAR)return false;          // not the same place
+  if(d(p0,pN)>=LOOP)     return false;          // the track is not a closed loop
+  if(d(p0,first)>=NEAR)  return false;          // the recording does not start there
+  if(d(pN,last)>=NEAR)   return false;          // the recording does not end there
+
+  // Internal recording: prove the vehicle was parked there at both ends.
+  const t0=first.startT??first.t, t1=last.startT??last.t;
+  if(p0.t!=null&&t0!=null&&t1!=null){
+    for(const p of pts){
+      if(p.t<t0&&d(p,first)>=NEAR)return false; // it drove somewhere before stop 1
+      if(p.t>t1&&d(p,last )>=NEAR)return false; // it drove somewhere after the last
+    }
+  }
+  return true;
+}
+function anchorStopsToRoute(recPoints){
+  if(!routePts.length)return;
+  if(!routeCumM.length)buildRouteIndex();
+  const pointsHaveT = Array.isArray(recPoints) && recPoints.length===routePts.length
+                      && recPoints[0] && recPoints[0].t!=null;
+  let searchFrom=0, missingT=0, nTs=0, nGeo=0;
+  navAnchorWarning=null;
+
+  stops.forEach(s=>{
+    let idx=null, mode='GEOMETRIC';
+    const st=s.startT??s.t;
+
+    if(pointsHaveT&&st!=null){
+      let lo=0,hi=recPoints.length-1;
+      while(lo<hi){const mid=(lo+hi)>>1;(recPoints[mid].t<st)?lo=mid+1:hi=mid;}
+      idx=lo; mode='TIMESTAMP';
+    } else if(pointsHaveT){
+      // The route has time but this stop does not — the exact regression the
+      // audit found. Surface it instead of degrading quietly to geometry.
+      missingT++;
+    }
+
+    if(idx==null){                       // geometric fallback, monotonic forward
+      let best=searchFrom,bestD=Infinity;
+      for(let i=searchFrom;i<routePts.length;i++){
+        const d=haversine(routePts[i].lat,routePts[i].lon,s.lat,s.lng);
+        if(d<bestD){bestD=d;best=i;}
+      }
+      idx=best;
+    }
+    idx=Math.max(0,Math.min(routePts.length-1,idx));
+    searchFrom=Math.min(routePts.length-1,idx+1);
+    mode==='TIMESTAMP'?nTs++:nGeo++;
+
+    s.anchorMode     = mode;
+    s.routeIndex     = idx;
+    s.segmentIndex   = Math.min(idx,routePts.length-2);
+    s.routeDistanceM = routeCumM[idx]??0;
+
+    // approach bearing: direction over the last ~30 m BEFORE the stop.
+    // Never the instantaneous heading at arrival — the vehicle is stationary
+    // there and GPS heading is noise.
+    let j=idx, back=0;
+    while(j>0&&back<30){
+      back+=haversine(routePts[j-1].lat,routePts[j-1].lon,routePts[j].lat,routePts[j].lon)*1000;
+      j--;
+    }
+    s.approachBearing = back>=NAV.MOVE_BRG_MIN_M
+      ? brng(routePts[j].lat,routePts[j].lon,routePts[idx].lat,routePts[idx].lon)
+      : null;
+  });
+
+  anchorModeSummary={timestamp:nTs,geometric:nGeo,
+                     mode:nTs&&!nGeo?'TIMESTAMP':(!nTs&&nGeo?'GEOMETRIC':'MIXED')};
+  if(missingT){
+    navAnchorWarning=`STOP_TIMESTAMP_MISSING (${missingT}/${stops.length})`;
+    console.warn('WARNING:',navAnchorWarning,
+      '— route has timestamps but these stops do not; they fell back to geometry.');
+  }
+}
+
+/* ── arrival validation: distance AND route position AND direction ── */
+/* ── how far the vehicle may be from the stop's position ALONG the route ──
+   Built from the CONFIGURED radius, never from the speed-inflated one: a bus
+   crawling into a stop should not also buy 2.6x the along-track tolerance.
+   GPS accuracy contributes at most 12.5 m and the whole thing is clamped to
+   MAX_STOP_ALONG_TOL_M, so "bad accuracy + big radius + slow" can no longer
+   compound into hundreds of metres. Poor GPS lowers confidence instead — and
+   LOW confidence blocks the arrival outright (see isValidStopArrival).      */
+function stopAlongToleranceM(radiusM,accuracyM,confidence){
+  let tol=Math.max(NAV.MIN_STOP_ALONG_TOL_M,(radiusM||0)*0.5);
+  tol+=Math.min(accuracyM??0,25)*0.5;      // capped contribution, not a free pass
+  if(confidence==='HIGH')tol*=0.85;        // a trusted match needs less slack
+  return Math.min(NAV.MAX_STOP_ALONG_TOL_M,Math.max(NAV.MIN_STOP_ALONG_TOL_M,tol));
+}
+
+/* ── arrival validation: distance AND route position AND direction ──
+   Returns {ok, reason, hard}. `hard` marks a contradiction that should wipe
+   any pending arrival candidate; soft failures only decay it.              */
+function isValidStopArrival(stop,match,movBearing,effectiveRadius,distM,accuracyM,radiusM){
+  if(distM>effectiveRadius)                return {ok:false,reason:'TOO_FAR',hard:true};
+  const anchored = stop.routeDistanceM!=null;
+
+  // A LOW-confidence match means we do not know where on the cycle we are.
+  // Refusing to promote a stop is safe: it stays "next", the HUD keeps
+  // showing it, and it arrives as soon as the match recovers. Unanchored
+  // stops are exempt — with no route position there is nothing to be
+  // uncertain about, and they fall back to distance-only behaviour.
+  if(anchored&&match&&match.confidence==='LOW')
+    return {ok:false,reason:'LOW_CONFIDENCE',hard:false};
+
+  // route-position gate (only for anchored stops and a usable match)
+  if(anchored&&match&&match.routeDistanceM!=null&&match.confidence!=='LOW'){
+    const tol=stopAlongToleranceM(radiusM??effectiveRadius,accuracyM,match.confidence);
+    if(Math.abs(match.routeDistanceM-stop.routeDistanceM)>tol)
+      return {ok:false,reason:'WRONG_ROUTE_POSITION',hard:true};
+  }
+  // direction gate (only when both bearings are trustworthy)
+  if(stop.approachBearing!=null&&movBearing!=null){
+    const err=Math.abs(angleDiff(stop.approachBearing,movBearing));
+    if(err>NAV.STOP_DIR_MAX_DEG) return {ok:false,reason:'WRONG_DIRECTION',hard:true};
+  }
+  return {ok:true,reason:'OK',hard:false};
+}
+
+/* ── arrival persistence ──────────────────────────────────────────────────
+   One GPS fix is not evidence. A fix can land inside the radius while the
+   matcher sits elsewhere on the cycle (multipath, urban canyon). Require
+   NAV.ARRIVE_CONFIRM consecutive valid samples. Only anchored stops are
+   gated: unanchored ones keep the previous single-sample behaviour.
+   Returns true when the arrival is confirmed.                              */
+function confirmStopArrival(stop,verdict,match,distM){
+  if(stop.routeDistanceM==null) return verdict.ok;      // distance-only mode
+  if(!verdict.ok){
+    if(stopArrivalCandidate&&stopArrivalCandidate.stopId===stop.id){
+      if(verdict.hard) stopArrivalCandidate=null;        // contradiction — drop it
+      else if(--stopArrivalCandidate.count<=0) stopArrivalCandidate=null;
+    }
+    return false;
+  }
+  if(!stopArrivalCandidate||stopArrivalCandidate.stopId!==stop.id)
+    stopArrivalCandidate={stopId:stop.id,count:0,firstSeen:Date.now(),
+                          lastMatchDistance:null,confidence:null};
+  stopArrivalCandidate.count++;
+  stopArrivalCandidate.lastMatchDistance=distM;
+  stopArrivalCandidate.confidence=match?match.confidence:null;
+  if(stopArrivalCandidate.count>=NAV.ARRIVE_CONFIRM){stopArrivalCandidate=null;return true;}
+  return false;
 }
 
 function updRouteRemaining(nearIdx,distFromStart){
@@ -2131,9 +2825,20 @@ function updRouteRemaining(nearIdx,distFromStart){
   const segEnd=findNextStopRouteIdx(nearIdx);
   const segment=routePts.slice(nearIdx,segEnd+1).map(p=>[p.lat,p.lon]);
   const remain =routePts.slice(segEnd).map(p=>[p.lat,p.lon]);
-  routeDoneLayer.setLatLngs(done.length>1?done:[]);
-  routeAheadLayer.setLatLngs(segment.length>1?segment:done.length?[done[done.length-1]]:[] );
-  if(routeRemainLayer)routeRemainLayer.setLatLngs(remain.length>1?remain:[]);
+  const doneLL  =done.length>1?done:[];
+  const aheadLL =segment.length>1?segment:done.length?[done[done.length-1]]:[];
+  const remainLL=remain.length>1?remain:[];
+  routeDoneLayer.setLatLngs(doneLL);
+  routeAheadLayer.setLatLngs(aheadLL);
+  if(routeRemainLayer)routeRemainLayer.setLatLngs(remainLL);
+  // Casings carry the SAME geometry — presentation only, no logic here.
+  if(routeDoneCasingLayer)  routeDoneCasingLayer.setLatLngs(doneLL);
+  if(routeAheadCasingLayer) routeAheadCasingLayer.setLatLngs(aheadLL);
+  if(routeRemainCasingLayer)routeRemainCasingLayer.setLatLngs(remainLL);
+  // Keep the paint order: casings under, main lines over, vehicle on top.
+  [routeDoneCasingLayer,routeRemainCasingLayer,routeAheadCasingLayer,
+   routeDoneLayer,routeRemainLayer,routeAheadLayer].forEach(l=>l&&l.bringToFront&&l.bringToFront());
+  if(posMarker&&posMarker.setZIndexOffset)posMarker.setZIndexOffset(5000);
 }
 
 function updInstruction(nearIdx,distFromStart){
@@ -2205,17 +2910,24 @@ function updInstruction(nearIdx,distFromStart){
 // has actually left. Cleared once distance from the gate exceeds the radius.
 let departGate=null;
 
-function checkArrival(lat,lng,rawKmh){
+function checkArrival(lat,lng,rawKmh,match,accuracyM){
   if(!stops.length)return;
   const radius=+el('rng-radius').value;
   const autoStart=+el('rng-auto').value===1;
   const autoStop=+el('rng-autostop').value===1;
   // Speed-aware arrival radius: when slowing down near stop, expand detection zone
   const effectiveRadius=(rawKmh!=null&&rawKmh<20)?radius*1.8:radius;
+  const movB=calculateMovementBearing();
 
-  // Clear the gate once the vehicle physically left the completed stop
-  if(departGate&&haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius)
-    departGate=null;
+  // ── Departure gate release: physical distance AND route progress ──
+  // Distance alone let GPS jitter inside a stop re-arm the next lap's stop.
+  if(departGate){
+    const leftPhysically=haversine(lat,lng,departGate.lat,departGate.lng)*1000>radius;
+    const leftOnRoute = departGate.routeDistanceM==null
+      ? true
+      : routeProgressM>departGate.routeDistanceM+NAV.DEPART_PROGRESS_M;
+    if(leftPhysically&&leftOnRoute)departGate=null;
+  }
 
   // ── SEQUENCE-AWARE ARRIVAL: only the NEXT pending stop can arrive ──
   // Test cycles visit the same physical location on every lap; distance-only
@@ -2231,17 +2943,25 @@ function checkArrival(lat,lng,rawKmh){
       }
       if(next.events?.length&&!evtAnnounced.has(next.id)){
         evtAnnounced.add(next.id);
-        const msgs=[];
-        if(next.events.includes('openDoor'))msgs.push('open doors');
-        if(next.events.includes('kneeling'))msgs.push('kneeling');
-        if(msgs.length)speakText(`Stop ${next.id}: ${msgs.join(' and ')} required`,true);
+        const phrase=stopEventVoicePhrase(next.events);
+        if(phrase)speakText(`Stop ${next.id}: ${phrase} required`,true);
       }
     }
 
     // Gate check: same-spot next-lap stop must wait for a real departure first
     const gated=departGate&&haversine(departGate.lat,departGate.lng,next.lat,next.lng)*1000<30;
 
-    if(!gated&&dNext<=effectiveRadius&&!insideStop.has(next.id)){
+    // Arrival = distance AND route position AND approach direction,
+    // then held for ARRIVE_CONFIRM consecutive samples before it counts.
+    const v=isValidStopArrival(next,match,movB,effectiveRadius,dNext,accuracyM,radius);
+    const confirmed=gated?false:confirmStopArrival(next,v,match,dNext);
+    if(gated)stopArrivalCandidate=null;
+    if(navDebug&&!v.ok&&dNext<=effectiveRadius){
+      navDebugLog.push(`STOP-REJECT P${next.id} d=${dNext.toFixed(0)}m reason=${v.reason}`);
+      if(navDebugLog.length>40)navDebugLog.shift();
+    }
+
+    if(!gated&&confirmed&&!insideStop.has(next.id)){
       insideStop.add(next.id);
       showAlert('arrived',`📍 ${next.name}${next.dur_s?' · '+fmtTime(next.dur_s):''}`);
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
@@ -2268,6 +2988,48 @@ function checkArrival(lat,lng,rawKmh){
       }
     }
   });
+}
+function toggleNavDebug(on){
+  navDebug=!!on;
+  const e=el('nav-debug'); if(e)e.classList.toggle('on',navDebug);
+  const v=el('val-navdbg'); if(v)v.textContent=navDebug?'On':'Off';
+  if(!navDebug&&el('nav-debug-txt'))el('nav-debug-txt').textContent='';
+}
+
+/* Field diagnostics: everything needed to tell a matching failure apart from
+   a heading failure, a progress failure or a stop-association failure. */
+function renderNavDebug(lat,lng,accuracy,rawKmh,gpsHeading,match){
+  const t=el('nav-debug-txt'); if(!t)return;
+  const next=stops.find(s=>s.state!=='done');
+  const mov=calculateMovementBearing();
+  const f=(x,d=1)=>x==null?'—':(+x).toFixed(d);
+  t.textContent=
+`GPS      ${f(lat,5)}, ${f(lng,5)}
+accuracy ${f(accuracy,0)} m
+speed    ${f(rawKmh,1)} km/h
+hdg GPS  ${f(gpsHeading,0)}°   src ${headingSource}
+hdg move ${f(mov,0)}°   used ${f(currentHeading,0)}°
+segment  ${match?match.segmentIndex:'—'}   idx ${match?match.index:'—'}
+progress ${f(routeProgressM/1000,2)} km / ${f(totalRouteDist,2)} km
+x-track  ${f(match&&match.crossTrackM,1)} m
+hdg err  ${match&&match.headingError!=null?f(match.headingError,0)+'\u00b0':'—'}
+conf     ${match?match.confidence:'—'}  (${match?match.reason:'—'})
+next     ${next?('P'+next.id+' '+next.name):'—'}
+ stop@   ${next&&next.routeDistanceM!=null?f(next.routeDistanceM/1000,2)+' km':'not anchored'}
+ appr    ${next&&next.approachBearing!=null?f(next.approachBearing,0)+'\u00b0':'—'}
+ dist    ${next?f(haversine(lat,lng,next.lat,next.lng)*1000,0)+' m':'—'}
+ tol     ${next&&next.routeDistanceM!=null?f(stopAlongToleranceM(+el('rng-radius').value,accuracy,match&&match.confidence),0)+' m':'—'}
+STOP CANDIDATE: ${stopArrivalCandidate?('P'+stopArrivalCandidate.stopId+'  '+stopArrivalCandidate.count+'/'+NAV.ARRIVE_CONFIRM):'—'}
+STOP ANCHOR:${next?`
+ P${next.id}
+ mode=${next.anchorMode||'—'}
+ routeIdx=${next.routeIndex??'—'}
+ routeDist=${next.routeDistanceM!=null?(next.routeDistanceM/1000).toFixed(2)+'km':'—'}
+ bearing=${next.approachBearing!=null?f(next.approachBearing,0)+'°':'—'}`:' —'}
+DEDUP: ${dedupDecision?(dedupDecision.reason+' (first/last '+dedupDecision.dFL+' m'+(dedupDecision.merged?', merged':'')+')'):'—'}
+${navAnchorWarning?'WARNING: '+navAnchorWarning:''}
+─ matcher log ─
+`+navDebugLog.slice(-8).join('\n');
 }
 function showAlert(type,msg){
   const a=el('arriving');a.className=`arriving ${type}`;a.textContent=msg;a.style.display='block';
@@ -2395,24 +3157,37 @@ function loadRec(idx){
     lastRouteIdx=0;
 
     const ll=pts.map(p=>[p.lat,p.lon]);
-    routeLayer    =L.polyline(ll,{color:'rgba(88,166,255,.25)',weight:6}).addTo(map);
-    routeAheadLayer=L.polyline(ll,{color:'#58a6ff',weight:4}).addTo(map);
-    routeRemainLayer=L.polyline([],{color:'rgba(88,166,255,.35)',weight:3,opacity:.6,dashArray:'6 4'}).addTo(map);
-    routeDoneLayer =L.polyline([],{color:'#444',weight:4}).addTo(map);
+    routeLayer    =L.polyline(ll,{color:'rgba(88,166,255,.18)',weight:5}).addTo(map);
+    routeDoneCasingLayer =L.polyline([],{color:'#12161c',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeRemainCasingLayer=L.polyline([],{color:'#12161c',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeAheadCasingLayer =L.polyline(ll,{color:'#12161c',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeDoneLayer =L.polyline([],{color:'#6b737d',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeRemainLayer=L.polyline([],{color:'rgba(88,166,255,.55)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
+    routeAheadLayer=L.polyline(ll,{color:'#7cc4ff',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
 
     // ── Stops ─────────────────────────────────────────
     stops=[];insideStop.clear();stopMarkers={};
     destinationAnnounced=false;evtAnnounced.clear();departGate=null;
-    // Circular-cycle dedup: on a loop the first and last recorded stops are the
-    // SAME physical place (the depot). Counting both makes the last stop sit on
-    // top of the start and never release. Merge them when co-located (<30 m).
+    // Circular-cycle dedup: on a loop the first and last recorded stops can be
+    // the SAME physical place (the depot), and counting both makes the last one
+    // sit on top of the start. Merge ONLY on full start/end evidence — see
+    // isDepotPair(); co-location on its own would delete a return-leg stop.
     let recStopsToUse=(rec.stops||[]).filter(s=>s&&!isNaN(+s.lat)&&!isNaN(+s.lng));
+    dedupDecision=null;
     if(recStopsToUse.length>=2){
       const f=recStopsToUse[0],l=recStopsToUse[recStopsToUse.length-1];
       const dFL=haversine(+f.lat,+f.lng,+l.lat,+l.lng)*1000;
-      if(dFL<30){
+      const depot=isDepotPair(rec.points,f,l);
+      dedupDecision={merged:depot,dFL:Math.round(dFL),
+        reason:depot?'DEPOT_START_END':(dFL<30?'CO_LOCATED_BUT_NOT_DEPOT':'DISTINCT')};
+      if(depot){
         const last=recStopsToUse.pop();
         const merged={...f};
+        // The merged stop is navigated at the START of the cycle, so it must
+        // anchor to the FIRST passage: keep f.t / f.startT and discard the
+        // last stop's timestamps. (Spreading f already does this; it is
+        // asserted here so a future edit cannot silently take last's time.)
+        merged.t=f.t??null; merged.startT=f.startT??f.t??null;
         merged.dur_s=Math.max(+f.dur_s||0,+last.dur_s||0);
         merged.events=[...new Set([...(f.events||[]),...(last.events||[])])];
         merged.photo=f.photo||last.photo||null;
@@ -2437,7 +3212,12 @@ function loadRec(idx){
         className:'',iconAnchor:[24,20]
       });
       const m=L.marker([+s.lat,+s.lng],{icon,zIndexOffset:900}).addTo(map);
+      // t/startT MUST survive into the nav stop: anchorStopsToRoute() uses
+      // them to place the stop on the recorded cycle. Without them an internal
+      // recording silently fell back to geometry and mis-anchored any stop
+      // whose coordinate is visited more than once (see anchorStopsToRoute).
       const navStop={id,name:`Stop ${id}`,lat:+s.lat,lng:+s.lng,
+        t:s.t??null, startT:s.startT??s.t??null,
         dur_s:s.dur_s||0,elapsed:0,running:false,intervalId:null,state:'waiting',
         photo:s.photo||null,events:s.events||[],
         seg_avg:segs[i]?.avg_kmh??null,seg_dist:segs[i]?.dist_km??null};
@@ -2457,6 +3237,11 @@ function loadRec(idx){
     setT('stops-badge',stops.length?` (${stops.length})`:'');
     setS('stops-empty',stops.length?'none':'');
 
+    // Route caches, matcher reset, and stop anchoring must happen BEFORE
+    // maneuvers/nav so every stop knows its position and direction on the cycle.
+    buildRouteIndex();
+    resetMatcher();
+    anchorStopsToRoute(rec.points);
     maneuvers=buildManeuvers(routePts);
     try{
       const b=routeLayer.getBounds();
@@ -2493,6 +3278,7 @@ function dlRecGPX(idx){
     xml+=`  <duracao_s>${s.dur_s||0}</duracao_s>\n`;
     if(evts.includes('openDoor'))xml+=`  <openDoor>1</openDoor>\n`;
     if(evts.includes('kneeling'))xml+=`  <kneeling>1</kneeling>\n`;
+  if(evts.includes('handBrake'))xml+=`  <handBrake>1</handBrake>\n`;
     xml+=`  <time>${new Date(s.t).toISOString()}</time>\n`;
     xml+=`</wpt>\n`;
   });

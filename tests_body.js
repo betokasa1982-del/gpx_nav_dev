@@ -297,7 +297,11 @@ el('rng-radius').value='10';
 gps(57.7964,11.97,40); // ~400 m away
 console.assert(el('nsc').style.display==='block','NSC hidden FAIL');
 console.assert(/40[0-9] m|39[0-9] m/.test(el('nsc-dist').textContent),'NSC dist FAIL: '+el('nsc-dist').textContent);
-console.assert(el('nsc-evt').textContent.includes('🚪'),'NSC events FAIL');
+// UX v1 replaced the emoji text with SVG chips (spec §8/§11: do not depend on
+// emojis in the driving UI). Assert the SEMANTIC outcome instead of the glyph:
+// the Door event is represented and no other event is.
+console.assert(/Open Door/.test(el('nsc-evt').innerHTML),'NSC events FAIL: '+el('nsc-evt').innerHTML);
+console.assert(!/Kneeling|Hand Brake/.test(el('nsc-evt').innerHTML),'NSC events leaked other events');
 console.assert(/31\.5/.test(el('nsc-leg').textContent),'NSC leg FAIL: '+el('nsc-leg').textContent);
 console.assert(el('nsc-count').textContent==='1/1','NSC count FAIL: '+el('nsc-count').textContent);
 // at stop: countdown mode
@@ -374,8 +378,10 @@ console.log('ALL v11-DEV TESTS PASSED');
 
 // ══ TEST 27: circular start/end stop dedup (the only change over stable v32) ══
 (function(){
-const fs=require('fs');
-const rec=JSON.parse(fs.readFileSync('/home/claude/real_cycle.json','utf8'));
+const fs=require('fs'),path=require('path');
+const FX=path.join(__dirname,'real_cycle.json');
+if(!fs.existsSync(FX)){console.log('27. circular start/end dedup SKIPPED — real_cycle.json fixture not in repo');return;}
+const rec=JSON.parse(fs.readFileSync(FX,'utf8'));
 const r=Array.isArray(rec)?rec[0]:rec;
 savedRecs.push(r);const zi=savedRecs.length-1;
 loadRec(zi);
@@ -385,3 +391,942 @@ console.log('27. circular start/end dedup OK — 7 recorded → '+stops.length+'
 })();
 
 console.log('ALL v33-DEV TESTS PASSED');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  NAVIGATION ENGINE v2 — matching / direction / stop-association tests
+// ══════════════════════════════════════════════════════════════════════════
+__group('Existing tests');
+console.log('\n── navigation engine v2 ──');
+// Earlier tests mutate the shared sliders (test 9 leaves the radius at 10 m).
+// Pin every setting this suite depends on so the cases are order-independent.
+el('rng-radius').value='80'; el('rng-auto').value='1';
+el('rng-autostop').value='1'; el('rng-follow').value='1';
+
+const mkL=()=>({addTo(){return this},setLatLngs(){},addLatLng(){},bringToFront(){},
+                setIcon(){},setLatLng(){},getBounds:()=>({isValid:()=>true})});
+
+/* Build an out-and-back route: north up a street, then back down a PARALLEL
+   street `sepM` metres to the east. This is the field failure geometry. */
+function buildOutAndBack(sepM){
+  const lat0=57.700, lng0=11.970, N=120;
+  const dLat=0.00009;                       // ~10 m per point
+  const dLng=sepM/ (111320*Math.cos(lat0*Math.PI/180));
+  const pts=[];
+  for(let i=0;i<N;i++)   pts.push({lat:lat0+i*dLat, lon:lng0});          // outbound N
+  for(let i=N-1;i>=0;i--)pts.push({lat:lat0+i*dLat, lon:lng0+dLng});     // return  S
+  return pts;
+}
+function installRoute(pts){
+  routePts=pts; buildCumDist(routePts);
+  totalRouteDist=routeCumDist[routeCumDist.length-1];
+  routeLayer=routeAheadLayer=routeRemainLayer=routeDoneLayer=mkL();
+  buildRouteIndex(); resetMatcher();
+  maneuvers=buildManeuvers(routePts);
+  navActive=true; insideStop.clear(); departGate=null; lastRouteIdx=0;
+}
+/* feed a GPS fix with an explicit heading/accuracy */
+function gpsH(lat,lng,kmh,hdg,acc){
+  onGPS({coords:{latitude:lat,longitude:lng,accuracy:acc??8,altitude:30,
+                 speed:kmh/3.6,heading:hdg},timestamp:(fake+=1000)});
+}
+
+// ── TEST A: two parallel streets 12 m apart — matcher must not swap legs ──
+(function(){
+  const pts=buildOutAndBack(12); installRoute(pts);
+  isRec=false; stops=[]; stopMarkers={};
+  // drive the outbound leg northbound (heading 0°)
+  let maxSeg=0, swapped=false;
+  for(let i=0;i<110;i++){
+    gpsH(pts[i].lat, pts[i].lon, 30, 0);
+    const seg=matchState?matchState.segmentIndex:0;
+    if(seg>=pts.length/2) swapped=true;     // jumped onto the return leg
+    maxSeg=Math.max(maxSeg,seg);
+  }
+  console.assert(!swapped,'A: matcher jumped to the RETURN leg while outbound (seg '+maxSeg+')');
+  console.assert(maxSeg>80,'A: progress did not advance along the outbound leg: '+maxSeg);
+  console.log('A. parallel streets 12 m — stayed on outbound leg OK (seg '+maxSeg+')');
+})();
+
+// ── TEST A2: the return leg must be matched once actually driven ──
+(function(){
+  const pts=buildOutAndBack(12); installRoute(pts);
+  stops=[]; stopMarkers={};
+  for(let i=0;i<120;i++)  gpsH(pts[i].lat,pts[i].lon,30,0);     // outbound, north
+  for(let i=120;i<pts.length;i++) gpsH(pts[i].lat,pts[i].lon,30,180); // return, south
+  console.assert(matchState.segmentIndex>150,'A2: never advanced onto the return leg: '+matchState.segmentIndex);
+  console.log('A2. return leg matched after driving it OK (seg '+matchState.segmentIndex+')');
+})();
+
+// ── TEST B: same physical stop on two laps — sequence + gate + progress ──
+(function(){
+  const pts=[]; const lat0=57.70,lng0=11.97;
+  for(let l=0;l<2;l++)                                    // two identical laps
+    for(let i=0;i<80;i++) pts.push({lat:lat0+i*0.00009,lon:lng0});
+  installRoute(pts);
+  const SL=lat0+40*0.00009;
+  stops=[{id:1,name:'Lap1',lat:SL,lng:lng0,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'},
+         {id:2,name:'Lap2',lat:SL,lng:lng0,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}},2:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  console.assert(stops[0].routeDistanceM<stops[1].routeDistanceM,
+    'B: co-located stops did not get distinct route distances');
+  for(let i=0;i<=40;i++) gpsH(pts[i].lat,pts[i].lon,20,0);
+  console.assert(stops[0].state==='current','B: lap-1 stop did not arrive: '+stops[0].state);
+  console.assert(stops[1].state==='waiting','B: lap-2 stop armed too early');
+  console.log('B. co-located multi-lap stops are independent OK ('+
+    (stops[0].routeDistanceM/1000).toFixed(2)+' km vs '+(stops[1].routeDistanceM/1000).toFixed(2)+' km)');
+})();
+
+// ── TEST C: arriving from the WRONG direction must not trigger the stop ──
+(function(){
+  const pts=[]; for(let i=0;i<100;i++)pts.push({lat:57.70,lon:11.97+i*0.00017}); // eastbound
+  installRoute(pts);
+  const S=pts[50];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  console.assert(Math.abs(angleDiff(stops[0].approachBearing,90))<15,
+    'C: approachBearing wrong: '+stops[0].approachBearing);
+  // approach the same coordinate travelling WEST (bearing ~270°)
+  for(let i=60;i>=50;i--) gpsH(pts[i].lat,pts[i].lon,25,270);
+  const v=isValidStopArrival(stops[0],matchState,calculateMovementBearing(),80,0,8);
+  console.assert(v.reason==='WRONG_DIRECTION'||stops[0].state==='waiting',
+    'C: stop accepted from the wrong direction ('+v.reason+' / '+stops[0].state+')');
+  console.log('C. wrong-direction approach rejected OK ('+v.reason+')');
+})();
+
+// ── TEST D: same stop, correct direction → arrival ──
+(function(){
+  const pts=[]; for(let i=0;i<100;i++)pts.push({lat:57.70,lon:11.97+i*0.00017});
+  installRoute(pts);
+  const S=pts[50];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  for(let i=40;i<=50;i++) gpsH(pts[i].lat,pts[i].lon,25,90);   // eastbound, as recorded
+  console.assert(stops[0].state==='current','D: correct-direction arrival FAILED: '+stops[0].state);
+  console.log('D. correct-direction approach arrives OK');
+})();
+
+// ── TEST E: GPS jitter at a stop — no progress jump, no extra arrival ──
+(function(){
+  const pts=[]; for(let i=0;i<160;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[60];
+  stops=[{id:1,name:'A',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'},
+         {id:2,name:'B',lat:pts[140].lat,lng:pts[140].lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}},2:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  for(let i=50;i<=60;i++) gpsH(pts[i].lat,pts[i].lon,20,0);
+  const progAtStop=routeProgressM, manBefore=maneuvers.length;
+  for(let i=0;i<30;i++)                                    // ±5 m jitter, parked
+    gpsH(S.lat+((i%3)-1)*0.000045, S.lon+((i*7%3)-1)*0.000045, 1, (i*57)%360);
+  console.assert(Math.abs(routeProgressM-progAtStop)<40,
+    'E: jitter moved route progress by '+(routeProgressM-progAtStop).toFixed(0)+' m');
+  console.assert(stops[1].state==='waiting','E: jitter armed the next stop');
+  console.assert(maneuvers.length===manBefore,'E: jitter created maneuvers');
+  console.log('E. parked jitter absorbed OK (Δprogress '+(routeProgressM-progAtStop).toFixed(1)+' m)');
+})();
+
+// ── TEST F: poor accuracy must lower confidence, not force a leg swap ──
+(function(){
+  const pts=buildOutAndBack(12); installRoute(pts);
+  stops=[]; stopMarkers={};
+  for(let i=0;i<60;i++) gpsH(pts[i].lat,pts[i].lon,30,0,6);        // good fix
+  const segGood=matchState.segmentIndex;
+  let swapped=false, sawLowConf=false;
+  for(let i=60;i<90;i++){
+    gpsH(pts[i].lat,pts[i].lon,30,0,60);                            // accuracy 60 m
+    if(matchState.segmentIndex>=pts.length/2)swapped=true;
+    if(matchState.confidence!=='HIGH')sawLowConf=true;
+  }
+  console.assert(!swapped,'F: bad accuracy caused a leg swap');
+  console.assert(sawLowConf,'F: confidence stayed HIGH at 60 m accuracy');
+  console.log('F. degraded accuracy → lower confidence, no swap OK (seg '+segGood+'→'+matchState.segmentIndex+')');
+})();
+
+// ── TEST G: invalid / absent GPS heading at low speed ──
+(function(){
+  const pts=[]; for(let i=0;i<80;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  stops=[]; stopMarkers={};
+  [null,NaN,180,0].forEach((hv,k)=>{ for(let i=k*10;i<k*10+10;i++) gpsH(pts[i].lat,pts[i].lon,3,hv); });
+  console.assert(matchState&&matchState.segmentIndex>=25,
+    'G: matching collapsed with bad heading: '+(matchState&&matchState.segmentIndex));
+  const hd=getReliableHeading(3,180);
+  console.assert(hd.source!=='GPS','G: GPS heading trusted at 3 km/h');
+  console.log('G. bad/absent heading handled OK (source '+hd.source+', seg '+matchState.segmentIndex+')');
+})();
+
+// ── TEST H: a real, sustained U-turn IS reported ──
+(function(){
+  const pts=[];
+  for(let i=0;i<60;i++) pts.push({lat:57.70+i*0.00027,lon:11.97});              // north 1.8 km
+  for(let i=1;i<=60;i++)pts.push({lat:57.70+(60-i)*0.00027,lon:11.9703});       // back south
+  buildCumDist(pts); totalRouteDist=routeCumDist[routeCumDist.length-1];
+  const ms=buildManeuvers(pts).filter(m=>m.type!=='arrive');
+  console.assert(ms.some(m=>m.type==='uturn'||m.type==='shl'||m.type==='shr'),
+    'H: real U-turn not detected: '+JSON.stringify(ms.map(m=>m.type)));
+  console.log('H. sustained U-turn detected OK ('+ms.map(m=>m.type).join(',')+')');
+})();
+
+// ── TEST I: a 90° corner is exactly ONE turn ──
+(function(){
+  const pts=[];
+  for(let i=0;i<=80;i++)pts.push({lat:57.70+i*0.00013,lon:11.97});
+  for(let i=1;i<=80;i++)pts.push({lat:57.70+80*0.00013,lon:11.97+i*0.00024});
+  buildCumDist(pts); totalRouteDist=routeCumDist[routeCumDist.length-1];
+  const ms=buildManeuvers(pts).filter(m=>m.type!=='arrive');
+  console.assert(ms.length===1&&ms[0].type==='right',
+    'I: 90° corner produced '+JSON.stringify(ms.map(m=>m.type)));
+  console.log('I. 90° corner = one right turn OK');
+})();
+
+// ── TEST J: a gentle 12° bend produces no maneuver ──
+(function(){
+  const pts=[];
+  for(let i=0;i<=80;i++)pts.push({lat:57.70+i*0.00013,lon:11.97});
+  const bLat=57.70+80*0.00013, r=12*Math.PI/180;
+  for(let i=1;i<=80;i++)pts.push({lat:bLat+i*0.00013*Math.cos(r),lon:11.97+i*0.00013*Math.sin(r)*1.86});
+  buildCumDist(pts); totalRouteDist=routeCumDist[routeCumDist.length-1];
+  const ms=buildManeuvers(pts).filter(m=>m.type!=='arrive');
+  console.assert(ms.length===0,'J: gentle bend produced maneuvers: '+JSON.stringify(ms.map(m=>m.type)));
+  console.log('J. 12° bend produces no maneuver OK');
+})();
+
+// ── TEST K: single-sample teleport must not be accepted immediately ──
+(function(){
+  const pts=[]; for(let i=0;i<400;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  stops=[]; stopMarkers={};
+  for(let i=0;i<40;i++) gpsH(pts[i].lat,pts[i].lon,30,0);
+  const before=routeProgressM;
+  gpsH(pts[350].lat,pts[350].lon,30,0);                 // one bogus fix ~2.8 km ahead
+  console.assert(Math.abs(routeProgressM-before)<NAV.JUMP_M,
+    'K: single sample moved progress by '+((routeProgressM-before)/1000).toFixed(2)+' km');
+  // sustained evidence → the jump is eventually accepted (driver really is there)
+  for(let i=350;i<358;i++) gpsH(pts[i].lat,pts[i].lon,30,0);
+  console.assert(routeProgressM>before+1000,'K: confirmed relocation never accepted');
+  console.log('K. progress jump needs confirmation OK');
+})();
+
+// ── TEST L: departure gate needs route progress, not just distance ──
+(function(){
+  const pts=[]; for(let i=0;i<200;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[60];
+  stops=[{id:1,name:'A',lat:S.lat,lng:S.lon,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting'},
+         {id:2,name:'A2',lat:S.lat,lng:S.lon,dur_s:5,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}},2:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  for(let i=52;i<=60;i++) gpsH(pts[i].lat,pts[i].lon,15,0);
+  console.assert(stops[0].state==='current','L: first stop did not arrive');
+  markDone(1);
+  console.assert(departGate&&departGate.routeDistanceM!=null,'L: gate has no route anchor');
+  for(let i=0;i<10;i++) gpsH(S.lat+((i%3)-1)*0.00004,S.lon,1,(i*33)%360);  // jitter in place
+  console.assert(stops[1].state==='waiting','L: gate released by jitter alone');
+  console.log('L. departure gate is route-anchored OK');
+})();
+
+console.log('ALL NAVIGATION-ENGINE TESTS PASSED');
+// ── TEST M: matcher must stay cheap on a dense route (driving device) ──
+(function(){
+  const pts=[]; for(let i=0;i<6000;i++)pts.push({lat:57.70+i*0.00003,lon:11.97+ (i%2)*0.000001});
+  routePts=pts; buildCumDist(routePts); totalRouteDist=routeCumDist[routeCumDist.length-1];
+  const t0=Date.now(); buildRouteIndex(); const tIdx=Date.now()-t0;
+  resetMatcher();
+  const t1=Date.now();
+  for(let i=0;i<3000;i++){
+    _posHist.push({lat:pts[i].lat,lng:pts[i].lon,t:i*1000}); if(_posHist.length>12)_posHist.shift();
+    matchPositionToRoute(pts[i].lat,pts[i].lon,0,30,8);
+  }
+  const per=(Date.now()-t1)/3000;
+  console.log(`M. perf OK — index ${tIdx} ms · match ${per.toFixed(3)} ms/fix on a 6000-pt route`);
+  console.assert(per<2,'matcher too slow per GPS fix: '+per);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STOP ACCEPTANCE HARDENING — bounded tolerance, persistence, LOW gate
+// ══════════════════════════════════════════════════════════════════════════
+__group('Navigation tests');
+console.log('\n── stop acceptance hardening ──');
+
+// ── N1: tolerance must stay capped under "big radius + bad accuracy" ──
+(function(){
+  // pure function check first: no combination may exceed MAX
+  let worst=0;
+  [10,80,150,200].forEach(r=>[5,25,50,120].forEach(a=>
+    ['HIGH','MEDIUM','LOW'].forEach(c=>{
+      const t=stopAlongToleranceM(r,a,c);
+      worst=Math.max(worst,t);
+      console.assert(t>=NAV.MIN_STOP_ALONG_TOL_M&&t<=NAV.MAX_STOP_ALONG_TOL_M,
+        `N1: tolerance ${t.toFixed(0)} m out of bounds (r=${r} acc=${a} ${c})`);
+    })));
+  console.assert(worst<=NAV.MAX_STOP_ALONG_TOL_M,'N1: cap breached: '+worst);
+
+  // behavioural check: a stop 120 m away ALONG THE ROUTE is refused even
+  // though the vehicle sits inside a 200 m radius with 50 m accuracy
+  el('rng-radius').value='200';
+  const pts=[]; for(let i=0;i<300;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[150];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  // drive only to index 138 → ~120 m short of the stop on the route,
+  // but well inside the (inflated) physical radius
+  for(let i=120;i<=138;i++) gpsH(pts[i].lat,pts[i].lon,15,0,50);
+  const dPhys=haversine(pts[138].lat,pts[138].lon,S.lat,S.lon)*1000;
+  console.assert(dPhys<200*1.8,'N1: setup wrong — vehicle not inside the radius');
+  console.assert(stops[0].state==='waiting',
+    'N1: stop accepted 120 m off its route position (state '+stops[0].state+')');
+  console.log(`N1. tolerance capped at ${worst.toFixed(0)} m; stop ${dPhys.toFixed(0)} m away physically, `+
+              `120 m off-route → refused OK`);
+  el('rng-radius').value='80';
+})();
+
+// ── N2: one sample must not arrive; consecutive samples must ──
+(function(){
+  // Points are ~10 m apart. Radius 25 m and speed 30 km/h (no 1.8x inflation)
+  // put the acceptance boundary between index 97 and 99 — unambiguous.
+  el('rng-radius').value='25';
+  const pts=[]; for(let i=0;i<200;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[100];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  for(let i=90;i<=97;i++) gpsH(pts[i].lat,pts[i].lon,30,0);   // approach: 100 m → 30 m, outside
+  console.assert(stops[0].state==='waiting','N2: arrived before reaching the stop');
+  console.assert(stopArrivalCandidate===null,'N2: candidate opened while still outside');
+  gpsH(pts[99].lat,pts[99].lon,30,0);                         // FIRST valid sample (10 m)
+  console.assert(stops[0].state==='waiting',
+    'N2: single sample confirmed the arrival (state '+stops[0].state+')');
+  console.assert(stopArrivalCandidate&&stopArrivalCandidate.count===1,
+    'N2: no pending candidate after the first valid sample');
+  gpsH(S.lat,S.lon,30,0);                                     // SECOND valid sample (0 m)
+  console.assert(stops[0].state==='current','N2: arrival never confirmed: '+stops[0].state);
+  console.assert(stopArrivalCandidate===null,'N2: candidate not cleared after confirmation');
+  console.log('N2. arrival needs '+NAV.ARRIVE_CONFIRM+' consecutive samples OK');
+  el('rng-radius').value='80';
+})();
+
+// ── N3: a GPS jump into the radius while the matcher is elsewhere ──
+(function(){
+  const pts=[]; for(let i=0;i<400;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[300];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  for(let i=0;i<=60;i++) gpsH(pts[i].lat,pts[i].lon,30,0);     // matcher settled at ~600 m
+  const progBefore=routeProgressM;
+  gpsH(S.lat,S.lon,30,0);                                      // teleport onto the stop
+  gpsH(S.lat,S.lon,30,0);                                      // and hold it
+  console.assert(stops[0].state==='waiting',
+    'N3: stop accepted from a teleport while the matcher was elsewhere: '+stops[0].state);
+  console.assert(Math.abs(routeProgressM-progBefore)<NAV.JUMP_M,
+    'N3: progress followed the teleport: '+((routeProgressM-progBefore)).toFixed(0)+' m');
+  console.log('N3. physical jump into the radius refused while off-route OK');
+})();
+
+// ── N4: LOW matcher confidence must not promote a stop ──
+(function(){
+  const pts=[]; for(let i=0;i<200;i++)pts.push({lat:57.70+i*0.00009,lon:11.97});
+  installRoute(pts);
+  const S=pts[100];
+  stops=[{id:1,name:'S',lat:S.lat,lng:S.lon,dur_s:10,elapsed:0,running:false,intervalId:null,state:'waiting'}];
+  stopMarkers={1:{setIcon(){}}};
+  anchorStopsToRoute(null);
+  // unit-level: the validator refuses regardless of a zero physical distance
+  const lowMatch={confidence:'LOW',routeDistanceM:stops[0].routeDistanceM,reason:'JUMP_PENDING'};
+  const v=isValidStopArrival(stops[0],lowMatch,null,144,0,8,80);
+  console.assert(!v.ok&&v.reason==='LOW_CONFIDENCE',
+    'N4: LOW confidence accepted at distance 0 ('+v.reason+')');
+  console.assert(v.hard===false,'N4: LOW should be a soft failure (decay, not wipe)');
+  // and it recovers once confidence returns
+  const okMatch={confidence:'HIGH',routeDistanceM:stops[0].routeDistanceM};
+  console.assert(isValidStopArrival(stops[0],okMatch,null,144,0,8,80).ok,
+    'N4: HIGH confidence still refused');
+  // unanchored stops keep the legacy distance-only path
+  const bare={id:9,name:'bare',lat:S.lat,lng:S.lon};
+  console.assert(isValidStopArrival(bare,lowMatch,null,144,0,8,80).ok,
+    'N4: unanchored stop blocked by LOW confidence');
+  console.log('N4. LOW confidence blocks promotion, recovers on HIGH OK');
+})();
+
+console.log('ALL STOP-ACCEPTANCE TESTS PASSED');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  TIMESTAMP ANCHORING — internal recordings must never use geometry
+// ══════════════════════════════════════════════════════════════════════════
+__group('Stop tests');
+console.log('\n── timestamp anchoring ──');
+
+const T0=1700000000000, LAT0=57.700, LNG0=11.970, DLAT=0.00009; // ~10 m / point
+
+/* Build a timestamped recording. `shape` returns {lat,lng} for index i. */
+function mkRec(name,n,shape,stopIdxs,opts){
+  const pts=[]; let t=T0;
+  for(let i=0;i<n;i++){const p=shape(i);pts.push({lat:p.lat,lng:p.lng,t,speed:8,alt:30});t+=1000;}
+  const stops=(stopIdxs||[]).map(i=>{
+    const s={lat:pts[i].lat,lng:pts[i].lng,t:pts[i].t+3000,startT:pts[i].t,
+             dur_s:20,events:[],photo:null};
+    if(opts&&opts.stripTime){delete s.t;delete s.startT;}
+    return s;
+  });
+  return {name,date:new Date(T0).toISOString(),dist:n*0.01,points:pts,stops};
+}
+/* Independent reference implementations — what each mode SHOULD produce. */
+function timestampIndex(rec,s){
+  const st=s.startT??s.t; if(st==null)return null;
+  let lo=0,hi=rec.points.length-1;
+  while(lo<hi){const m=(lo+hi)>>1;(rec.points[m].t<st)?lo=m+1:hi=m;}
+  return lo;
+}
+function geometricIndex(rec,s,from){
+  let best=from||0,bd=Infinity;
+  for(let i=best;i<rec.points.length;i++){
+    const d=haversine(rec.points[i].lat,rec.points[i].lng,s.lat,s.lng);
+    if(d<bd){bd=d;best=i;}
+  }
+  return best;
+}
+function loadFresh(rec){savedRecs.push(rec);loadRec(savedRecs.length-1);}
+
+// ── T1: A → B → A, stop on the SECOND passage of A ──────────────────────
+(function(){
+  const N=200;                                   // 0..99 north, 100..199 back south
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}
+                      :{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  const rec=mkRec('A-B-A',N,shape,[199]);        // stop at the FINAL A
+  loadFresh(rec);
+  const s=stops[0], ti=timestampIndex(rec,rec.stops[0]), gi=geometricIndex(rec,rec.stops[0],0);
+  console.assert(s.anchorMode==='TIMESTAMP','T1: internal recording used '+s.anchorMode);
+  console.assert(s.routeIndex===ti,'T1: routeIndex '+s.routeIndex+' != timestamp truth '+ti);
+  console.assert(ti!==gi,'T1: scenario is not discriminating (ts '+ti+' == geo '+gi+')');
+  console.assert(s.routeDistanceM>1500,
+    'T1: anchored to the FIRST passage: '+(s.routeDistanceM/1000).toFixed(2)+' km');
+  console.assert(Math.abs(angleDiff(s.approachBearing,180))<20,
+    'T1: approachBearing is the outbound direction: '+s.approachBearing);
+  console.log(`T1. second passage of A: idx ${s.routeIndex} (geo would say ${gi}), `+
+              `${(s.routeDistanceM/1000).toFixed(2)} km, bearing ${s.approachBearing.toFixed(0)}° OK`);
+})();
+
+// ── T2: out-and-back on the SAME street, one stop per direction ─────────
+(function(){
+  const N=200;
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}
+                      :{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  // A depot stop at idx 10 keeps X and Y off the first/last positions, so the
+  // circular start/end dedup (which merges a co-located first+last pair) does
+  // not consume them. See the report note on that interaction.
+  const rec=mkRec('narrow street',N,shape,[10,50,149]);  // depot, X outbound, Y return
+  const gap=haversine(rec.stops[1].lat,rec.stops[1].lng,
+                      rec.stops[2].lat,rec.stops[2].lng)*1000;
+  console.assert(gap<5,'T2: stops are '+gap.toFixed(1)+' m apart, scenario too easy');
+  loadFresh(rec);
+  console.assert(stops.length===3,'T2: expected 3 stops, got '+stops.length);
+  const X=stops[1], Y=stops[2];
+  console.assert(X.anchorMode==='TIMESTAMP'&&Y.anchorMode==='TIMESTAMP','T2: not timestamp-anchored');
+  console.assert(Y.routeDistanceM-X.routeDistanceM>800,
+    'T2: X and Y collapsed onto the same passage: '+
+    (X.routeDistanceM/1000).toFixed(2)+' / '+(Y.routeDistanceM/1000).toFixed(2)+' km');
+  const dirErr=Math.abs(angleDiff(X.approachBearing,Y.approachBearing));
+  console.assert(dirErr>150,'T2: approach bearings not opposed: '+dirErr.toFixed(0)+'°');
+  console.log(`T2. same street both ways (${gap.toFixed(1)} m apart): `+
+    `X ${(X.routeDistanceM/1000).toFixed(2)} km @${X.approachBearing.toFixed(0)}°, `+
+    `Y ${(Y.routeDistanceM/1000).toFixed(2)} km @${Y.approachBearing.toFixed(0)}° OK`);
+})();
+
+// ── T3: stop recorded ONLY on the second lap (the audit case) ───────────
+(function(){
+  const N=240;                                   // two identical 120-point laps
+  const shape=i=>({lat:LAT0+(i%120)*DLAT,lng:LNG0});
+  const rec=mkRec('lap2-only',N,shape,[160]);    // A visited twice, stopped once
+  loadFresh(rec);
+  const s=stops[0], ti=timestampIndex(rec,rec.stops[0]), gi=geometricIndex(rec,rec.stops[0],0);
+  console.assert(s.anchorMode==='TIMESTAMP','T3: fell back to '+s.anchorMode);
+  console.assert(s.routeIndex===ti,'T3: routeIndex '+s.routeIndex+' != '+ti);
+  console.assert(s.routeIndex!==gi,'T3: matched the first geometric occurrence '+gi);
+  // and the arrival gate now accepts the real passage
+  const tol=stopAlongToleranceM(80,8,'HIGH');
+  console.assert(Math.abs(routeCumM[ti]-s.routeDistanceM)<tol,'T3: gate would still reject');
+  console.log(`T3. lap-2-only stop: idx ${s.routeIndex} = ${(s.routeDistanceM/1000).toFixed(2)} km `+
+              `(geometry would say ${gi} = ${(routeCumM[gi]/1000).toFixed(2)} km) OK`);
+})();
+
+// ── T4: timestampIndex vs geometricIndex — official answer is timestamp ──
+(function(){
+  const N=200;
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  const rec=mkRec('retrace',N,shape,[150]);
+  loadFresh(rec);
+  const ti=timestampIndex(rec,rec.stops[0]), gi=geometricIndex(rec,rec.stops[0],0);
+  console.assert(ti!==gi,'T4: indices agree, scenario not discriminating');
+  console.assert(stops[0].routeIndex===ti,
+    `T4: official answer ${stops[0].routeIndex} is not the timestamp index ${ti} (geo=${gi})`);
+  console.log(`T4. timestampIndex=${ti} vs geometricIndex=${gi} → official ${stops[0].routeIndex} OK`);
+})();
+
+// ── T5: full round trip recording → JSON → load must keep the anchor ────
+(function(){
+  const N=240;
+  const shape=i=>({lat:LAT0+(i%120)*DLAT,lng:LNG0});
+  const rec=mkRec('roundtrip',N,shape,[160]);
+  loadFresh(rec);
+  const before={idx:stops[0].routeIndex,dist:stops[0].routeDistanceM,brg:stops[0].approachBearing};
+  const wire=JSON.parse(JSON.stringify(recToPlain(rec)));   // export → import
+  console.assert(wire.stops[0].startT!=null,'T5: startT lost in the JSON round trip');
+  console.assert(wire.points[0].t!=null,'T5: point timestamps lost in the JSON round trip');
+  loadFresh(wire);
+  console.assert(stops[0].anchorMode==='TIMESTAMP','T5: reloaded copy used '+stops[0].anchorMode);
+  console.assert(stops[0].routeIndex===before.idx&&
+                 Math.abs(stops[0].routeDistanceM-before.dist)<1,
+    'T5: anchor moved across the round trip');
+  console.log('T5. recording → JSON → load keeps the anchor OK ('+
+              (stops[0].routeDistanceM/1000).toFixed(2)+' km, mode '+stops[0].anchorMode+')');
+})();
+
+// ── T6: external GPX (no timestamps) must still use the geometric path ──
+(function(){
+  const N=200;
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  const rec=mkRec('no-time',N,shape,[50],{stripTime:true});
+  rec.points.forEach(p=>delete p.t);                        // a GPX track has no time
+  loadFresh(rec);
+  console.assert(stops[0].anchorMode==='GEOMETRIC','T6: expected GEOMETRIC, got '+stops[0].anchorMode);
+  console.assert(stops[0].routeDistanceM!=null&&stops[0].approachBearing!=null,
+    'T6: geometric fallback produced no anchor');
+  console.assert(navAnchorWarning===null,'T6: spurious warning for a genuinely timeless route');
+  console.log('T6. timeless route → GEOMETRIC fallback, no warning OK');
+})();
+
+// ── T7: guardrail — route has time, stop does not ───────────────────────
+(function(){
+  const N=200;
+  const shape=i=>({lat:LAT0+i*DLAT,lng:LNG0});
+  const rec=mkRec('missing-stop-time',N,shape,[100],{stripTime:true}); // points keep t
+  loadFresh(rec);
+  console.assert(stops[0].anchorMode==='GEOMETRIC','T7: should degrade to geometry');
+  console.assert(navAnchorWarning&&navAnchorWarning.indexOf('STOP_TIMESTAMP_MISSING')===0,
+    'T7: guardrail did not fire: '+navAnchorWarning);
+  console.log('T7. guardrail fires: '+navAnchorWarning+' OK');
+  // and a healthy recording clears it again
+  loadFresh(mkRec('healthy',N,shape,[100]));
+  console.assert(navAnchorWarning===null,'T7: warning not cleared on a healthy recording');
+  console.assert(anchorModeSummary.mode==='TIMESTAMP','T7: mode summary wrong: '+anchorModeSummary.mode);
+  console.log('T7b. warning clears; anchorModeSummary.mode='+anchorModeSummary.mode+' OK');
+})();
+
+console.log('ALL TIMESTAMP-ANCHORING TESTS PASSED');
+__group('Timestamp anchoring tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CIRCULAR STOP DEDUP — co-location is not proof of the same event
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── circular stop dedup ──');
+
+/* south approach → A → north to B → back through A → south exit.
+   A is passed TWICE mid-route; the track neither starts nor ends there. */
+function mkThroughRoute(){
+  const A=40, B=140;                                   // indices of A (out) and B
+  const shape=i=>i<=B?{lat:LAT0+i*DLAT,lng:LNG0}       // north 0..140
+                     :{lat:LAT0+(2*B-i)*DLAT,lng:LNG0};// back south 141..280
+  return {shape,n:281,Aout:A,Aback:2*B-A};             // A on the way back = 240
+}
+
+// ── DEDUP-1: same coordinate, very different startT, distinct events ─────
+(function(){
+  const {shape,n,Aout,Aback}=mkThroughRoute();
+  const rec=mkRec('dedup1',n,shape,[Aout,Aback]);
+  const gap=haversine(rec.stops[0].lat,rec.stops[0].lng,rec.stops[1].lat,rec.stops[1].lng)*1000;
+  const dt=(rec.stops[1].startT-rec.stops[0].startT)/1000;
+  console.assert(gap<1,'DEDUP-1: stops not co-located ('+gap.toFixed(1)+' m)');
+  loadFresh(rec);
+  console.assert(stops.length===2,'DEDUP-1: a stop was deleted — got '+stops.length);
+  console.assert(dedupDecision&&dedupDecision.merged===false,
+    'DEDUP-1: merged despite distinct events ('+(dedupDecision&&dedupDecision.reason)+')');
+  console.log(`DEDUP-1. same coordinate (${gap.toFixed(1)} m), Δt ${dt}s → both kept OK `+
+              `[${dedupDecision.reason}]`);
+})();
+
+// ── DEDUP-2: legitimate depot — track starts and ends parked at D ────────
+(function(){
+  // parked at D, drive a loop, return and park at D again
+  const pts=[]; let t=T0;
+  const push=(lat,lng)=>{pts.push({lat,lng,t,speed:0,alt:30});t+=1000;};
+  for(let i=0;i<6;i++)  push(LAT0,LNG0);                       // parked at depot
+  for(let i=1;i<=60;i++)push(LAT0+i*DLAT,LNG0);                // out
+  for(let i=59;i>=1;i--)push(LAT0+i*DLAT,LNG0+0.0004);         // back on a parallel street
+  for(let i=0;i<6;i++)  push(LAT0,LNG0);                       // parked at depot again
+  const mid=Math.floor(pts.length/2);
+  const mk=i=>({lat:pts[i].lat,lng:pts[i].lng,t:pts[i].t+3000,startT:pts[i].t,
+                dur_s:20,events:[],photo:null});
+  const rec={name:'depot',date:new Date(T0).toISOString(),dist:1.2,points:pts,
+             stops:[mk(0),mk(30),mk(mid),mk(pts.length-1)]};   // D, normal, normal, D
+  loadFresh(rec);
+  console.assert(stops.length===3,'DEDUP-2: depot pair not merged — got '+stops.length+' stops');
+  console.assert(dedupDecision&&dedupDecision.merged===true&&dedupDecision.reason==='DEPOT_START_END',
+    'DEDUP-2: wrong decision '+(dedupDecision&&dedupDecision.reason));
+  console.assert(stops[0].startT===rec.stops[0].startT,
+    'DEDUP-2: merged stop did not keep the START-of-cycle event');
+  console.assert(stops[0].routeDistanceM<100,
+    'DEDUP-2: merged depot anchored away from the cycle start: '+stops[0].routeDistanceM.toFixed(0)+' m');
+  console.log('DEDUP-2. genuine depot merged (4→3), start event preserved, anchored at '+
+              stops[0].routeDistanceM.toFixed(0)+' m OK');
+})();
+
+// ── DEDUP-3: out-and-back, A on the way out and A on the way back ────────
+(function(){
+  const {shape,n,Aout,Aback}=mkThroughRoute();
+  const rec=mkRec('dedup3',n,shape,[Aout,Aback]);
+  loadFresh(rec);
+  console.assert(stops.length===2,'DEDUP-3: X and Y collapsed into '+stops.length+' stop(s)');
+  const [X,Y]=stops;
+  // §9 — anchoring must place them on the correct passages, in opposite senses
+  console.assert(X.anchorMode==='TIMESTAMP'&&Y.anchorMode==='TIMESTAMP',
+    'DEDUP-3: not timestamp-anchored');
+  console.assert(Y.routeDistanceM-X.routeDistanceM>1500,
+    'DEDUP-3: same passage — X '+(X.routeDistanceM/1000).toFixed(2)+
+    ' km, Y '+(Y.routeDistanceM/1000).toFixed(2)+' km');
+  const opp=Math.abs(angleDiff(X.approachBearing,Y.approachBearing));
+  console.assert(opp>150,'DEDUP-3: approach bearings not opposed: '+opp.toFixed(0)+'°');
+  console.log(`DEDUP-3. A twice, 0 m apart → X ${(X.routeDistanceM/1000).toFixed(2)} km @`+
+    `${X.approachBearing.toFixed(0)}°, Y ${(Y.routeDistanceM/1000).toFixed(2)} km @`+
+    `${Y.approachBearing.toFixed(0)}° OK`);
+})();
+
+// ── DEDUP-4: first and last 5 m apart but distinct events ────────────────
+(function(){
+  const {shape,n}=mkThroughRoute();
+  const rec=mkRec('dedup4',n,shape,[40,240]);
+  rec.stops[1].lat=rec.stops[0].lat+0.000045;          // ~5 m north of the first
+  loadFresh(rec);
+  console.assert(stops.length===2,'DEDUP-4: merged two distinct events 5 m apart');
+  console.assert(dedupDecision.reason==='CO_LOCATED_BUT_NOT_DEPOT',
+    'DEDUP-4: unexpected reason '+dedupDecision.reason);
+  console.log('DEDUP-4. 5 m apart, not start/end of the track → both kept OK');
+})();
+
+// ── DEDUP-5: guard the unit rule itself ──────────────────────────────────
+(function(){
+  const {shape,n}=mkThroughRoute();
+  const rec=mkRec('unit',n,shape,[40,240]);
+  console.assert(isDepotPair(rec.points,rec.stops[0],rec.stops[1])===false,
+    'DEDUP-5: mid-route pair judged a depot');
+  // an OPEN track (A → B, never returns): its two ends are 1.8 km apart,
+  // so even stops sitting exactly at both ends are not a depot pair
+  const open=mkRec('open',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[0,199]);
+  console.assert(isDepotPair(open.points,open.stops[0],open.stops[1])===false,
+    'DEDUP-5: open-ended track judged a loop');
+  // and the closed loop used above IS recognised when the stops sit at its ends
+  const ends=[{lat:rec.points[0].lat,lng:rec.points[0].lng,startT:rec.points[0].t},
+              {lat:rec.points[n-1].lat,lng:rec.points[n-1].lng,startT:rec.points[n-1].t}];
+  console.assert(isDepotPair(rec.points,ends[0],ends[1])===true,
+    'DEDUP-5: genuine start/end pair on a closed loop rejected');
+  console.log('DEDUP-5. isDepotPair: mid-route pair no, open track no, loop ends yes OK');
+})();
+
+console.log('ALL DEDUP TESTS PASSED');
+__group('Dedup tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  UI / EVENT DISPLAY — registry, Next Stop Card, photo de-duplication
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── UI / stop events ──');
+
+function nscFor(evts,photo){                       // load a 1-stop route and render
+  const rec=mkRec('ui',120,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[60]);
+  rec.stops[0].events=evts; rec.stops[0].photo=photo||null;
+  loadFresh(rec); navActive=true;
+  updNextStopCard(LAT0, LNG0);
+  return {evt:el('nsc-evt').innerHTML||'', block:el('nsc-events').innerHTML||'',
+          blockShown:el('nsc-events').style.display!=='none',
+          photoShown:el('nsc-photo').style.display==='block'};
+}
+const hasDoor =s=>/Open Door/.test(s), hasKnee=s=>/Kneeling/.test(s), hasBrake=s=>/Hand Brake/.test(s);
+
+// UI-1..UI-4 — each event, and all three together
+(function(){
+  let r=nscFor(['openDoor']);
+  console.assert(hasDoor(r.block)&&!hasKnee(r.block)&&!hasBrake(r.block),'UI-1: '+r.block);
+  console.log('UI-1. openDoor → Door only OK');
+
+  r=nscFor(['kneeling']);
+  console.assert(hasKnee(r.block)&&!hasDoor(r.block)&&!hasBrake(r.block),'UI-2: '+r.block);
+  console.log('UI-2. kneeling → Knee only OK');
+
+  r=nscFor(['handBrake']);
+  console.assert(hasBrake(r.block)&&!hasDoor(r.block)&&!hasKnee(r.block),'UI-3: '+r.block);
+  console.log('UI-3. handBrake → Brake only OK');
+
+  r=nscFor(['openDoor','kneeling','handBrake']);
+  console.assert(hasDoor(r.block)&&hasKnee(r.block)&&hasBrake(r.block),'UI-4: '+r.block);
+  console.log('UI-4. all three shown OK');
+})();
+
+// UI-5 — no empty events area
+(function(){
+  const r=nscFor([]);
+  console.assert(r.block===''&&r.blockShown===false,'UI-5: empty events area rendered');
+  console.log('UI-5. no events → area hidden OK');
+})();
+
+// UI-6 — legacy cycle without handBrake keeps working, and gains nothing
+(function(){
+  const r=nscFor(['openDoor','kneeling']);
+  console.assert(hasDoor(r.block)&&hasKnee(r.block),'UI-6: legacy events lost');
+  console.assert(!hasBrake(r.block),'UI-6: handBrake invented for a legacy cycle');
+  console.log('UI-6. legacy cycle unchanged, no handBrake added OK');
+})();
+
+// UI-7 — an unknown event is dropped, never remapped
+(function(){
+  const r=nscFor(['foo','openDoor']);
+  console.assert(hasDoor(r.block),'UI-7: known event lost');
+  console.assert(!hasKnee(r.block)&&!hasBrake(r.block),'UI-7: unknown event became another event');
+  console.assert(!/⚡/.test(r.block+r.evt),'UI-7: generic ⚡ fallback still present');
+  console.assert(normalizeStopEvents(['foo','bar']).length===0,'UI-7: unknown survived normalize');
+  console.assert(getStopEventMeta('foo')===null,'UI-7: meta invented for unknown event');
+  console.log('UI-7. unknown event dropped, no ⚡ fallback OK');
+})();
+
+// UI-8 — photo appears once, in the Next Stop Card
+(function(){
+  const r=nscFor(['openDoor','kneeling','handBrake'],'data:image/jpeg;base64,AAAAAAAAAAAA');
+  console.assert(r.photoShown,'UI-8: card photo not shown');
+  console.assert(!el('stop-photo-ov').classList.contains('on'),'UI-8: overlay opened too');
+  console.log('UI-8. photo shown once (card), overlay closed OK');
+})();
+
+// UI-9 — approaching 200 m must not open the overlay
+(function(){
+  const rec=mkRec('ui9',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].photo='data:image/jpeg;base64,AAAAAAAAAAAA';
+  rec.stops[0].events=['openDoor'];
+  loadFresh(rec); navActive=true; closeStopPhoto();
+  el('rng-radius').value='80';
+  for(let i=78;i<=95;i++) gpsH(rec.points[i].lat,rec.points[i].lng,25,0);
+  console.assert(!el('stop-photo-ov').classList.contains('on'),
+    'UI-9: proximity opened the photo overlay');
+  console.log('UI-9. 200 m approach → no overlay OK');
+})();
+
+// UI-10 — arrival must not open the overlay either
+(function(){
+  const rec=mkRec('ui10',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].photo='data:image/jpeg;base64,AAAAAAAAAAAA';
+  loadFresh(rec); navActive=true; closeStopPhoto();
+  for(let i=90;i<=101;i++) gpsH(rec.points[i].lat,rec.points[i].lng,15,0);
+  console.assert(stops[0].state==='current','UI-10: setup — stop never arrived');
+  console.assert(!el('stop-photo-ov').classList.contains('on'),
+    'UI-10: arrival opened the photo overlay');
+  console.log('UI-10. arrival → no overlay, photo stays in the card OK');
+})();
+
+// UI-11 — tapping the card photo DOES open the enlarged view
+(function(){
+  closeStopPhoto();
+  nscPhotoTap();
+  console.assert(el('stop-photo-ov').classList.contains('on'),'UI-11: tap did not enlarge');
+  closeStopPhoto();
+  console.assert(!el('stop-photo-ov').classList.contains('on'),'UI-11: close failed');
+  console.log('UI-11. tap → lightbox opens, closes OK');
+})();
+
+// UI-12 / UI-13 — switching stops swaps events AND photo; stale photo cleared
+(function(){
+  const rec=mkRec('ui12',260,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[60,180]);
+  rec.stops[0].events=['openDoor'];  rec.stops[0].photo='data:image/jpeg;base64,AAAA1111';
+  rec.stops[1].events=['handBrake']; rec.stops[1].photo=null;   // stop 5 has no photo
+  loadFresh(rec); navActive=true;
+  updNextStopCard(LAT0,LNG0);
+  console.assert(hasDoor(el('nsc-events').innerHTML),'UI-12: stop 4 events missing');
+  console.assert(el('nsc-photo').style.display==='block','UI-12: stop 4 photo missing');
+  markDone(stops[0].id);
+  updNextStopCard(LAT0,LNG0);
+  const b=el('nsc-events').innerHTML;
+  console.assert(hasBrake(b)&&!hasDoor(b),'UI-12: events did not switch to stop 5: '+b);
+  console.assert(el('nsc-photo').style.display==='none','UI-13: stop 4 photo still visible on stop 5');
+  console.log('UI-12/13. events and photo follow the next stop OK');
+})();
+
+// UI-14 — voice announces all three, naturally
+(function(){
+  console.assert(stopEventVoicePhrase(['openDoor'])==='open doors','UI-14a');
+  console.assert(stopEventVoicePhrase(['openDoor','kneeling'])==='open doors and kneeling','UI-14b');
+  console.assert(stopEventVoicePhrase(['openDoor','handBrake'])==='open doors and hand brake','UI-14c');
+  console.assert(stopEventVoicePhrase(['openDoor','kneeling','handBrake'])
+                 ==='open doors, kneeling and hand brake','UI-14d: '+stopEventVoicePhrase(['openDoor','kneeling','handBrake']));
+  console.assert(stopEventVoicePhrase(['foo'])==='','UI-14e: unknown event spoken');
+  console.assert(stopEventVoicePhrase([])==='','UI-14f: empty phrase not empty');
+  console.assert(!/parking brake/.test(stopEventVoicePhrase(['handBrake'])),'UI-14g: says parking brake');
+  console.log('UI-14. voice: "'+stopEventVoicePhrase(['openDoor','kneeling','handBrake'])+'" OK');
+})();
+
+// UI-15 — recording buttons: three, independent, reset cleanly
+(function(){
+  pendingStopEvents=[];refreshEventButtons();
+  const on=id=>el(id).classList.contains('active');
+  toggleStopEvent('openDoor'); toggleStopEvent('kneeling'); toggleStopEvent('handBrake');
+  console.assert(on('evt-door')&&on('evt-knee')&&on('evt-brake'),'UI-15: not all three active');
+  console.assert(el('evt-brake').getAttribute('aria-pressed')==='true','UI-15: aria-pressed not set');
+  toggleStopEvent('kneeling');
+  console.assert(on('evt-door')&&!on('evt-knee')&&on('evt-brake'),'UI-15: toggling is not independent');
+  pendingPhotoStopIdx=-1; confirmStopEvents();
+  console.assert(!on('evt-door')&&!on('evt-knee')&&!on('evt-brake'),'UI-15: residual state after confirm');
+  console.assert(pendingStopEvents.length===0,'UI-15: pendingStopEvents not cleared');
+  toggleStopEvent('handBrake'); skipPhoto();
+  console.assert(!on('evt-brake')&&pendingStopEvents.length===0,'UI-15: residual state after skipPhoto');
+  console.log('UI-15. three buttons independent, ON/OFF, reset clean OK');
+})();
+
+// UI-16 — events persist through recording → JSON → load
+(function(){
+  const rec=mkRec('ui16',160,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[80]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  const wire=JSON.parse(JSON.stringify(recToPlain(rec)));
+  loadFresh(wire);
+  console.assert(normalizeStopEvents(stops[0].events).length===3,'UI-16: events lost in JSON');
+  const gpx=typeof dlRecGPX==='function';
+  console.log('UI-16. three events survive JSON round trip OK');
+})();
+
+// UI-17 — canonical order regardless of selection order
+(function(){
+  const a=normalizeStopEvents(['handBrake','openDoor','kneeling']).join(',');
+  console.assert(a==='openDoor,kneeling,handBrake','UI-17: order not canonical: '+a);
+  console.log('UI-17. canonical event order OK');
+})();
+
+console.log('ALL UI TESTS PASSED');
+__group('UI/Event tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  MAP VISIBILITY — vehicle marker and route line legibility
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── map visibility ──');
+
+function driveOnce(headingVal){
+  const rec=mkRec('map',160,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[80]);
+  loadFresh(rec); navActive=true; posMarker=null;
+  for(let i=0;i<6;i++) gpsH(rec.points[i].lat,rec.points[i].lng,30,headingVal);
+  return rec;
+}
+
+// MAP-1 / MAP-2 / MAP-3 — the marker exists, is SVG, and is big enough
+(function(){
+  driveOnce(0);
+  console.assert(posMarker,'MAP-1: no vehicle marker');
+  const html=posMarker._icon&&posMarker._icon.html||'';
+  console.log('MAP-1. vehicle marker present OK');
+
+  console.assert(/<svg/.test(html),'MAP-2: marker is not SVG');
+  console.assert(!/[\u{1F300}-\u{1FAFF}\u{2700}-\u{27BF}\u25B2]/u.test(html),
+    'MAP-2: marker still contains an emoji/▲ glyph');
+  console.log('MAP-2. marker is inline SVG, no emoji OK');
+
+  const size=posMarker._icon.iconSize;
+  console.assert(size&&size[0]>=44&&size[1]>=44,'MAP-3: marker too small: '+JSON.stringify(size));
+  console.assert(VEHICLE_PX>=44&&VEHICLE_PX<=56,'MAP-3: VEHICLE_PX out of range: '+VEHICLE_PX);
+  console.log('MAP-3. marker '+size[0]+' px (>=44) OK');
+})();
+
+// MAP-4 — a reliable heading rotates the bus
+(function(){
+  driveOnce(0);
+  const h0=posMarker._icon.html;
+  const r0=/rotate\(([-\d.]+)deg\)/.exec(h0);
+  console.assert(r0,'MAP-4: no rotation in the marker');
+  // now drive east: heading ~90°
+  const rec=mkRec('map4',160,i=>({lat:LAT0,lng:LNG0+i*0.00017}),[80]);
+  loadFresh(rec); navActive=true; posMarker=null;
+  for(let i=0;i<8;i++) gpsH(rec.points[i].lat,rec.points[i].lng,40,90);
+  const r1=/rotate\(([-\d.]+)deg\)/.exec(posMarker._icon.html);
+  console.assert(r1&&Math.abs(parseFloat(r1[1])-90)<25,
+    'MAP-4: bus not rotated to the heading: '+(r1&&r1[1]));
+  console.log('MAP-4. heading '+parseFloat(r1[1]).toFixed(0)+'° rotates the bus OK');
+})();
+
+// MAP-5 — no heading → neutral orientation, still visible
+(function(){
+  currentHeading=null; _headBuf.length=0;
+  const rec=mkRec('map5',160,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[80]);
+  loadFresh(rec); navActive=true; posMarker=null; _posHist.length=0;
+  // a single stationary sample: no movement bearing, no GPS heading
+  onGPS({coords:{latitude:LAT0,longitude:LNG0,accuracy:9,altitude:30,speed:0,heading:null},
+         timestamp:(fake+=1000)});
+  const html=posMarker._icon.html;
+  const rot=/rotate\(([-\d.]+)deg\)/.exec(html);
+  console.assert(rot&&parseFloat(rot[1])===0,'MAP-5: non-zero rotation without heading: '+(rot&&rot[1]));
+  console.assert(/veh-wrap/.test(html)&&/<svg/.test(html),'MAP-5: marker not rendered');
+  console.assert(/neutral/.test(html),'MAP-5: neutral state not flagged');
+  console.log('MAP-5. no heading → bus points up, still drawn OK');
+})();
+
+// MAP-6 / MAP-12 — vehicle above every line, stop marker and the accuracy circle
+(function(){
+  driveOnce(0);
+  const z=posMarker._opts.zIndexOffset;
+  console.assert(z>=5000,'MAP-6: vehicle zIndexOffset too low: '+z);
+  const stopZ=Object.values(stopMarkers)[0]?._opts?.zIndexOffset??900;
+  console.assert(z>stopZ,'MAP-6: vehicle not above stop markers ('+z+' vs '+stopZ+')');
+  console.assert(accCircle&&accCircle._back===true,'MAP-12: accuracy circle not sent to back');
+  console.log('MAP-6/12. vehicle z='+z+' above stops ('+stopZ+') and accuracy circle OK');
+})();
+
+// MAP-7 — route ahead is casing + main line
+(function(){
+  driveOnce(0);
+  console.assert(routeAheadCasingLayer,'MAP-7: no casing layer for the route ahead');
+  console.assert(routeAheadLayer,'MAP-7: no main line');
+  const cw=routeAheadCasingLayer._opts.weight, mw=routeAheadLayer._opts.weight;
+  console.assert(cw>mw,'MAP-7: casing ('+cw+') not thicker than the main line ('+mw+')');
+  console.assert(JSON.stringify(routeAheadCasingLayer._latlngs)===JSON.stringify(routeAheadLayer._latlngs),
+    'MAP-7: casing and main line carry different geometry');
+  console.log('MAP-7. route ahead: casing '+cw+' px + main '+mw+' px, same geometry OK');
+})();
+
+// MAP-8 — thicker than the previous implementation (main was 4-5 px)
+(function(){
+  driveOnce(0);
+  console.assert(routeAheadLayer._opts.weight>=7&&routeAheadLayer._opts.weight<=8,
+    'MAP-8: main line outside 7-8 px: '+routeAheadLayer._opts.weight);
+  console.assert(routeAheadCasingLayer._opts.weight>=11&&routeAheadCasingLayer._opts.weight<=12,
+    'MAP-8: casing outside 11-12 px: '+routeAheadCasingLayer._opts.weight);
+  console.log('MAP-8. ahead line 7-8 px inside an 11-12 px casing OK');
+})();
+
+// MAP-9 / MAP-10 — done and remain stay visually distinct from the ahead line
+(function(){
+  driveOnce(0);
+  const A=routeAheadLayer._opts, D=routeDoneLayer._opts, R=routeRemainLayer._opts;
+  console.assert(D.color!==A.color,'MAP-9: done has the same colour as ahead');
+  console.assert(D.weight<A.weight,'MAP-9: done is not visually quieter');
+  console.assert(!!R.dashArray,'MAP-10: remain is not dashed');
+  console.assert(R.weight<A.weight,'MAP-10: remain is not quieter than ahead');
+  console.assert(!D.dashArray,'MAP-9: done should be solid, not dashed');
+  console.log(`MAP-9/10. ahead ${A.weight}px solid · done ${D.weight}px ${D.color} · remain ${R.weight}px dashed OK`);
+})();
+
+// MAP-11 — heading-up rotation still works alongside the new drawing
+(function(){
+  const rec=mkRec('map11',160,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[80]);
+  loadFresh(rec); navActive=true; posMarker=null;
+  el('rng-follow').value='1';
+  for(let i=0;i<8;i++) gpsH(rec.points[i].lat,rec.points[i].lng,40,45);
+  console.assert(typeof setMapBearing==='function','MAP-11: setMapBearing missing');
+  setMapBearing(-45);
+  // setMapBearing unwraps across 0/360 so the CSS transition never spins the
+  // long way round, so -45 may legitimately be stored as 315. Compare angles.
+  const norm=a=>((a%360)+360)%360;
+  console.assert(norm(_lastBearing)===norm(-45),'MAP-11: bearing not applied: '+_lastBearing);
+  console.assert(routeAheadLayer._latlngs.length>0,'MAP-11: route vanished under rotation');
+  console.assert(posMarker._icon.html.indexOf('<svg')>=0,'MAP-11: vehicle vanished under rotation');
+  setMapBearing(0);
+  console.log('MAP-11. heading-up rotation intact with the new layers OK');
+})();
+
+console.log('ALL MAP TESTS PASSED');
+__group('Map visibility tests');
