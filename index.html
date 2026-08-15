@@ -243,6 +243,13 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   backdrop-filter:blur(8px);
 }
 .hud-compass-arrow{font-size:26px;transition:transform .3s}
+.lap-badge{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  z-index:1150;pointer-events:none;font:700 12px/1 var(--mono);
+  letter-spacing:1.5px;color:#0d1117;background:var(--accent);
+  padding:5px 12px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.lap-select{background:var(--panel2,#161b22);color:var(--fg,#e6edf3);
+  border:1px solid var(--border,#30363d);border-radius:7px;
+  padding:7px 10px;font:600 13px var(--mono);min-width:110px}
 .nav-debug{position:absolute;left:8px;top:8px;z-index:1200;display:none;
   max-width:280px;max-height:56vh;overflow:auto;pointer-events:none;
   background:rgba(6,10,16,.86);border:1px solid #2b3440;border-radius:8px;padding:7px 9px}
@@ -618,6 +625,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
     </div>
 
     <!-- Compass -->
+    <div class="lap-badge" id="lap-badge" style="display:none">LAP 1 / 1</div>
     <div class="nav-debug" id="nav-debug"><pre id="nav-debug-txt"></pre></div>
     <div class="hud-compass">
       <div class="hud-compass-arrow" id="hud-compass">↑</div>
@@ -804,6 +812,17 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
         <div class="nav-field"><label>Rec stop min. duration (s)</label>
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
+        <div class="nav-field"><label>Repetitions (laps)</label>
+          <select id="lap-select" class="lap-select">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="inf">∞ Infinite</option>
+          </select>
+          <span class="val" id="val-laps"></span></div>
         <div class="nav-field"><label>Navigation debug</label>
           <input type="range" min="0" max="1" value="0" id="rng-navdbg" oninput="toggleNavDebug(+this.value===1)">
           <span class="val" id="val-navdbg">Off</span></div>
@@ -1774,6 +1793,9 @@ function parseGPX(xml,filename){
   resetMatcher();
   anchorStopsToRoute(null);
   maneuvers=buildManeuvers(pts);
+  loadedCycleMeta={name:name||'gpx',date:''};
+  playbackCycle=compileCycle();
+  Playback.stop();
 
   // Stats
   const totalProg=stops.reduce((a,s)=>a+s.dur_s,0);
@@ -1959,6 +1981,16 @@ function startNav(){
   lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
   resetMatcher();if(!routeCumM.length)buildRouteIndex();
   lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
+  // ── PLAYBACK session init (§8/§20) ──────────────────────────────────
+  // The frozen checkArrival still contains a 200 m RADIAL pre-announce.
+  // Editing it is forbidden, so it is silenced by its own state: with every
+  // stop id pre-registered in evtAnnounced the radial branch never fires,
+  // and the VoiceScheduler (route-distance triggers) owns announcements.
+  stops.forEach(s=>evtAnnounced.add(s.id));
+  Playback.begin(el('lap-select')?el('lap-select').value:1);
+  // multi-lap: the engine's one-shot destination voice belongs to the LAST
+  // lap only; pre-arming it keeps mid-session laps quiet (app-level flag).
+  if(LapManager.infinite||LapManager.totalLaps>1)destinationAnnounced=true;
   refreshStopIcons(); // NEXT-stop pulse from the first second of navigation
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
   if(el('lcm')){el('lcm').style.display='none';
@@ -1976,6 +2008,7 @@ function startNav(){
 function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
   navActive=false;
+  Playback.stop();
   el('btn-nav').style.display='';el('btn-nav2').style.display='';
   el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
@@ -2029,6 +2062,330 @@ function vehicleMarkerHtml(headingDeg){
     <div class="veh-bus" style="transform:rotate(${rot}deg)">${busSvg()}</div>
   </div>`;
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   CYCLE PLAYBACK ENGINE v2 — deterministic playlist above the frozen matcher
+   ──────────────────────────────────────────────────────────────────────────
+   The Navigation Engine answers "where am I on the recorded route" and is
+   FROZEN. Everything here consumes its routeProgressM and never computes a
+   GPS position of its own (§29). Geographic proximity has no authority over
+   playback: the active segment, the stop occurrence, the voice, the photo —
+   all follow the compiled playlist ordered by route distance (§7/§8).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const PLAYBACK_CFG={
+  segmentLenM : 250,   // §4: 100-300 m travel slices (distance, never time)
+  approachLenM: 150,   // STOP_APPROACH span immediately before each stop
+  voiceTriggers:{approachM:200,prepareM:50,arrivalM:0},   // §10, configurable
+  endEpsM     : 40,    // lap counts as ended within this of the total
+  passTolM    : 60,    // beyond stop+this, unfired messages expire silently
+};
+
+let playbackCycle=null;        // compiled playlist — built once per load (§18)
+let loadedCycleMeta=null;      // {name,date} of the recording that produced it
+
+/* ── PHASE 1: Cycle Compiler ─────────────────────────────────────────────
+   Reads the ALREADY-ANCHORED nav state (frozen anchorStopsToRoute has run:
+   every stop carries routeDistanceM). Pure derivation — the raw recording is
+   never touched (§2/§27) and the playlist can always be recompiled (§26).  */
+function compileCycle(){
+  if(!routePts.length||!routeCumM.length)return null;
+  const total=routeCumM[routeCumM.length-1];
+
+  // §6: occurrences. Nav stops are already one-per-passage (timestamp
+  // anchoring), so each becomes an occurrence; the PHYSICAL id groups stops
+  // whose coordinates coincide, so "stop 4 outbound" and "stop 4 return" get
+  // occurrence 1 and 2 of the same physical stop.
+  const phys=[];
+  const occurrences=stops.map(s=>{
+    let g=phys.find(G=>haversine(G.lat,G.lng,s.lat,s.lng)*1000<15);
+    if(!g){g={lat:s.lat,lng:s.lng,physId:phys.length+1,count:0};phys.push(g);}
+    g.count++;
+    return{
+      occurrenceId:`stop${g.physId}_occurrence_${g.count}`,
+      stopId:g.physId, navStopId:s.id, name:s.name,
+      routeDistanceM:s.routeDistanceM??0, durationS:s.dur_s||0,
+      events:normalizeStopEvents(s.events), photo:s.photo||null,
+    };
+  }).sort((a,b)=>a.routeDistanceM-b.routeDistanceM);
+
+  // §4: mandatory cuts — cycle start/end, approach start, stop point, maneuvers.
+  const cuts=new Set([0,total]);
+  occurrences.forEach(o=>{
+    cuts.add(Math.min(total,Math.max(0,o.routeDistanceM-PLAYBACK_CFG.approachLenM)));
+    cuts.add(Math.min(total,o.routeDistanceM));
+  });
+  maneuvers.forEach(m=>{
+    const mm=(m.distFromStart||0)*1000;
+    if(mm>1&&mm<total-1)cuts.add(mm);
+  });
+  const sorted=[...cuts].sort((a,b)=>a-b);
+
+  const segments=[]; let id=0;
+  const occAt=m=>occurrences.find(o=>Math.abs(o.routeDistanceM-m)<0.5);
+
+  // a stop sitting exactly at 0 m (depot) still needs its STOP segment
+  const oc0=occAt(0);
+  if(oc0)segments.push(_stopSeg(id++,oc0));
+
+  for(let i=0;i<sorted.length-1;i++){
+    const a=sorted[i],b=sorted[i+1];
+    if(b-a<0.5)continue;
+    const ob=occAt(b);
+    if(ob&&(b-a)<=PLAYBACK_CFG.approachLenM+1){
+      segments.push({id:id++,type:'STOP_APPROACH',startRouteM:a,endRouteM:b,
+        distanceM:b-a,stopOccurrenceId:ob.occurrenceId,stopId:ob.stopId});
+    }else{
+      // §4: never slice a stop — only plain travel is subdivided
+      const n=Math.max(1,Math.round((b-a)/PLAYBACK_CFG.segmentLenM));
+      for(let k=0;k<n;k++){
+        const s0=a+(b-a)*k/n, s1=a+(b-a)*(k+1)/n;
+        segments.push({id:id++,type:'TRAVEL',startRouteM:s0,endRouteM:s1,distanceM:s1-s0});
+      }
+    }
+    if(ob)segments.push(_stopSeg(id++,ob));
+  }
+  segments.push({id:id++,type:'END',startRouteM:total,endRouteM:total,distanceM:0});
+
+  const meta=loadedCycleMeta||{};
+  return{
+    cycleId:`${meta.name||'cycle'}|${meta.date||''}|${Math.round(total)}m|${occurrences.length}occ`,
+    totalDistanceM:total, segments, occurrences,
+    compiledAt:Date.now(), config:{...PLAYBACK_CFG},
+  };
+}
+function _stopSeg(id,o){
+  return{id,type:'STOP',startRouteM:o.routeDistanceM,endRouteM:o.routeDistanceM,
+    routeDistanceM:o.routeDistanceM,stopOccurrenceId:o.occurrenceId,stopId:o.stopId,
+    navStopId:o.navStopId,durationS:o.durationS,events:o.events,photo:o.photo};
+}
+
+/* ── PHASE 4: Voice Scheduler ────────────────────────────────────────────
+   Every message belongs to ONE occurrence and fires on routeDistanceM (§9/
+   §10), once (§11). Radial GPS distance never triggers playback voice (§8). */
+const VoiceScheduler={
+  messages:[],
+  buildForLap(){
+    const t=PLAYBACK_CFG.voiceTriggers;
+    this.messages=[];
+    if(!playbackCycle)return;
+    playbackCycle.occurrences.forEach(o=>{
+      const phrase=stopEventVoicePhrase(o.events);
+      this.messages.push({
+        id:`${o.occurrenceId}_approach`,occurrenceId:o.occurrenceId,
+        triggerRouteM:Math.max(0,o.routeDistanceM-t.approachM),fired:false,
+        text:`Stop ${o.stopId} in ${t.approachM} meters`+(phrase?`. ${phrase} required`:''),
+      });
+      this.messages.push({
+        id:`${o.occurrenceId}_prepare`,occurrenceId:o.occurrenceId,
+        triggerRouteM:Math.max(0,o.routeDistanceM-t.prepareM),fired:false,
+        text:`Prepare to stop`,
+      });
+      if(o.events.length)this.messages.push({
+        id:`${o.occurrenceId}_arrival`,occurrenceId:o.occurrenceId,
+        triggerRouteM:Math.max(0,o.routeDistanceM-t.arrivalM),fired:false,
+        text:`Stop ${o.stopId}: ${phrase} required`,
+      });
+    });
+  },
+  /* fire what is due for the CURRENT occurrence only */
+  update(routeM,currentOcc){
+    if(!currentOcc)return;
+    this.messages.forEach(m=>{
+      if(m.fired)return;
+      const occ=playbackCycle.occurrences.find(o=>o.occurrenceId===m.occurrenceId);
+      if(!occ)return;
+      // expire silently once the stop is behind us — never announce the past
+      if(routeM>occ.routeDistanceM+PLAYBACK_CFG.passTolM){m.fired=true;return;}
+      if(m.occurrenceId!==currentOcc.occurrenceId)return;       // §8
+      if(routeM>=m.triggerRouteM){m.fired=true;speakText(m.text,true);}
+    });
+  },
+  /* §28: after a recovery, everything already passed is marked fired WITHOUT
+     being spoken — an old stop must never be announced late. */
+  markPassed(routeM){
+    this.messages.forEach(m=>{
+      const occ=playbackCycle&&playbackCycle.occurrences.find(o=>o.occurrenceId===m.occurrenceId);
+      if(occ&&routeM>occ.routeDistanceM-PLAYBACK_CFG.voiceTriggers.approachM)m.fired=true;
+      else if(routeM>=m.triggerRouteM)m.fired=true;
+    });
+  },
+  resetLap(){this.messages.forEach(m=>m.fired=false);},          // §12
+};
+
+/* ── PHASE 5: Lap Manager ────────────────────────────────────────────────*/
+const LapManager={
+  currentLap:1,totalLaps:1,infinite:false,
+  configure(n){
+    this.infinite=(n==='inf'||n===Infinity);
+    this.totalLaps=this.infinite?Infinity:Math.max(1,parseInt(n,10)||1);
+    this.currentLap=1;
+  },
+  hasNext(){return this.infinite||this.currentLap<this.totalLaps;},
+  next(){this.currentLap++;},
+  label(){return this.infinite?`LAP ${this.currentLap} / ∞`
+                              :`LAP ${this.currentLap} / ${this.totalLaps}`;},
+};
+
+/* ── PHASE 2: Playback Engine ────────────────────────────────────────────
+   State machine (§14) driven exclusively by routeProgressM. lastSegIdx only
+   moves forward within a lap (§13): jitter can regress the matcher a few
+   metres, but a segment never re-executes.                                 */
+const Playback={
+  state:'IDLE', lastSegIdx:0, active:false, recoveryPending:false,
+  _completeSpoken:false,
+
+  begin(totalLaps){
+    if(!playbackCycle){this.state='IDLE';this.active=false;return;}
+    LapManager.configure(totalLaps??(el('lap-select')?el('lap-select').value:1));
+    // §28: an interrupted session for this same cycle demands explicit recovery
+    let saved=null;
+    try{saved=JSON.parse(localStorage.getItem('gpx-playback-session')||'null');}catch(e){}
+    if(saved&&saved.cycleId===playbackCycle.cycleId&&saved.state==='RUNNING'){
+      LapManager.currentLap=Math.min(saved.currentLap||1,
+        LapManager.infinite?1e9:LapManager.totalLaps);
+      this.recoveryPending=true;
+      this.state='STARTING';
+    }else{
+      this.recoveryPending=false;
+      this.state='STARTING';
+    }
+    this.active=true;this.lastSegIdx=0;this._completeSpoken=false;
+    VoiceScheduler.buildForLap();
+    this._persist('RUNNING');
+    this._badge();
+  },
+
+  stop(){
+    this.active=false;this.state='IDLE';this.lastSegIdx=0;this.recoveryPending=false;
+    try{localStorage.removeItem('gpx-playback-session');}catch(e){}
+    this._badge();
+  },
+
+  /* the single entry point, called once per accepted GPS fix */
+  update(routeM){
+    if(!this.active||!playbackCycle)return;
+    if(this.state==='COMPLETE')return;                       // §22: never restart
+    // Sanity: a playlist compiled for ANOTHER route must never drive this one.
+    // (Routes only load through loadRec/parseGPX, which recompile — but if the
+    // two ever disagree, driving lap resets against the wrong total would be
+    // catastrophic, so the mismatch deactivates playback for this fix.)
+    const curTotal=routeCumM.length?routeCumM[routeCumM.length-1]:0;
+    if(Math.abs(playbackCycle.totalDistanceM-curTotal)>1)return;
+
+    if(this.recoveryPending){
+      // §28: never invent the current segment. Right after a restart the
+      // matcher is still relocalising (progress creeps up from 0 with LOW
+      // confidence), so resolving here would mark the wrong things as passed
+      // and let an old stop speak. Hold playback silent until the engine is
+      // confident about where we are, then resume from THAT position.
+      if(!matchState||matchState.confidence==='LOW'){this._badge();return;}
+      VoiceScheduler.markPassed(routeM);
+      // Stops the interrupted session already served are behind us. Mark them
+      // done so the sequence — the engine's `next` and the current occurrence
+      // — resumes at the right place instead of deadlocking on a stop that
+      // can never arrive again this lap.
+      stops.forEach(s=>{
+        if(s.routeDistanceM!=null&&s.routeDistanceM<routeM-PLAYBACK_CFG.passTolM
+           &&s.state!=='done'){
+          s.state='done';updCardState(s);
+        }
+      });
+      refreshStopIcons();
+      this.lastSegIdx=this._spanIdxAt(routeM);
+      this.recoveryPending=false;
+    }
+
+    // active span: only forward within the lap (§13)
+    const idx=Math.max(this.lastSegIdx,this._spanIdxAt(routeM));
+    this.lastSegIdx=idx;
+    const seg=playbackCycle.segments[idx];
+
+    // current occurrence = first not-done occurrence in playlist order.
+    // Sequence, not proximity: identical coordinates on another leg are a
+    // different occurrence and therefore invisible here (§7/§8).
+    const occ=this._currentOccurrence();
+
+    // §14 state machine
+    const navStop=occ?stops.find(s=>s.id===occ.navStopId):null;
+    if(navStop&&navStop.state==='current')      this.state='AT_STOP';
+    else if(seg&&seg.type==='STOP_APPROACH')    this.state='STOP_APPROACH';
+    else if(this.state==='AT_STOP')             this.state='DEPARTING';
+    else if(this.state!=='STARTING'||routeM>5)  this.state='RUNNING';
+
+    // voice — occurrence-scoped, route-distance triggered
+    VoiceScheduler.update(routeM,occ);
+
+    // lap end (§22): within endEps of the total and not held at a stop
+    if(this.state!=='AT_STOP'&&routeM>=playbackCycle.totalDistanceM-PLAYBACK_CFG.endEpsM){
+      this.state='END_OF_CYCLE';
+      if(LapManager.hasNext())this._nextLap();
+      else this._complete();
+    }
+    this._badge();
+  },
+
+  currentSegment(){return playbackCycle?playbackCycle.segments[this.lastSegIdx]:null;},
+  _currentOccurrence(){
+    if(!playbackCycle)return null;
+    for(const o of playbackCycle.occurrences){
+      const s=stops.find(x=>x.id===o.navStopId);
+      if(s&&s.state!=='done')return o;
+    }
+    return null;
+  },
+  _spanIdxAt(routeM){
+    const segs=playbackCycle.segments;
+    let best=0;
+    for(let i=0;i<segs.length;i++){
+      const s=segs[i];
+      if(s.type==='STOP')continue;                       // point markers
+      if(s.startRouteM<=routeM)best=i; else break;
+    }
+    return best;
+  },
+
+  /* §23: between laps reset ONLY runtime playback/voice/stop state.
+     Recording, compiled playlist, session stats and lap counter survive. */
+  _nextLap(){
+    LapManager.next();
+    // stop occurrence runtime state — same reset startNav applies
+    stops.forEach(s=>{
+      clearInterval(s.intervalId);
+      s.state='waiting';s.elapsed=0;s.running=false;
+      updCardState(s);
+    });
+    insideStop.clear();departGate=null;evtAnnounced.clear();
+    stops.forEach(s=>evtAnnounced.add(s.id));   // keep the frozen radial voice silenced
+    resetMatcher();                              // route progress restarts (call, not change)
+    refreshStopIcons();
+    VoiceScheduler.resetLap();                   // §12
+    this.lastSegIdx=0;this.state='RUNNING';
+    this._persist('RUNNING');
+    speakText(LapManager.infinite?`Lap ${LapManager.currentLap}`
+      :`Lap ${LapManager.currentLap} of ${LapManager.totalLaps}`,true);
+  },
+
+  _complete(){
+    this.state='COMPLETE';this._persist('COMPLETE');
+    try{localStorage.removeItem('gpx-playback-session');}catch(e){}
+    if(!this._completeSpoken){this._completeSpoken=true;speakText('All laps complete',true);}
+  },
+
+  _persist(st){
+    try{localStorage.setItem('gpx-playback-session',JSON.stringify({
+      cycleId:playbackCycle.cycleId,currentLap:LapManager.currentLap,
+      totalLaps:LapManager.infinite?'inf':LapManager.totalLaps,state:st,ts:Date.now()}));}catch(e){}
+  },
+
+  _badge(){
+    const b=el('lap-badge');if(!b)return;
+    const show=this.active&&(LapManager.infinite||LapManager.totalLaps>1||this.state==='COMPLETE');
+    b.style.display=show?'':'none';
+    b.textContent=this.state==='COMPLETE'?'COMPLETE'
+                 :this.recoveryPending?'PLAYBACK RECOVERY REQUIRED'
+                 :LapManager.label();
+  },
+};
 function onGPS(pos){
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
@@ -2106,6 +2463,8 @@ function onGPS(pos){
   // Arrival check (rawKmh passed in — it's local to this function)
   const stopsBefore=stops.filter(x=>x.state!=='waiting').length;
   checkArrival(lat,lng,rawKmh,match,accuracy);
+  // §29: GPS → engine → routeProgressM → playback. No second matcher.
+  if(navActive)Playback.update(routeProgressM);
   if(navDebug)renderNavDebug(lat,lng,accuracy,rawKmh,heading,match);
   updNextStopCard(lat,lng);
   updLiveMetrics(lat,lng,rawKmh,pos.timestamp,stopsBefore);
@@ -2895,7 +3254,17 @@ function updInstruction(nearIdx,distFromStart){
   }
 
   // ── Voice guidance ──
-  if(distM>0&&distM<600) maybeSpeak(type||cls,label,distM);
+  // §8: during playback the Voice Scheduler owns every stop announcement.
+  // This instruction channel is RADIAL (getNextManeuver picks the nearest
+  // not-done stop within 4x radius), which is exactly the proximity voice the
+  // spec eliminates — on an out-and-back it says "Make a stop" for the other
+  // leg. 'arrive' is playback-owned too: right after a lap flip the vehicle
+  // is still standing on the arrive maneuver, so any distance-based exception
+  // leaks "Arrived at destination" into the new lap. Playback speaks its own
+  // endings ("Lap X of Y", "All laps complete"). The HUD still SHOWS every
+  // instruction; only the voice is gated, and turn voice keeps speaking.
+  const _pbOwnsVoice=Playback.active&&(type==='stop'||type==='arrive');
+  if(distM>0&&distM<600&&!_pbOwnsVoice) maybeSpeak(type||cls,label,distM);
 
   // Update peek bar
   el('peek-icon').textContent=icon;
@@ -2967,7 +3336,12 @@ function checkArrival(lat,lng,rawKmh,match,accuracyM){
       if(next.photo&&next.photo.length>10) showStopPhoto(next,0);
       next.state='current';updCardState(next);
       if(autoStart&&!next.running)startTimer(next.id);
-      speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
+      // §19: during playback the Voice Scheduler is the SINGLE owner of stop
+      // voice, so this line would duplicate its arrival announcement. Only the
+      // speech is suppressed — arrival confirmation, state, timers, photo, HUD
+      // and scroll all run exactly as before. Without playback, unchanged.
+      if(!Playback.active)
+        speakText(`Arrived at stop ${next.id}${next.dur_s?', planned '+fmtTime(next.dur_s):''}`,true);
       el(`sc-${next.id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
       if(!hudPanelOpen) toggleHudPanel();
       else renderHudPanel();
@@ -3028,6 +3402,9 @@ STOP ANCHOR:${next?`
  bearing=${next.approachBearing!=null?f(next.approachBearing,0)+'°':'—'}`:' —'}
 DEDUP: ${dedupDecision?(dedupDecision.reason+' (first/last '+dedupDecision.dFL+' m'+(dedupDecision.merged?', merged':'')+')'):'—'}
 ${navAnchorWarning?'WARNING: '+navAnchorWarning:''}
+PLAYBACK: ${Playback.active?Playback.state:'—'}  ${Playback.active?LapManager.label():''}
+ segment ${Playback.active&&Playback.currentSegment()?Playback.currentSegment().id+' '+Playback.currentSegment().type:'—'}
+ occ     ${Playback.active&&Playback._currentOccurrence()?Playback._currentOccurrence().occurrenceId:'—'}
 ─ matcher log ─
 `+navDebugLog.slice(-8).join('\n');
 }
@@ -3243,6 +3620,11 @@ function loadRec(idx){
     resetMatcher();
     anchorStopsToRoute(rec.points);
     maneuvers=buildManeuvers(routePts);
+    // §18/§26: compile ONCE at load — never per GPS fix. Old recordings have
+    // no playlist; compileCycle derives one without touching the JSON (§2).
+    loadedCycleMeta={name:rec.name||'cycle',date:rec.date||''};
+    playbackCycle=compileCycle();
+    Playback.stop();
     try{
       const b=routeLayer.getBounds();
       if(!fitRouteBounds(b)) map.setView([pts[0].lat,pts[0].lon],15);

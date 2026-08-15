@@ -1330,3 +1330,478 @@ function driveOnce(headingVal){
 
 console.log('ALL MAP TESTS PASSED');
 __group('Map visibility tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CYCLE PLAYBACK ENGINE v2 — PLAYBACK-1..20 (spec §31)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── cycle playback engine ──');
+
+/* voice spy: capture every speakText call, restore afterwards */
+let _spoken=[];
+const _realSpeak=speakText;
+speakText=(t,f)=>{_spoken.push(String(t));};
+function saidMatching(re){return _spoken.filter(t=>re.test(t));}
+
+/* drive along the loaded route by feeding fixes at given point indices */
+function drivePts(rec,from,to,kmh,hdg){
+  const step=from<=to?1:-1;
+  for(let i=from;i!==to+step;i+=step) gpsH(rec.points[i].lat,rec.points[i].lng,kmh??30,hdg??0);
+}
+/* standard session: load rec, arm playback like startNav does */
+function beginPlayback(rec,laps){
+  loadFresh(rec); navActive=true;
+  insideStop.clear(); departGate=null; evtAnnounced.clear();
+  stops.forEach(s=>evtAnnounced.add(s.id));
+  destinationAnnounced=true; lastVoiceKey=''; lastVoiceManeuver='';
+  try{localStorage.removeItem('gpx-playback-session');}catch(e){}
+  Playback.begin(laps??1);
+  _spoken=[];
+}
+
+// ── PLAYBACK-1: simple A→B→C cycle produces a correct ordered playlist ──
+(function(){
+  const rec=mkRec('pb1',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[60,140]); // ~2 km, stops at 0.6/1.4 km
+  loadFresh(rec);
+  console.assert(playbackCycle,'PB-1: no compiled cycle');
+  const st=playbackCycle.segments.filter(s=>s.type==='STOP');
+  console.assert(st.length===2,'PB-1: expected 2 STOP segments, got '+st.length);
+  console.assert(st[0].routeDistanceM<st[1].routeDistanceM,'PB-1: stops out of order');
+  const types=playbackCycle.segments.map(s=>s.type);
+  console.assert(types[0]!=='END'&&types[types.length-1]==='END','PB-1: END not last');
+  // monotonic, gap-free spans
+  let prevEnd=0,ok=true;
+  playbackCycle.segments.forEach(s=>{
+    if(s.type==='STOP')return;
+    if(Math.abs(s.startRouteM-prevEnd)>0.6)ok=false;
+    prevEnd=s.endRouteM;
+  });
+  console.assert(ok,'PB-1: playlist has gaps or overlaps');
+  console.log('PB-1. playlist ordered, gap-free, END last OK ('+playbackCycle.segments.length+' segments)');
+})();
+
+// ── PLAYBACK-2: travel slices land in the 100-300 m band ──
+(function(){
+  const rec=mkRec('pb2',300,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[150]); // 3 km, one stop
+  loadFresh(rec);
+  const tr=playbackCycle.segments.filter(s=>s.type==='TRAVEL'&&s.distanceM>1);
+  const bad=tr.filter(s=>s.distanceM<80||s.distanceM>320);
+  console.assert(tr.length>=6,'PB-2: too few travel segments: '+tr.length);
+  console.assert(bad.length===0,'PB-2: segments outside 100-300 m band: '+
+    bad.map(s=>s.distanceM.toFixed(0)).join(','));
+  console.log('PB-2. '+tr.length+' travel slices, all ~'+PLAYBACK_CFG.segmentLenM+' m OK');
+})();
+
+// ── PLAYBACK-3: a stop is never split across two segments ──
+(function(){
+  const rec=mkRec('pb3',300,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[77,199]);
+  loadFresh(rec);
+  playbackCycle.occurrences.forEach(o=>{
+    const inside=playbackCycle.segments.filter(s=>
+      s.type!=='STOP'&&s.startRouteM<o.routeDistanceM-0.5&&s.endRouteM>o.routeDistanceM+0.5);
+    console.assert(inside.length===0,'PB-3: '+o.occurrenceId+' cut mid-segment');
+    const stopSegs=playbackCycle.segments.filter(s=>
+      s.type==='STOP'&&s.stopOccurrenceId===o.occurrenceId);
+    console.assert(stopSegs.length===1,'PB-3: '+o.occurrenceId+' has '+stopSegs.length+' STOP segments');
+  });
+  console.log('PB-3. every stop is a cut boundary, exactly one STOP segment each OK');
+})();
+
+// ── PLAYBACK-4: same physical stop twice → two distinct occurrences ──
+(function(){
+  const N=200; // out-and-back on the same street: same coordinate visited twice
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  const rec=mkRec('pb4',N,shape,[10,50,149]); // depot guard + A out + A back (co-located)
+  loadFresh(rec);
+  const occ=playbackCycle.occurrences;
+  const A=occ.filter(o=>o.stopId===occ[1].stopId&&o.stopId===occ[2].stopId?true:o.stopId===occ[1].stopId);
+  // the two co-located stops must share stopId but differ in occurrenceId
+  const co=occ.filter(o=>Math.abs(o.routeDistanceM-occ[1].routeDistanceM)<1||
+                          Math.abs(o.routeDistanceM-occ[2].routeDistanceM)<1);
+  console.assert(occ[1].stopId===occ[2].stopId,'PB-4: co-located stops got different physical ids');
+  console.assert(occ[1].occurrenceId!==occ[2].occurrenceId,'PB-4: occurrences not distinct');
+  console.assert(/occurrence_1$/.test(occ[1].occurrenceId)&&/occurrence_2$/.test(occ[2].occurrenceId),
+    'PB-4: occurrence numbering wrong: '+occ[1].occurrenceId+' / '+occ[2].occurrenceId);
+  console.assert(Math.abs(occ[2].routeDistanceM-occ[1].routeDistanceM)>800,
+    'PB-4: occurrences share a route position');
+  console.log('PB-4. '+occ[1].occurrenceId+' @'+(occ[1].routeDistanceM/1000).toFixed(2)+' km · '
+    +occ[2].occurrenceId+' @'+(occ[2].routeDistanceM/1000).toFixed(2)+' km OK');
+})();
+
+// ── PLAYBACK-5: 5 m from a stop of ANOTHER leg → NO VOICE, NO ARRIVAL ──
+(function(){
+  const N=240; // outbound on street A, return on parallel street B 12 m east;
+               // the return-leg stop is physically ~12 m from the outbound path
+  const dLng=12/(111320*Math.cos(LAT0*Math.PI/180));
+  const shape=i=>i<120?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(239-i)*DLAT,lng:LNG0+dLng};
+  const rec=mkRec('pb5',N,shape,[179]); // ONLY stop: on the RETURN leg (~idx 60 going back)
+  beginPlayback(rec,1);
+  // drive the OUTBOUND leg: passes ~12 m from the return-leg stop coordinate
+  drivePts(rec,0,110,30,0);
+  const nearTexts=saidMatching(/Stop \d|stop/i);
+  console.assert(stops[0].state==='waiting','PB-5: other-leg stop arrived: '+stops[0].state);
+  console.assert(nearTexts.length===0,'PB-5: voice fired on the wrong leg: '+JSON.stringify(nearTexts));
+  console.log('PB-5. passed 12 m from other-leg stop: NO VOICE, NO ARRIVAL OK');
+})();
+
+// ── PLAYBACK-6: the correct segment DOES produce voice + arrival ──
+(function(){
+  const rec=mkRec('pb6',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=['openDoor','kneeling'];
+  beginPlayback(rec,1);
+  drivePts(rec,0,101,25,0);
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===1,
+    'PB-6: approach voice missing: '+JSON.stringify(_spoken));
+  console.assert(saidMatching(/Prepare to stop/).length===1,'PB-6: prepare voice missing');
+  console.assert(saidMatching(/open doors and kneeling required/).length>=1,
+    'PB-6: event phrase missing');
+  console.assert(stops[0].state==='current','PB-6: stop did not arrive: '+stops[0].state);
+  console.log('PB-6. correct segment → approach + prepare + events + arrival OK');
+})();
+
+// ── PLAYBACK-7: jitter regressing a segment must not repeat voice ──
+(function(){
+  const rec=mkRec('pb7',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  beginPlayback(rec,1);
+  drivePts(rec,0,85,30,0);                       // past the approach trigger
+  const approaches=saidMatching(/Stop 1 in 200 meters/).length;
+  console.assert(approaches===1,'PB-7: setup — approach fired '+approaches+' times');
+  const segBefore=Playback.lastSegIdx;
+  // jitter: 6 fixes oscillating backwards a few metres
+  for(let k=0;k<6;k++) gpsH(rec.points[83+(k%2)].lat,rec.points[83+(k%2)].lng,3,(k*90)%360);
+  console.assert(Playback.lastSegIdx>=segBefore,'PB-7: playback segment regressed');
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===1,'PB-7: approach voice repeated');
+  console.log('PB-7. jitter: segment held ('+segBefore+'→'+Playback.lastSegIdx+'), no repeat OK');
+})();
+
+__group('Playback tests');
+
+// ── PLAYBACK-8: trigger fires only when routeDistance >= trigger ──
+(function(){
+  const rec=mkRec('pb8',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]); // stop @ ~1000 m
+  beginPlayback(rec,1);
+  drivePts(rec,0,75,30,0);                       // 750 m < 800 m trigger
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===0,
+    'PB-8: approach fired before the trigger (progress '+routeProgressM.toFixed(0)+' m)');
+  drivePts(rec,76,85,30,0);                      // crosses 800 m
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===1,
+    'PB-8: approach did not fire after crossing the trigger');
+  const st=stops[0], trig=st.routeDistanceM-PLAYBACK_CFG.voiceTriggers.approachM;
+  console.assert(routeProgressM>=trig,'PB-8: sanity');
+  console.log('PB-8. trigger at '+(trig/1000).toFixed(2)+' km respected (fired at ~'+
+    (routeProgressM/1000).toFixed(2)+' km) OK');
+})();
+
+// ── PLAYBACK-9: voice locking — a fired trigger never speaks twice ──
+(function(){
+  const rec=mkRec('pb9',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=['handBrake'];
+  beginPlayback(rec,1);
+  drivePts(rec,0,101,25,0);
+  const c1={ap:saidMatching(/in 200 meters/).length,ar:saidMatching(/hand brake required/).length};
+  // hammer the same position 10 more times
+  for(let k=0;k<10;k++) gpsH(rec.points[101].lat,rec.points[101].lng,1,0);
+  const c2={ap:saidMatching(/in 200 meters/).length,ar:saidMatching(/hand brake required/).length};
+  console.assert(c1.ap===1&&c2.ap===1,'PB-9: approach repeated');
+  console.assert(c1.ar>=1&&c2.ar===c1.ar,'PB-9: arrival phrase repeated');
+  const msg=VoiceScheduler.messages.find(m=>/approach/.test(m.id));
+  console.assert(msg.fired===true,'PB-9: fired flag not set');
+  console.log('PB-9. voice locking holds under repeated fixes OK');
+})();
+
+// ── PLAYBACK-10: openDoor+kneeling+handBrake all spoken ──
+(function(){
+  const rec=mkRec('pb10',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  beginPlayback(rec,1);
+  drivePts(rec,0,101,25,0);
+  const hits=saidMatching(/open doors, kneeling and hand brake required/);
+  console.assert(hits.length>=1,'PB-10: full phrase missing: '+JSON.stringify(_spoken.slice(-4)));
+  console.log('PB-10. "'+hits[0]+'" OK');
+})();
+
+// ── PLAYBACK-11: stop without events announces no events ──
+(function(){
+  const rec=mkRec('pb11',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=[];
+  beginPlayback(rec,1);
+  drivePts(rec,0,101,25,0);
+  console.assert(saidMatching(/required/).length===0,
+    'PB-11: event phrase for an event-less stop: '+JSON.stringify(saidMatching(/required/)));
+  console.assert(saidMatching(/in 200 meters/).length===1,'PB-11: approach should still fire');
+  console.log('PB-11. no events → no event phrase, approach still spoken OK');
+})();
+
+// ── PLAYBACK-12: photo belongs to the occurrence, not the nearest stop ──
+(function(){
+  const N=240; const dLng=12/(111320*Math.cos(LAT0*Math.PI/180));
+  const shape=i=>i<120?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(239-i)*DLAT,lng:LNG0+dLng};
+  const rec=mkRec('pb12',N,shape,[60,179]); // occ1 outbound WITH photo, occ2 return NO photo
+  rec.stops[0].photo='data:image/jpeg;base64,PHOTO_OCC1';
+  rec.stops[1].photo=null;
+  beginPlayback(rec,1);
+  drivePts(rec,0,55,30,0); updNextStopCard(rec.points[55].lat,rec.points[55].lng);
+  console.assert(el('nsc-photo').style.display==='block','PB-12: occ1 photo not shown');
+  drivePts(rec,56,61,15,0);                       // arrive occ1
+  markDone(stops[0].id);
+  drivePts(rec,62,130,30,0);                      // now heading to occ2 — passes near occ1 coords
+  updNextStopCard(rec.points[130].lat,rec.points[130].lng);
+  console.assert(el('nsc-photo').style.display==='none',
+    'PB-12: occ1 photo leaked into occ2 (nearest-stop lookup)');
+  console.log('PB-12. photo follows the occurrence, not proximity OK');
+})();
+
+__group('Voice scheduler tests');
+
+// ── PLAYBACK-13: lap 1/3 completes → LAP 2/3 ──
+(function(){
+  // Multi-lap only makes physical sense on a CLOSED loop: the vehicle must be
+  // back at the start when the lap flips, otherwise "reset progress to 0" and
+  // the vehicle's real position contradict each other. Out on lng0, back on a
+  // parallel street 13 m east, ending ~13 m from the start point.
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('pb13',300,loop,[70]);
+  beginPlayback(rec,3);
+  console.assert(LapManager.totalLaps===3&&LapManager.currentLap===1,'PB-13: lap config wrong');
+  drivePts(rec,0,71,25,0); markDone(stops[0].id);   // stop done (outbound)
+  drivePts(rec,72,149,30,0);                        // rest of the outbound leg, north
+  drivePts(rec,150,299,30,180);                     // return leg, south, back to start
+  console.assert(LapManager.currentLap===2,'PB-13: lap did not advance: '+LapManager.currentLap);
+  console.assert(saidMatching(/Lap 2 of 3/).length===1,'PB-13: lap voice missing');
+  console.assert(stops[0].state==='waiting','PB-13: stop state not reset for lap 2');
+  console.assert(routeProgressM<100,'PB-13: matcher progress not reset: '+routeProgressM.toFixed(0));
+  console.log('PB-13. END → LAP 2/3, stops reset, progress reset OK');
+})();
+
+// ── PLAYBACK-14: lap 3/3 completes → COMPLETE, no restart ──
+(function(){
+  const rec=mkRec('pb14',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  beginPlayback(rec,2);
+  for(let lap=0;lap<2;lap++){
+    drivePts(rec,0,71,25,0); markDone(stops[0].id);
+    drivePts(rec,72,149,30,0);
+  }
+  console.assert(Playback.state==='COMPLETE','PB-14: not COMPLETE: '+Playback.state);
+  console.assert(saidMatching(/All laps complete/).length===1,'PB-14: completion voice missing');
+  const lapAtEnd=LapManager.currentLap;
+  drivePts(rec,0,30,30,0);                          // keep driving — must NOT restart
+  console.assert(Playback.state==='COMPLETE'&&LapManager.currentLap===lapAtEnd,
+    'PB-14: restarted after COMPLETE');
+  console.log('PB-14. COMPLETE reached, further driving ignored OK');
+})();
+
+// ── PLAYBACK-15: infinite laps keep cycling ──
+(function(){
+  const rec=mkRec('pb15',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  beginPlayback(rec,'inf');
+  console.assert(LapManager.infinite===true,'PB-15: infinite not configured');
+  for(let lap=0;lap<4;lap++){
+    drivePts(rec,0,71,25,0); markDone(stops[0].id);
+    drivePts(rec,72,149,30,0);
+  }
+  console.assert(LapManager.currentLap===5,'PB-15: expected lap 5, got '+LapManager.currentLap);
+  console.assert(Playback.state!=='COMPLETE','PB-15: infinite mode completed');
+  console.log('PB-15. infinite: now on '+LapManager.label()+' OK');
+})();
+
+// ── PLAYBACK-16: identical coordinates — each lap uses the right occurrence ──
+(function(){
+  const N=200;
+  const shape=i=>i<100?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+(199-i)*DLAT,lng:LNG0};
+  const rec=mkRec('pb16',N,shape,[10,50,149]);   // A out (occ1) & A back (occ2), same coords
+  beginPlayback(rec,2);
+  const occ1=playbackCycle.occurrences[1],occ2=playbackCycle.occurrences[2];
+  console.assert(occ1.stopId===occ2.stopId&&occ1.occurrenceId!==occ2.occurrenceId,'PB-16: setup');
+  // lap 1, outbound: current occurrence after the depot must be occ1
+  drivePts(rec,0,12,20,0); markDone(stops[0].id);
+  drivePts(rec,13,45,30,0);
+  console.assert(Playback._currentOccurrence().occurrenceId===occ1.occurrenceId,
+    'PB-16: wrong occurrence outbound: '+Playback._currentOccurrence().occurrenceId);
+  drivePts(rec,46,52,15,0); markDone(stops[1].id);
+  drivePts(rec,53,145,30,180);
+  console.assert(Playback._currentOccurrence().occurrenceId===occ2.occurrenceId,
+    'PB-16: wrong occurrence on return: '+Playback._currentOccurrence().occurrenceId);
+  console.log('PB-16. occ1 outbound, occ2 return — sequence decides, coords ignored OK');
+})();
+
+// ── PLAYBACK-17: circular cycle — lap boundary produces no wrong voice ──
+(function(){
+  const rec=mkRec('pb17',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  rec.stops[0].events=['openDoor'];
+  beginPlayback(rec,2);
+  drivePts(rec,0,71,25,0); markDone(stops[0].id);
+  _spoken=[];
+  drivePts(rec,72,149,30,0);                       // cross the lap boundary
+  const wrong=_spoken.filter(t=>!/^Lap /.test(t));
+  console.assert(wrong.length===0,'PB-17: unexpected voice at lap boundary: '+JSON.stringify(wrong));
+  console.assert(saidMatching(/^Lap 2 of 2/).length===1,'PB-17: lap announcement missing');
+  // and lap 2 announces the stop again (voice state reset per lap, §12)
+  _spoken=[];
+  drivePts(rec,0,71,25,0);
+  console.assert(saidMatching(/in 200 meters/).length===1,'PB-17: lap-2 approach missing');
+  console.log('PB-17. lap boundary clean, lap-2 voice re-armed OK');
+})();
+
+__group('Lap manager tests');
+
+// ── PLAYBACK-18: an old cycle with no playlist compiles automatically ──
+(function(){
+  const rec=mkRec('pb18',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  console.assert(rec.playlist===undefined&&rec.compiled===undefined,'PB-18: fixture dirty');
+  loadFresh(rec);
+  console.assert(playbackCycle&&playbackCycle.segments.length>3,'PB-18: compiler did not run on load');
+  console.assert(playbackCycle.occurrences.length===1,'PB-18: occurrences wrong');
+  console.log('PB-18. legacy recording → playlist compiled on load OK');
+})();
+
+// ── PLAYBACK-19: recovery never announces an old stop ──
+(function(){
+  const rec=mkRec('pb19',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[50,150]);
+  rec.stops[0].events=['openDoor'];rec.stops[1].events=['kneeling'];
+  loadFresh(rec);
+  // simulate a session that died mid-cycle on lap 1
+  localStorage.setItem('gpx-playback-session',JSON.stringify({
+    cycleId:playbackCycle.cycleId,currentLap:1,totalLaps:2,state:'RUNNING',ts:Date.now()}));
+  navActive=true; insideStop.clear(); departGate=null;
+  evtAnnounced.clear(); stops.forEach(s=>evtAnnounced.add(s.id));
+  Playback.begin(2); _spoken=[];
+  console.assert(Playback.recoveryPending===true,'PB-19: recovery not detected');
+  // app restarts with the vehicle ALREADY past stop 1 (at ~1.1 km)
+  drivePts(rec,105,115,30,0);
+  console.assert(saidMatching(/Stop 1/).length===0,
+    'PB-19: old stop announced after recovery: '+JSON.stringify(saidMatching(/Stop 1/)));
+  console.assert(Playback.recoveryPending===false,'PB-19: recovery never resolved');
+  // the NEXT stop still announces normally
+  drivePts(rec,116,151,25,0);
+  console.assert(saidMatching(/Stop 2 in 200 meters/).length===1,'PB-19: next stop lost its voice');
+  console.log('PB-19. recovery: old stop silent, next stop normal OK');
+})();
+
+// ── PLAYBACK-20: the compiler never mutates the recording ──
+(function(){
+  const rec=mkRec('pb20',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  rec.stops[0].events=['openDoor','handBrake'];
+  rec.stops[0].photo='data:image/jpeg;base64,ORIGINAL';
+  const before=JSON.stringify(rec);
+  loadFresh(rec);
+  const c1=playbackCycle; compileCycle();          // run twice for good measure
+  console.assert(JSON.stringify(rec)===before,'PB-20: recording mutated by the compiler');
+  console.assert(c1.segments.length>0,'PB-20: sanity');
+  console.log('PB-20. recording JSON byte-identical after compiling twice OK');
+})();
+
+/* restore the real voice */
+
+console.log('ALL PLAYBACK TESTS PASSED');
+__group('Playback tests');
+
+// ── PLAYBACK-21: playback owns the arrival voice (no duplicate) ──
+(function(){
+  const rec=mkRec('pb21',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=['openDoor'];
+  beginPlayback(rec,1);
+  el('rng-radius').value='80';
+  drivePts(rec,60,101,20,0);
+  console.assert(stops[0].state==='current','PB-21: setup — stop never arrived');
+  const engineVoice=saidMatching(/^Arrived at stop/);
+  const schedVoice =saidMatching(/^Stop 1/);
+  console.assert(engineVoice.length===0,
+    'PB-21: checkArrival still spoke during playback: '+JSON.stringify(engineVoice));
+  console.assert(schedVoice.length>=1,'PB-21: scheduler produced no stop voice');
+  console.log(`PB-21. playback owns arrival voice — checkArrival 0, scheduler ${schedVoice.length} OK`);
+})();
+
+// ── PLAYBACK-22: physically at the wrong occurrence → total silence ──
+(function(){
+  // Out on lng0, back 7 m east; the SAME physical stop is recorded on both
+  // legs, so occ1 (0.60 km) and occ2 (2.39 km) sit 7 m apart on the ground.
+  // The vehicle drives the outbound leg properly: occ1 arrives and completes,
+  // making occ2 the current occurrence. It is then standing 7 m from occ2's
+  // coordinate while 1.8 km short of it ALONG THE ROUTE. Proximity must buy
+  // occ2 nothing — no voice, no arrival (§7/§8).
+  //
+  // (An earlier version of this case teleported onto occ2's coordinate from
+  // mid-outbound. That was not discriminating: 7 m of cross-track with the
+  // outbound heading is a legitimate match for occ1, so the engine was right
+  // to advance there and the scheduler was right to announce occ1.)
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('pb22',300,loop,[60,239]);
+  rec.stops[0].events=['openDoor'];rec.stops[1].events=['kneeling'];
+  beginPlayback(rec,1);
+  el('rng-radius').value='80';
+  drivePts(rec,0,62,25,0);                       // outbound through occ1
+  console.assert(stops[0].state==='current','PB-22: setup — occ1 never arrived');
+  markDone(stops[0].id);
+  const occ2=playbackCycle.occurrences[1];
+  console.assert(Playback._currentOccurrence().occurrenceId===occ2.occurrenceId,
+    'PB-22: setup — occ2 is not the current occurrence');
+  _spoken=[];
+  const gap=haversine(rec.points[62].lat,rec.points[62].lng,
+                      rec.points[239].lat,rec.points[239].lng)*1000;
+  console.assert(gap<25,'PB-22: setup — occurrences '+gap.toFixed(0)+' m apart');
+  const alongGap=occ2.routeDistanceM-routeProgressM;
+  console.assert(alongGap>1500,'PB-22: setup — occ2 only '+alongGap.toFixed(0)+' m ahead on route');
+  for(let i=0;i<6;i++) gpsH(rec.points[62].lat,rec.points[62].lng,5,0);   // sit there
+  console.assert(saidMatching(/Stop \d/).length===0,
+    'PB-22: wrong-occurrence stop voice: '+JSON.stringify(saidMatching(/Stop \d/)));
+  console.assert(saidMatching(/^Arrived at stop/).length===0,'PB-22: arrival voice fired');
+  console.assert(saidMatching(/Make a stop/).length===0,
+    'PB-22: radial "Make a stop" leaked: '+JSON.stringify(saidMatching(/Make a stop/)));
+  console.assert(saidMatching(/Arrived at destination/).length===0,'PB-22: destination voice fired');
+  console.assert(stops[1].state==='waiting','PB-22: wrong occurrence was marked arrived');
+  const fired=VoiceScheduler.messages.filter(m=>m.occurrenceId===occ2.occurrenceId&&m.fired);
+  console.assert(fired.length===0,'PB-22: occ2 messages fired early: '+JSON.stringify(fired.map(f=>f.id)));
+  console.log(`PB-22. ${gap.toFixed(0)} m from occ2 but ${(alongGap/1000).toFixed(2)} km short on route: silent OK`);
+})();
+
+// ── PLAYBACK-23: turn instructions still speak during playback ──
+(function(){
+  // straight north, then a 90° right — a genuine maneuver, no stops nearby
+  const corner=i=>i<=80?{lat:LAT0+i*DLAT,lng:LNG0}
+                       :{lat:LAT0+80*DLAT,lng:LNG0+(i-80)*0.00017};
+  const rec=mkRec('pb23',160,corner,[]);
+  beginPlayback(rec,1);
+  lastVoiceKey='';lastVoiceManeuver='';
+  console.assert(Playback.active===true,'PB-23: playback not active');
+  console.assert(maneuvers.some(m=>m.type==='right'),'PB-23: setup — no turn in the route');
+  drivePts(rec,20,72,40,0);
+  const turnVoice=saidMatching(/right|left|turn/i);
+  console.assert(turnVoice.length>=1,
+    'PB-23: turn voice suppressed during playback: '+JSON.stringify(_spoken));
+  console.log('PB-23. turn voice still speaks during playback: "'+turnVoice[0]+'" OK');
+})();
+
+// ── PLAYBACK-24: without playback, normal arrival voice is unchanged ──
+(function(){
+  const rec=mkRec('pb24',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  loadFresh(rec);
+  Playback.stop();                               // explicitly NOT playing back
+  navActive=true; insideStop.clear(); departGate=null; evtAnnounced.clear();
+  el('rng-radius').value='80'; _spoken=[];
+  console.assert(Playback.active===false,'PB-24: playback still active');
+  drivePts(rec,60,101,20,0);
+  console.assert(stops[0].state==='current','PB-24: setup — stop never arrived');
+  console.assert(saidMatching(/^Arrived at stop 1/).length===1,
+    'PB-24: normal navigation lost its arrival voice: '+JSON.stringify(_spoken));
+  console.log('PB-24. normal navigation still says "Arrived at stop 1" OK');
+})();
+
+// ── PLAYBACK-25: three events spoken by the scheduler, no duplicate ──
+(function(){
+  const rec=mkRec('pb25',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[100]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  beginPlayback(rec,1);
+  el('rng-radius').value='80';
+  drivePts(rec,60,101,20,0);
+  const three=saidMatching(/open doors, kneeling and hand brake required/);
+  console.assert(three.length>=1,
+    'PB-25: three-event phrase missing: '+JSON.stringify(_spoken));
+  console.assert(saidMatching(/^Arrived at stop/).length===0,
+    'PB-25: duplicate "Arrived at stop" alongside the scheduler voice');
+  console.assert(!/parking brake/.test(_spoken.join('|')),'PB-25: said parking brake');
+  console.log('PB-25. "'+three[0]+'" — single owner OK');
+})();
+
+__group('Playback tests');
+speakText=_realSpeak;   // restore AFTER every playback case, including PB-21..25

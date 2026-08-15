@@ -85,7 +85,9 @@ global.Date.prototype.toLocaleTimeString=function(){return '12:00'};
 let __n=0,__fails=0,__groups=[],__mark={n:0,f:0};
 console.assert=(cond,...m)=>{ __n++; if(!cond){__fails++;console.error('  \u2717 FAIL:',...m);} };
 global.__group=(name)=>{
-  __groups.push({name,passed:(__n-__mark.n)-(__fails-__mark.f),failed:__fails-__mark.f});
+  const p=(__n-__mark.n)-(__fails-__mark.f), f=__fails-__mark.f;
+  const g=__groups.find(x=>x.name===name);
+  if(g){g.passed+=p;g.failed+=f;} else __groups.push({name,passed:p,failed:f});
   __mark={n:__n,f:__fails};
 };
 process.on('exit',()=>{

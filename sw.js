@@ -1,6 +1,6 @@
 // GPX Navigator Pro — Service Worker
 // Versão do cache: incrementar ao atualizar os arquivos
-const CACHE = "gpx-nav-v34-ui-nav2-stopguard-tsanchor-dedup-ux1-ux2";
+const CACHE = "gpx-nav-v34-ui-nav2-stopguard-tsanchor-dedup-ux1-ux2-playback-voice";
 const ASSETS = [
   "./",
   "./index.html",
