@@ -844,6 +844,167 @@ body.driver-mode .leaflet-control-attribution{
   body.driver-mode .nsc *{transition:none!important;animation:none!important}
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRIVER UX v5 — driver-first navigation composition
+   Visual layer only. The navigation/playback engines remain untouched.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.driver-mode #map .leaflet-tile-pane{
+  filter:saturate(1.08) contrast(1.10) brightness(.97);
+}
+body.driver-mode .map-wrap:after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:400;
+  background:linear-gradient(180deg,rgba(255,255,255,.02) 0%,transparent 24%,transparent 72%,rgba(8,12,18,.08) 100%);
+}
+
+/* Navigation guidance: one clear visual instruction, not a dashboard full of cards. */
+body.driver-mode .hud-instr{
+  top:12px;left:16px;right:16px;
+  min-height:108px;height:108px;
+  border-radius:20px;
+  background:rgba(13,17,23,.965);
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 12px 36px rgba(0,0,0,.42);
+}
+body.driver-mode .hud-instr-icon{
+  width:132px;min-width:132px;min-height:108px;
+  border-right:1px solid rgba(255,255,255,.11);
+  background:linear-gradient(135deg,rgba(240,165,0,.18),rgba(240,165,0,.05));
+}
+body.driver-mode #hud-icon-arrow,
+body.driver-mode #hud-icon-arrow svg{
+  width:96px;height:96px;
+}
+body.driver-mode .hud-instr-body{padding:10px 20px;gap:0}
+body.driver-mode .hud-instr-dist{
+  font-size:54px;line-height:.92;letter-spacing:-1.5px;
+}
+body.driver-mode .hud-instr-action{
+  font-size:27px;line-height:1;margin:5px 0 2px;
+}
+body.driver-mode .hud-instr-detail{font-size:12px;line-height:1.15}
+body.driver-mode .hud-next-preview{font-size:11px;margin-top:4px}
+body.driver-mode .hud-instr-speed{
+  width:104px;min-width:104px;padding:10px 8px;
+  background:rgba(255,255,255,.025);
+}
+body.driver-mode .hud-spd-val{font-size:40px}
+body.driver-mode .hud-spd-unit{font-size:11px}
+body.driver-mode .hud-tgt{font-size:10px;margin-top:7px}
+
+/* The map guidance arrow is a secondary road cue. Make it visible, but never
+   larger than the vehicle-facing guidance card. */
+body.driver-mode .guid-wrap{
+  width:96px;height:96px;
+  filter:drop-shadow(0 4px 9px rgba(0,0,0,.72));
+}
+body.driver-mode .guid-wrap svg{width:96px;height:96px}
+
+/* Vehicle: large enough for a one-second glance. */
+body.driver-mode .veh-wrap{width:68px;height:68px}
+body.driver-mode .veh-bus svg{width:68px;height:68px}
+body.driver-mode .veh-halo{inset:-9px}
+
+/* Driver stop dock: a single coherent card. Photo and events stay visible
+   instead of being pushed below the fold by a tall vertical card. */
+body.driver-mode .nsc{
+  right:18px;bottom:18px;top:auto;
+  width:min(560px,62vw);max-width:calc(100vw - 36px);
+  max-height:none;height:190px;
+  overflow:hidden;padding:14px 16px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 178px;
+  grid-template-rows:auto auto auto 1fr;
+  column-gap:14px;row-gap:2px;
+  border-left:5px solid var(--accent);
+  border-radius:18px;
+  background:rgba(13,17,23,.975);
+  box-shadow:0 14px 38px rgba(0,0,0,.48);
+}
+body.driver-mode .nsc-head{grid-column:1;font-size:11px;letter-spacing:2px}
+body.driver-mode .nsc-name{grid-column:1;font-size:26px;margin:2px 0 0;line-height:1}
+body.driver-mode .nsc-dist{grid-column:1;font-size:58px;line-height:.88;margin:5px 0 1px;letter-spacing:-1px}
+body.driver-mode .nsc-row{grid-column:1;font-size:12px;margin:0;justify-content:flex-start;gap:14px}
+body.driver-mode .nsc-row:has(.nsc-leg){display:none}
+body.driver-mode .nsc-events{
+  grid-column:1;display:flex!important;align-self:end;gap:7px;margin:5px 0 0;
+}
+body.driver-mode .evt-chip{
+  min-height:36px;padding:6px 8px;gap:5px;border-radius:9px;font-size:11px;
+}
+body.driver-mode .evt-chip svg{width:24px!important;height:24px!important}
+body.driver-mode .nsc-photo{
+  grid-column:2;grid-row:1 / span 4;
+  width:178px;height:158px;margin:0;align-self:center;
+  border-radius:11px;object-fit:cover;
+}
+body.driver-mode .nsc:has(.nsc-photo[style*="display: none"]) {
+  grid-template-columns:1fr;
+}
+body.driver-mode .nsc:has(.nsc-photo[style*="display: none"]) .nsc-photo{display:none!important}
+
+/* Keep the stop drawer out of the way in normal Driver Mode. If the driver
+   explicitly opens it, it becomes a dedicated sheet rather than a bar over
+   the Next Stop card. */
+body.driver-mode:not(.stops-open) .hud-stops-panel{display:none!important}
+body.driver-mode .hud-toggle{
+  left:16px;right:auto;bottom:18px;
+  padding:9px 12px;border-radius:12px;font-size:11px;
+  background:rgba(13,17,23,.94);box-shadow:0 8px 22px rgba(0,0,0,.35);
+}
+body.driver-mode.stops-open .hud-stops-panel{
+  left:18px;right:18px;bottom:18px;max-height:46vh;border-radius:18px;
+  box-shadow:0 14px 40px rgba(0,0,0,.55);
+}
+
+/* Compact progress dock; it should not compete with the stop card. */
+body.driver-mode .hud-strip{
+  left:18px;right:auto;bottom:18px;width:min(360px,34vw);min-width:220px;
+  height:34px;padding:6px 10px;border-radius:12px;
+  background:rgba(13,17,23,.92);
+}
+body.driver-mode .hud-sbar{height:6px}
+body.driver-mode .hud-slbl{font-size:10px}
+
+/* Quiet utility controls. */
+body.driver-mode .hud-compass{right:18px;top:132px;width:46px;height:46px}
+body.driver-mode #hud-voice{right:18px!important;top:188px!important;width:50px!important;height:50px!important}
+
+/* Tablet portrait is the actual field layout shown in the screenshots. */
+@media (min-width:600px) and (max-width:899px){
+  body.driver-mode .hud-instr{height:104px;min-height:104px;left:12px;right:12px}
+  body.driver-mode .hud-instr-icon{width:118px;min-width:118px;min-height:104px}
+  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:88px;height:88px}
+  body.driver-mode .hud-instr-dist{font-size:48px}
+  body.driver-mode .hud-instr-action{font-size:24px}
+  body.driver-mode .hud-instr-speed{width:90px;min-width:90px}
+  body.driver-mode .hud-spd-val{font-size:36px}
+  body.driver-mode .veh-wrap{width:64px;height:64px}
+  body.driver-mode .veh-bus svg{width:64px;height:64px}
+  body.driver-mode .nsc{width:min(520px,68vw);height:176px;grid-template-columns:minmax(0,1fr) 160px}
+  body.driver-mode .nsc-photo{width:160px;height:146px}
+  body.driver-mode .nsc-name{font-size:24px}
+  body.driver-mode .nsc-dist{font-size:54px}
+  body.driver-mode .evt-chip{min-height:34px;font-size:10px;padding:5px 7px}
+  body.driver-mode .evt-chip svg{width:22px!important;height:22px!important}
+}
+
+@media (max-width:599px){
+  body.driver-mode .hud-instr{height:92px;min-height:92px;left:8px;right:8px}
+  body.driver-mode .hud-instr-icon{width:88px;min-width:88px;min-height:92px}
+  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:74px;height:74px}
+  body.driver-mode .hud-instr-dist{font-size:38px}
+  body.driver-mode .hud-instr-action{font-size:19px}
+  body.driver-mode .hud-instr-speed{width:70px;min-width:70px}
+  body.driver-mode .hud-spd-val{font-size:30px}
+  body.driver-mode .nsc{left:8px;right:8px;bottom:8px;width:auto;max-width:none;height:154px;grid-template-columns:minmax(0,1fr) 120px}
+  body.driver-mode .nsc-photo{width:120px;height:126px}
+  body.driver-mode .nsc-name{font-size:20px}
+  body.driver-mode .nsc-dist{font-size:44px}
+  body.driver-mode .evt-chip{font-size:9px;padding:4px 5px}
+  body.driver-mode .evt-chip b{display:none}
+}
+
 </style>
 </head>
 <body>
@@ -3705,8 +3866,8 @@ function updInstruction(nearIdx,distFromStart){
     const dirLabel=g.kind==='TURN'
       ? `Turn ${g.dir||'ahead'}`
       : g.kind==='CURVE'
-        ? `Follow ${g.dir||'curve'}`
-        : 'Follow route';
+        ? 'Follow the road'
+        : 'Continue on route';
 
     el('hud-icon-arrow').innerHTML=guidanceArrowSvg(g.kind,g.dir,88);
     el('hud-icon').className=`hud-instr-icon ${g.kind==='TURN'?'turn':g.kind==='CURVE'?'straight':'straight'}`;
@@ -3715,19 +3876,19 @@ function updInstruction(nearIdx,distFromStart){
     const ahead=Math.max(0,(g.anchorM||routeProgressM)-routeProgressM);
     const distEl=el('hud-dist');
     if(g.kind==='STRAIGHT'){
-      distEl.textContent='↑';
+      distEl.textContent=fmtDist(ahead);
       distEl.className='hud-instr-dist far';
-      el('hud-action').textContent='Follow route';
+      el('hud-action').textContent='Continue on route';
     }else{
       distEl.textContent=fmtDist(ahead);
       distEl.className='hud-instr-dist '+(ahead>200?'far':ahead>50?'medium':'close');
       el('hud-action').textContent=dirLabel;
     }
     el('hud-detail').textContent=g.kind==='CURVE'
-      ? 'Road curve — keep following the route'
+      ? 'Road curve — follow the highlighted route'
       : g.kind==='TURN'
-        ? 'Visual guidance'
-        : 'Stay on the recorded route';
+        ? 'Follow the highlighted route'
+        : 'Stay on the highlighted route';
 
     const upcoming=maneuvers.filter(m=>m.idx>nearIdx&&m.distFromStart>distFromStart);
     const nextNext=upcoming.find(m=>m.type!=='arrive');
