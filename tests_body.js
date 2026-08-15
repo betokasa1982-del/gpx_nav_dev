@@ -57,9 +57,13 @@ console.assert(stops[1].state==='current','B arrive FAIL: '+stops[1].state);
 console.log('4. distinct sequential stops OK');
 
 // ══ TEST 5: rotation branch executes (DOMMatrix present, no crash) ══
-let svCalls=0; map.setView=()=>{svCalls++};
+// The stub is RESTORED afterwards: leaving a dead setView in place silently
+// disabled map centring for every later test in the file.
+const _realSetView=map.setView;
+let svCalls=0; map.setView=(...a)=>{svCalls++;return _realSetView.apply(map,a);};
 currentHeading=90; gps(57.706,11.97,30);
 console.assert(svCalls>0,'follow/rotation branch FAIL — setView never called');
+map.setView=_realSetView;
 console.log('5. rotation/follow branch OK');
 
 // ══ TEST 6: stopRec auto-loads the recording ══
@@ -1755,9 +1759,14 @@ __group('Playback tests');
   console.log(`PB-22. ${gap.toFixed(0)} m from occ2 but ${(alongGap/1000).toFixed(2)} km short on route: silent OK`);
 })();
 
-// ── PLAYBACK-23: turn instructions still speak during playback ──
+// ── PLAYBACK-23: generic turn voice is SUPPRESSED during playback ──
 (function(){
-  // straight north, then a 90° right — a genuine maneuver, no stops nearby
+  // SPEC CHANGE — this assertion is the reverse of its original form.
+  // Playback v2 §8 required turn voice to keep speaking during playback.
+  // Driver UX v3 §5/§34 reverses that: drivers reported "Turn left/right"
+  // firing on ordinary road bends, so direction moves to the Guidance Arrow
+  // and the generic maneuver voice is silenced while playback is active.
+  // Scheduler voice (stops, prepare, events) is unaffected — see MAP-UX-14.
   const corner=i=>i<=80?{lat:LAT0+i*DLAT,lng:LNG0}
                        :{lat:LAT0+80*DLAT,lng:LNG0+(i-80)*0.00017};
   const rec=mkRec('pb23',160,corner,[]);
@@ -1766,10 +1775,12 @@ __group('Playback tests');
   console.assert(Playback.active===true,'PB-23: playback not active');
   console.assert(maneuvers.some(m=>m.type==='right'),'PB-23: setup — no turn in the route');
   drivePts(rec,20,72,40,0);
-  const turnVoice=saidMatching(/right|left|turn/i);
-  console.assert(turnVoice.length>=1,
-    'PB-23: turn voice suppressed during playback: '+JSON.stringify(_spoken));
-  console.log('PB-23. turn voice still speaks during playback: "'+turnVoice[0]+'" OK');
+  const turnVoice=saidMatching(/turn|keep/i);
+  console.assert(turnVoice.length===0,
+    'PB-23: generic turn voice still fired during playback: '+JSON.stringify(turnVoice));
+  // and the visual channel did take over
+  console.assert(lastGuidance!=null,'PB-23: no guidance computed to replace the voice');
+  console.log('PB-23. generic turn voice suppressed, guidance='+lastGuidance.kind+' OK');
 })();
 
 // ── PLAYBACK-24: without playback, normal arrival voice is unchanged ──
@@ -1805,3 +1816,298 @@ __group('Playback tests');
 
 __group('Playback tests');
 speakText=_realSpeak;   // restore AFTER every playback case, including PB-21..25
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  DRIVER UX v3 — visual guidance, driving map, driver-focused stop card
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── driver UX v3 ──');
+// The playback suite restores the real speakText at its end; these cases
+// assert on voice too, so the spy is re-installed here and released below.
+const _realSpeak3=speakText;
+speakText=(t,f)=>{_spoken.push(String(t));};
+
+/* geometry builders: gentle bend, real junction, long sweeping curve */
+const uxStraight=i=>({lat:LAT0+i*DLAT,lng:LNG0});
+const uxJunction=i=>i<=80?{lat:LAT0+i*DLAT,lng:LNG0}                       // north
+                         :{lat:LAT0+80*DLAT,lng:LNG0+(i-80)*0.00017};      // then east
+function uxBend(totalDeg,overM){          // arc of totalDeg spread over overM
+  const stepM=10, n=Math.max(1,Math.round(overM/stepM));
+  return i=>{
+    let lat=LAT0,lng=LNG0,brg=0;
+    for(let k=0;k<i;k++){
+      if(k>=40&&k<40+n)brg+=totalDeg/n;                 // the bend starts at pt 40
+      const r=brg*Math.PI/180;
+      lat+=Math.cos(r)*stepM/111320;
+      lng+=Math.sin(r)*stepM/(111320*Math.cos(LAT0*Math.PI/180));
+    }
+    return{lat,lng};
+  };
+}
+function uxDrive(shape,n,to,kmh,hdg){
+  const rec=mkRec('ux',n,shape,[]);
+  beginPlayback(rec,1);
+  // Earlier suites leave the sliders wherever they finished; pin the ones
+  // this suite depends on so the cases are order-independent.
+  el('rng-follow').value='1'; el('rng-zoom').value='17';
+  drivePts(rec,0,to,kmh??30,hdg??0);
+  return rec;
+}
+
+// ── MAP-UX-1: vehicle stays 46-56 px ──
+(function(){
+  uxDrive(uxStraight,120,20,30,0);
+  const sz=posMarker._icon.iconSize;
+  console.assert(sz[0]>=46&&sz[0]<=56,'MAP-UX-1: vehicle '+sz[0]+' px outside 46-56');
+  console.assert(VEHICLE_PX>=46,'MAP-UX-1: VEHICLE_PX shrank to '+VEHICLE_PX);
+  console.log('MAP-UX-1. vehicle '+sz[0]+' px OK');
+})();
+
+// ── MAP-UX-2 / 3: zoom closes in when slow, never opens too far when fast ──
+(function(){
+  el('rng-zoom').value='17';
+  const slow=adaptiveZoom(5), city=adaptiveZoom(25), fast=adaptiveZoom(90);
+  console.assert(slow>city&&city>=adaptiveZoom(50),'MAP-UX-2: zoom does not tighten at low speed');
+  console.assert(slow>=17.5,'MAP-UX-2: low-speed zoom too wide: '+slow);
+  console.assert(fast>=15.5,'MAP-UX-3: high-speed zoom too wide: '+fast);
+  console.assert(adaptiveZoom(200)>=15.5,'MAP-UX-3: no lower clamp on zoom');
+  console.assert(slow-fast<=2.5,'MAP-UX-3: zoom swing too violent: '+(slow-fast));
+  console.log(`MAP-UX-2/3. zoom 5km/h=${slow} · 25=${city} · 90=${fast}, clamped OK`);
+})();
+
+// ── MAP-UX-4: map centre leads the vehicle (bus sits low on screen) ──
+(function(){
+  global.__setViewLog=[];
+  const rec=uxDrive(uxStraight,120,20,40,0);
+  const log=global.__setViewLog;
+  console.assert(log.length,'MAP-UX-4: map never centred');
+  const c=log[log.length-1].c;                 // the centre the last fix asked for
+  const veh={lat:rec.points[20].lat,lng:rec.points[20].lng};
+  // heading is north, so a leading centre must be NORTH of the vehicle
+  console.assert(c[0]>veh.lat,'MAP-UX-4: centre is not ahead of the vehicle');
+  const leadM=(c[0]-veh.lat)*111320;
+  console.assert(leadM>=60&&leadM<=160,'MAP-UX-4: lead offset '+leadM.toFixed(0)+' m out of range');
+  console.log('MAP-UX-4. centre leads the vehicle by '+leadM.toFixed(0)+' m OK');
+})();
+
+// ── MAP-UX-5: route ahead stays the visually dominant line ──
+(function(){
+  uxDrive(uxStraight,120,20,30,0);
+  const A=routeAheadLayer._opts,D=routeDoneLayer._opts,C=routeAheadCasingLayer._opts;
+  console.assert(A.weight>=7&&C.weight>A.weight,'MAP-UX-5: ahead lost its casing+weight');
+  console.assert(A.weight>D.weight,'MAP-UX-5: done is as heavy as ahead');
+  console.assert(routeAheadLayer._latlngs.length>1,'MAP-UX-5: no route ahead drawn');
+  console.log(`MAP-UX-5. ahead ${A.weight}px in ${C.weight}px casing, done ${D.weight}px OK`);
+})();
+
+// ── MAP-UX-6: straight stretch → arrow exists, STRAIGHT, no turn direction ──
+(function(){
+  uxDrive(uxStraight,140,30,30,0);
+  console.assert(guidanceMarker,'MAP-UX-6: no guidance arrow rendered');
+  console.assert(lastGuidance.kind==='STRAIGHT','MAP-UX-6: straight road classified '+lastGuidance.kind);
+  console.assert(lastGuidance.dir===null,'MAP-UX-6: straight road got a direction');
+  console.assert(/<svg/.test(guidanceMarker._icon.html),'MAP-UX-6: arrow is not SVG');
+  console.assert(!/[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/u.test(guidanceMarker._icon.html),
+    'MAP-UX-6: arrow contains an emoji/arrow glyph');
+  console.log('MAP-UX-6. straight → SVG arrow, kind=STRAIGHT OK');
+})();
+
+// ── MAP-UX-7 / §37 / §39: a gentle bend is CURVE, never TURN ──
+(function(){
+  // 40° spread over 150 m — the exact case from the spec
+  uxDrive(uxBend(40,150),140,45,30,0);
+  const g=computeGuidance(routeProgressM,30);
+  console.assert(g.kind!=='TURN','MAP-UX-7: gentle bend classified as TURN ('+
+    g.deltaDeg.toFixed(0)+'° over '+g.overM+' m)');
+  console.assert(g.kind==='CURVE'||g.kind==='STRAIGHT','MAP-UX-7: unexpected kind '+g.kind);
+  console.assert(!/TURN/.test(guidanceMarker._icon.html),'MAP-UX-7: aggressive turn arrow drawn');
+  console.log(`MAP-UX-7. bend ${Math.abs(g.deltaDeg).toFixed(0)}° over ${g.overM} m → ${g.kind} OK`);
+})();
+
+// ── MAP-UX-8 / §37: the same gentle bend produces NO turn voice ──
+(function(){
+  uxDrive(uxBend(40,150),140,20,30,0);
+  _spoken=[];lastVoiceKey='';lastVoiceManeuver='';
+  const rec=savedRecs[savedRecs.length-1];
+  drivePts(rec,21,70,30,0);
+  const v=saidMatching(/turn left|turn right|keep left|keep right/i);
+  console.assert(v.length===0,'MAP-UX-8: gentle bend spoke a turn: '+JSON.stringify(v));
+  console.log('MAP-UX-8. gentle bend → no turn voice OK');
+})();
+
+// ── MAP-UX-9 / §38: a real junction is TURN, with a direction ──
+(function(){
+  uxDrive(uxJunction,160,72,25,0);
+  const g=computeGuidance(routeProgressM,25);
+  console.assert(g.kind==='TURN','MAP-UX-9: junction classified '+g.kind+
+    ' ('+g.deltaDeg.toFixed(0)+'° over '+g.overM+' m)');
+  console.assert(g.dir==='right','MAP-UX-9: junction direction '+g.dir);
+  console.assert(/TURN/.test(guidanceMarker._icon.html),'MAP-UX-9: arrow not flagged as a turn');
+  console.assert(saidMatching(/turn right/i).length===0,'MAP-UX-9: junction still spoke');
+  console.log(`MAP-UX-9. junction ${Math.abs(g.deltaDeg).toFixed(0)}° over ${g.overM} m → TURN right, silent OK`);
+})();
+
+// ── MAP-UX-10 / 11: the arrow is correct heading-up AND north-up ──
+(function(){
+  uxDrive(uxJunction,160,72,25,0);
+  const rotOf=()=>parseFloat(/rotate\(([-\d.]+)deg\)/.exec(guidanceMarker._icon.html)[1]);
+  // north-up
+  el('rng-follow').value='0'; setMapBearing(0);
+  renderGuidanceArrow(computeGuidance(routeProgressM,25));
+  const north=rotOf();
+  const norm=a=>((a%360)+360)%360;
+  console.assert(Math.abs(norm(north)-norm(lastGuidance.bearing))<1,
+    'MAP-UX-11: north-up arrow does not carry the route bearing: '+north);
+  // heading-up: the container rotates by -heading, so the arrow's own rotation
+  // stays absolute and the VISUAL result is the bearing relative to travel
+  setMapBearing(-90);
+  renderGuidanceArrow(computeGuidance(routeProgressM,25));
+  const up=rotOf();
+  console.assert(Math.abs(norm(up)-norm(north))<1,'MAP-UX-10: arrow rotation drifted with the map');
+  const visual=norm(up+_lastBearing);
+  console.assert(Math.abs(visual-norm(lastGuidance.bearing-90))<1,
+    'MAP-UX-10: heading-up visual angle wrong: '+visual);
+  console.assert(!/rotate\(0deg\)/.test(guidanceMarker._icon.html)||lastGuidance.bearing===0,
+    'MAP-UX-10: arrow hard-coded to up');
+  setMapBearing(0); el('rng-follow').value='1';
+  console.log(`MAP-UX-10/11. arrow ${north.toFixed(0)}° absolute; heading-up visual ${visual.toFixed(0)}° OK`);
+})();
+
+// ── MAP-UX-12 / 13: no "Turn left"/"Turn right" anywhere during playback ──
+(function(){
+  uxDrive(uxJunction,160,20,30,0);
+  _spoken=[];lastVoiceKey='';lastVoiceManeuver='';
+  const rec=savedRecs[savedRecs.length-1];
+  drivePts(rec,21,120,30,0);
+  console.assert(saidMatching(/turn left/i).length===0,'MAP-UX-12: "Turn left" spoken');
+  console.assert(saidMatching(/turn right/i).length===0,'MAP-UX-13: "Turn right" spoken');
+  console.assert(saidMatching(/keep (left|right)/i).length===0,'MAP-UX-12/13: "Keep ..." spoken');
+  console.log('MAP-UX-12/13. no turn/keep voice across a junction during playback OK');
+})();
+
+// ── MAP-UX-14 / §6: the Voice Scheduler is untouched by the suppression ──
+(function(){
+  const rec=mkRec('ux14',200,uxStraight,[100]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  beginPlayback(rec,1);
+  el('rng-radius').value='80';
+  drivePts(rec,60,101,20,0);
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===1,'MAP-UX-14: approach voice lost');
+  console.assert(saidMatching(/open doors, kneeling and hand brake required/).length>=1,
+    'MAP-UX-14: event voice lost: '+JSON.stringify(_spoken));
+  console.assert(saidMatching(/Prepare to stop/).length===1,'MAP-UX-14: prepare voice lost');
+  console.log('MAP-UX-14. scheduler intact: approach + prepare + events OK');
+})();
+
+// ── MAP-UX-15 / 16 / 17: bigger type, dominant distance, bigger photo ──
+(function(){
+  const css=document.__cssText||'';
+  const px=(sel,prop)=>{
+    const m=new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\{[^}]*'+prop+':(\\d+)px').exec(css);
+    return m?+m[1]:null;
+  };
+  const dist=px('.nsc-dist','font-size'), name=px('.nsc-name','font-size'),
+        photo=px('.nsc-photo','height');
+  console.assert(dist>=40,'MAP-UX-16: distance font only '+dist+'px');
+  console.assert(name>=16,'MAP-UX-15: stop name font only '+name+'px');
+  console.assert(dist>name,'MAP-UX-16: distance is not the dominant element');
+  console.assert(photo>=140,'MAP-UX-17: photo only '+photo+'px tall');
+  console.assert(photo>96,'MAP-UX-17: photo not larger than the previous 96px');
+  console.log(`MAP-UX-15/16/17. name ${name}px · distance ${dist}px · photo ${photo}px OK`);
+})();
+
+// ── MAP-UX-18 / 19: three SVG events, belonging to the right occurrence ──
+(function(){
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('ux19',300,loop,[60,239]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  rec.stops[0].photo='data:image/jpeg;base64,AAAAOCC1';
+  rec.stops[1].events=['kneeling'];
+  rec.stops[1].photo='data:image/jpeg;base64,BBBBOCC2';
+  beginPlayback(rec,1);
+  updNextStopCard(LAT0,LNG0);
+  const b=el('nsc-events').innerHTML;
+  console.assert((b.match(/<svg/g)||[]).length===3,'MAP-UX-18: expected 3 SVG icons, got '+
+    (b.match(/<svg/g)||[]).length);
+  console.assert(!/[\u{1F300}-\u{1FAFF}]/u.test(b),'MAP-UX-18: emoji returned to the events row');
+  console.assert(/Open Door/.test(b)&&/Kneeling/.test(b)&&/Hand Brake/.test(b),'MAP-UX-18: labels missing');
+  console.assert(/aria-label/.test(b),'MAP-UX-29: no aria-label on the event icons');
+  console.assert(el('nsc-photo').src==='data:image/jpeg;base64,AAAAOCC1',
+    'MAP-UX-19: wrong occurrence photo: '+el('nsc-photo').src);
+  markDone(stops[0].id);
+  updNextStopCard(LAT0,LNG0);
+  console.assert(el('nsc-photo').src==='data:image/jpeg;base64,BBBBOCC2',
+    'MAP-UX-19: photo did not follow to occurrence 2');
+  console.assert(!/Hand Brake/.test(el('nsc-events').innerHTML),
+    'MAP-UX-19: occurrence 1 events leaked into occurrence 2');
+  console.log('MAP-UX-18/19. 3 SVG events with labels; photo+events follow the occurrence OK');
+})();
+
+// ── MAP-UX-20: no photo → no empty frame ──
+(function(){
+  const rec=mkRec('ux20',200,uxStraight,[100]);
+  rec.stops[0].events=['openDoor'];rec.stops[0].photo=null;
+  beginPlayback(rec,1);
+  updNextStopCard(LAT0,LNG0);
+  console.assert(el('nsc-photo').style.display==='none','MAP-UX-20: empty photo frame left visible');
+  console.assert(el('nsc-name').textContent.length>0,'MAP-UX-20: card broke without a photo');
+  console.assert(el('nsc-events').style.display!=='none','MAP-UX-20: events hidden with no photo');
+  console.log('MAP-UX-20. no photo → frame hidden, card still complete OK');
+})();
+
+// ── MAP-UX-21 / §32: diagnostics stay in Navigation Debug, off the driving UI ──
+(function(){
+  const rec=mkRec('ux21',200,uxStraight,[100]);
+  beginPlayback(rec,1);
+  toggleNavDebug(true);
+  drivePts(rec,10,40,30,0);
+  const dbg=el('nav-debug-txt').textContent;
+  console.assert(/x-track/.test(dbg)&&/conf/.test(dbg)&&/segment/.test(dbg),
+    'MAP-UX-21: Navigation Debug lost its technical fields');
+  console.assert(/PLAYBACK/.test(dbg)||/STOP ANCHOR/.test(dbg),'MAP-UX-21: debug blocks missing');
+  // and none of it leaked into the driver-facing card
+  const card=(el('nsc-name').textContent||'')+(el('nsc-dist').textContent||'')+
+             (el('nsc-events').innerHTML||'')+(el('nsc-plan').textContent||'');
+  console.assert(!/x-track|conf |cross|matcher|routeIdx/i.test(card),
+    'MAP-UX-21: diagnostics leaked into the Next Stop Card');
+  toggleNavDebug(false);
+  console.assert(el('nav-debug').classList.contains('on')===false,'MAP-UX-21: debug did not close');
+  console.log('MAP-UX-21. debug intact and separate from the driving UI OK');
+})();
+
+// ── MAP-UX-22 / §40: the visual layer does not disturb occurrence identity ──
+(function(){
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('ux22',300,loop,[60,239]);
+  rec.stops[0].events=['openDoor'];rec.stops[1].events=['kneeling'];
+  beginPlayback(rec,1);
+  el('rng-radius').value='80';
+  drivePts(rec,0,62,25,0);
+  console.assert(stops[0].state==='current','MAP-UX-22: occ1 did not arrive');
+  markDone(stops[0].id);
+  _spoken=[];
+  for(let i=0;i<6;i++) gpsH(rec.points[62].lat,rec.points[62].lng,5,0);
+  console.assert(saidMatching(/Stop \d/).length===0,
+    'MAP-UX-22: out-and-back identification broke: '+JSON.stringify(_spoken));
+  console.assert(stops[1].state==='waiting','MAP-UX-22: wrong occurrence arrived');
+  console.log('MAP-UX-22. out-and-back occurrence identity unaffected by the visual layer OK');
+})();
+
+// ── MAP-UX-23 / §41: laps still work with guidance active ──
+(function(){
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('ux23',300,loop,[70]);
+  beginPlayback(rec,3);
+  drivePts(rec,0,71,25,0); markDone(stops[0].id);
+  drivePts(rec,72,149,30,0); drivePts(rec,150,299,30,180);
+  console.assert(LapManager.currentLap===2,'MAP-UX-23: lap did not advance: '+LapManager.currentLap);
+  console.assert(guidanceMarker,'MAP-UX-23: guidance arrow lost across the lap boundary');
+  console.log('MAP-UX-23. LAP 2/3 reached with guidance active OK');
+})();
+
+speakText=_realSpeak3;
+console.log('ALL DRIVER-UX TESTS PASSED');
+__group('Driver UX tests');

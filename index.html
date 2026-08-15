@@ -92,7 +92,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 body.stops-open .lcm{opacity:0;pointer-events:none}
 
 /* ── NEXT STOP CARD ── */
-.nsc{position:absolute;right:10px;top:215px;width:195px;
+.nsc-name{font-size:17px;font-weight:800;line-height:1.15;margin:2px 0 1px;
+  color:#e8eef6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nsc{position:absolute;right:10px;top:215px;width:236px;
   max-width:calc(100vw - 20px);max-height:calc(100vh - 260px);overflow:hidden;
   box-sizing:border-box;
   background:rgba(13,17,23,.97);border:1px solid var(--border);
@@ -101,13 +103,16 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   box-shadow:0 4px 18px rgba(0,0,0,.55)}
 .nsc-head{display:flex;justify-content:space-between;font-size:11px;
   letter-spacing:1.5px;color:#aeb9c4;font-weight:800;font-family:var(--mono)}
-.nsc-dist{font-family:var(--mono);font-size:34px;font-weight:800;
+.nsc-dist{font-family:var(--mono);font-size:44px;font-weight:800;
   color:var(--accent);line-height:1.15;margin:3px 0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nsc.atstop .nsc-dist{color:var(--green,#3fb950)}
 .nsc.atstop{border-left-color:#3fb950}
 .nsc-row{display:flex;justify-content:space-between;align-items:center;
   font-size:13px;margin-top:2px;color:#e6edf3}
+.guid-icon{background:none;border:none}
+.guid-wrap{width:54px;height:54px;line-height:0;pointer-events:none;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));transition:transform .35s linear}
 .veh-icon{background:none;border:none}
 .veh-wrap{position:relative;width:46px;height:46px;display:flex;
   align-items:center;justify-content:center;pointer-events:none}
@@ -141,7 +146,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   color:var(--green);border-color:var(--green)}
 .evt-btn.active .evt-state{opacity:1;background:var(--green);color:#0d1117;border-color:var(--green)}
 .nsc-leg{color:#79b8ff;font-family:var(--mono);font-size:13px;font-weight:700}
-.nsc-photo{width:100%;height:96px;object-fit:cover;border-radius:8px;
+.nsc-photo{width:100%;height:158px;object-fit:cover;border-radius:8px;
   margin-top:8px;border:1px solid var(--border);cursor:pointer;
   display:block;max-width:100%}
 @keyframes mkpg{0%{box-shadow:0 0 0 0 rgba(63,185,80,.65)}70%{box-shadow:0 0 0 16px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
@@ -159,13 +164,14 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   .hud-spd-val{font-size:42px}
   .hud-tgt{font-size:14px}
   .stab{font-size:12px;padding:13px 2px}
-  .nsc{width:256px;top:235px;padding:12px 14px}
-  .nsc-dist{font-size:50px}
+  .nsc{width:320px;top:235px;padding:14px 16px}
+  .nsc-name{font-size:21px}
+  .nsc-dist{font-size:62px}
   .nsc-row{font-size:15px}
   .nsc-evt{gap:6px}
   .evt-chip{font-size:12px;padding:4px 9px}
   .nsc-leg{font-size:14px}
-  .nsc-photo{height:140px}
+  .nsc-photo{height:210px}
   .lcm{width:256px;top:495px;padding:11px 14px}
   .lcm-l{font-size:14px}
   .lcm-v{font-size:24px}
@@ -589,6 +595,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
     <!-- Next Stop Card: the driver's primary reference on 10" tablets -->
     <div class="nsc" id="nsc">
       <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
+      <div class="nsc-name" id="nsc-name"></div>
       <div class="nsc-dist" id="nsc-dist">—</div>
       <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
       <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
@@ -1796,6 +1803,7 @@ function parseGPX(xml,filename){
   loadedCycleMeta={name:name||'gpx',date:''};
   playbackCycle=compileCycle();
   Playback.stop();
+  clearGuidanceArrow();
 
   // Stats
   const totalProg=stops.reduce((a,s)=>a+s.dur_s,0);
@@ -2386,6 +2394,161 @@ const Playback={
                  :LapManager.label();
   },
 };
+/* ══ VISUAL GUIDANCE — presentation layer, reads route geometry only ══════
+   §9/§11: the arrow is derived from the ROUTE GEOMETRY, never from the text
+   of a maneuver — deriving it from "Turn left" would reproduce the very bug
+   we are fixing. Nothing here writes engine state; routePts/routeCumM are
+   read-only inputs.
+
+   The distinction that matters is SPATIAL SCALE, not magnitude alone:
+
+     road bend    40° spread over 150 m  → CURVE  (follow the road)
+     junction     90° concentrated in 15 m → TURN  (a real decision point)
+
+   A pure `headingChange > X` rule cannot tell those apart, which is why the
+   classifier measures how much of the change is concentrated in a short
+   distance as well as how much there is in total. When the evidence is
+   ambiguous it returns CURVE, never TURN: over-reporting a turn is the
+   failure mode drivers complained about.                                   */
+const GUIDANCE_CFG={
+  lookAheadMinM : 50,   // §14: arrow sits 50-150 m ahead, by speed
+  lookAheadMaxM :150,
+  windowM       : 25,   // bearing-averaging window each side
+  spanM         :160,   // how far ahead the classifier inspects
+  turnDeltaDeg  : 55,   // a junction turns at least this much...
+  turnWithinM   : 35,   // ...and does it inside this distance
+  curveDeltaDeg : 18,   // below this the road is effectively straight
+};
+
+/* bearing of the route around a given distance-along, averaged over a window */
+function _routeBearingAt(routeM){
+  if(routeCumM.length<2)return null;
+  const a=idxAtMetres(Math.max(0,routeM-GUIDANCE_CFG.windowM/2));
+  const b=idxAtMetres(Math.min(routeCumM[routeCumM.length-1],routeM+GUIDANCE_CFG.windowM/2));
+  if(a===b||!routePts[a]||!routePts[b])return null;
+  if(haversine(routePts[a].lat,routePts[a].lon,routePts[b].lat,routePts[b].lon)*1000<3)return null;
+  return brng(routePts[a].lat,routePts[a].lon,routePts[b].lat,routePts[b].lon);
+}
+
+/* §13: STRAIGHT / CURVE / TURN, plus where to draw the arrow */
+function computeGuidance(routeM,speedKmh){
+  const out={kind:'STRAIGHT',dir:null,deltaDeg:0,overM:0,
+             anchorM:routeM,bearing:null,entryBearing:null,confident:false};
+  if(!routePts.length||routeCumM.length<2)return out;
+  const total=routeCumM[routeCumM.length-1];
+  const entry=_routeBearingAt(routeM);
+  if(entry==null)return out;
+  out.entryBearing=entry; out.bearing=entry;
+
+  // Sample how far the route has swung away from the entry bearing.
+  const samples=[];
+  let maxDelta=0;
+  for(let d=0;d<=GUIDANCE_CFG.spanM;d+=5){
+    const m=routeM+d;
+    if(m>=total)break;
+    const b=_routeBearingAt(m);
+    if(b==null)continue;
+    const delta=angleDiff(entry,b);
+    samples.push({d,delta});
+    if(Math.abs(delta)>Math.abs(maxDelta))maxDelta=delta;
+  }
+
+  // The decisive quantity is the LENGTH OF THE TRANSITION, not how far away
+  // it is: measure the distance between where the swing starts (10% of the
+  // total) and where it is essentially complete (90%). A junction does its
+  // 90° inside ~30 m; a road bend spreads the same angle over 150 m.
+  // (An earlier version compared the DISTANCE TO the swing instead, which
+  // classified every junction as a curve — the arrow was never a turn.)
+  let startD=null,endD=null;
+  if(Math.abs(maxDelta)>0.001){
+    for(const s of samples){
+      const frac=Math.abs(s.delta)/Math.abs(maxDelta);
+      if(startD===null&&frac>=0.10)startD=s.d;
+      if(endD===null&&frac>=0.90)endD=s.d;
+    }
+  }
+  const transitionM = (startD!=null&&endD!=null&&endD>=startD) ? (endD-startD) : GUIDANCE_CFG.spanM;
+  out.deltaDeg=maxDelta; out.overM=transitionM;
+
+  const concentrated = Math.abs(maxDelta)>=GUIDANCE_CFG.turnDeltaDeg
+                       && transitionM<=GUIDANCE_CFG.turnWithinM;
+  if(concentrated){
+    out.kind='TURN'; out.confident=true;
+  }else if(Math.abs(maxDelta)>=GUIDANCE_CFG.curveDeltaDeg){
+    out.kind='CURVE'; out.confident=true;                 // road bend — follow it
+  }else{
+    out.kind='STRAIGHT'; out.confident=true;
+  }
+  out.dir = Math.abs(maxDelta)<GUIDANCE_CFG.curveDeltaDeg ? null
+          : (maxDelta>0?'right':'left');
+
+  // §14: anchor near the vehicle, further ahead when moving faster
+  const v=speedKmh||0;
+  const look=Math.max(GUIDANCE_CFG.lookAheadMinM,
+              Math.min(GUIDANCE_CFG.lookAheadMaxM,GUIDANCE_CFG.lookAheadMinM+v*1.6));
+  out.anchorM=Math.min(total,routeM+look);
+  const ab=_routeBearingAt(out.anchorM);
+  if(ab!=null)out.bearing=ab;
+  return out;
+}
+
+/* Arrow SVG. Shape carries the meaning (§8: no emojis, no system fonts):
+   straight shaft, swept shaft, or an L-shaped junction arrow.             */
+function guidanceArrowSvg(kind,dir){
+  const S=54, stroke='#0d1117';
+  const body={
+    STRAIGHT:'<path d="M27 8 L27 46 M27 8 L18 20 M27 8 L36 20"/>',
+    CURVE_right:'<path d="M22 46 C22 30 28 20 38 14 M38 14 L28 13 M38 14 L34 23"/>',
+    CURVE_left :'<path d="M32 46 C32 30 26 20 16 14 M16 14 L26 13 M16 14 L20 23"/>',
+    TURN_right :'<path d="M18 46 L18 20 L38 20 M38 20 L28 11 M38 20 L28 29"/>',
+    TURN_left  :'<path d="M36 46 L36 20 L16 20 M16 20 L26 11 M16 20 L26 29"/>',
+  };
+  const key = kind==='STRAIGHT'?'STRAIGHT':`${kind}_${dir||'right'}`;
+  const d=body[key]||body.STRAIGHT;
+  return `<svg viewBox="0 0 54 54" width="${S}" height="${S}" aria-hidden="true">
+    <g fill="none" stroke="${stroke}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".55">${d}</g>
+    <g fill="none" stroke="var(--accent,#f0a500)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">${d}</g>
+  </svg>`;
+}
+
+let guidanceMarker=null, lastGuidance=null;
+
+/* Draw/refresh the arrow. §16: above the route, below stops and the vehicle. */
+function renderGuidanceArrow(g){
+  lastGuidance=g;
+  if(!map||!g||!routePts.length){return;}
+  const idx=idxAtMetres(g.anchorM);
+  const p=routePts[idx];
+  if(!p)return;
+  // §15: the arrow is rotated by the ABSOLUTE route bearing. Under heading-up
+  // the map container itself is rotated by -heading, so the visual result is
+  // the bearing RELATIVE to travel; under north-up the container is unrotated
+  // and the same value reads as an absolute bearing. Correct in both without
+  // hard-coding "up" anywhere.
+  const rot=g.bearing==null?0:g.bearing;
+  const html=`<div class="guid-wrap" data-kind="${g.kind}" data-dir="${g.dir||''}"
+      style="transform:rotate(${rot}deg)">${guidanceArrowSvg(g.kind,g.dir)}</div>`;
+  const icon=L.divIcon({html,className:'guid-icon',iconSize:[54,54],iconAnchor:[27,27]});
+  if(!guidanceMarker) guidanceMarker=L.marker([p.lat,p.lon],{icon,zIndexOffset:500,
+                        interactive:false}).addTo(map);
+  else{guidanceMarker.setLatLng([p.lat,p.lon]);guidanceMarker.setIcon(icon);}
+}
+function clearGuidanceArrow(){
+  if(guidanceMarker&&map){try{map.removeLayer(guidanceMarker);}catch(e){}}
+  guidanceMarker=null; lastGuidance=null;
+}
+
+/* §19/§20: zoom follows speed, clamped so the driver never loses the scene. */
+const ZOOM_BY_SPEED=[
+  {maxKmh:10,zoom:18},{maxKmh:30,zoom:17.5},{maxKmh:60,zoom:17},{maxKmh:Infinity,zoom:16.5},
+];
+function adaptiveZoom(speedKmh){
+  const base=+el('rng-zoom').value||17;
+  const row=ZOOM_BY_SPEED.find(r=>(speedKmh||0)<=r.maxKmh);
+  // the slider stays the driver's baseline; speed shifts it within a band
+  const z=base+(row.zoom-17);
+  return Math.max(15.5,Math.min(18.5,z));      // §20: never excessively wide
+}
 function onGPS(pos){
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
@@ -2435,19 +2598,22 @@ function onGPS(pos){
   if(posMarker.setZIndexOffset)posMarker.setZIndexOffset(5000);
 
   if(+el('rng-follow').value===1){
-    const zoom=+el('rng-zoom').value;
+    // §19: zoom tracks speed so the scale always matches how fast the scene
+    // is changing — close in traffic, wider on the motorway, clamped both ways.
+    const zoom=adaptiveZoom(rawKmh);
     if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
       // Heading-up: rotate map to put direction of travel at top
       setMapBearing(-currentHeading); // negative = rotate map opposite to heading
-      // Offset center slightly behind vehicle (show more route ahead)
+      // §21: push the CENTRE ahead of the vehicle so the bus sits low on the
+      // screen and the road ahead gets the space. Larger offset at speed.
       const hr=currentHeading*Math.PI/180;
-      const offM=40; // metres behind
-      const dLat=Math.cos(hr+Math.PI)*offM/111320;
-      const dLng=Math.sin(hr+Math.PI)*offM/(111320*Math.cos(lat*Math.PI/180));
-      map.setView([lat+dLat,lng+dLng],zoom,{animate:true,duration:.4,noMoveStart:true});
+      const offM=Math.max(70,Math.min(150,70+(rawKmh||0)*1.2)); // metres AHEAD
+      const dLat=Math.cos(hr)*offM/111320;
+      const dLng=Math.sin(hr)*offM/(111320*Math.cos(lat*Math.PI/180));
+      map.setView([lat+dLat,lng+dLng],zoom,{animate:true,duration:.6,noMoveStart:true});
     }else{
       setMapBearing(0); // north-up when stopped
-      map.setView([lat,lng],zoom,{animate:true,duration:.5});
+      map.setView([lat,lng],zoom,{animate:true,duration:.6});
     }
   }
 
@@ -2462,6 +2628,9 @@ function onGPS(pos){
 
   // Arrival check (rawKmh passed in — it's local to this function)
   const stopsBefore=stops.filter(x=>x.state!=='waiting').length;
+  // §4/§7: visual guidance derived from route geometry at the current
+  // position — presentation only, computed after the engine has spoken.
+  if(navActive&&routePts.length)renderGuidanceArrow(computeGuidance(routeProgressM,rawKmh));
   checkArrival(lat,lng,rawKmh,match,accuracy);
   // §29: GPS → engine → routeProgressM → playback. No second matcher.
   if(navActive)Playback.update(routeProgressM);
@@ -2635,6 +2804,9 @@ function updNextStopCard(lat,lng){
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
   }
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
+  // §26: the stop NAME is part of the glance-level answer, not a detail.
+  const _nm=el('nsc-name');
+  if(_nm)_nm.textContent=next.name||('Stop '+next.id);
   // Events come from `next` only (§18): when a stop turns done the card is
   // rebuilt for the following stop, so nothing from the previous one lingers.
   const _ev=normalizeStopEvents(next.events);
@@ -3263,7 +3435,15 @@ function updInstruction(nearIdx,distFromStart){
   // leaks "Arrived at destination" into the new lap. Playback speaks its own
   // endings ("Lap X of Y", "All laps complete"). The HUD still SHOWS every
   // instruction; only the voice is gated, and turn voice keeps speaking.
-  const _pbOwnsVoice=Playback.active&&(type==='stop'||type==='arrive');
+  // §5/§34: during playback the Guidance Arrow carries direction, so generic
+  // turn/keep instructions are suppressed — they were firing on ordinary road
+  // bends and telling drivers to turn where there is no junction. Every
+  // Voice Scheduler message (stops, prepare, events) is untouched: this gate
+  // only covers the maneuver instruction channel. §12: nothing is substituted
+  // when the arrow is unsure — silence beats a wrong instruction.
+  const TURN_TYPES=['left','right','sl','sr','shl','shr','uturn','straight'];
+  const _pbOwnsVoice=Playback.active&&
+    (type==='stop'||type==='arrive'||TURN_TYPES.indexOf(type)>=0);
   if(distM>0&&distM<600&&!_pbOwnsVoice) maybeSpeak(type||cls,label,distM);
 
   // Update peek bar

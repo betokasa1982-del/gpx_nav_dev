@@ -10,6 +10,16 @@ function loadAppCode(){
   return blocks.reduce((a,b)=>b.length>a.length?b:a);
 }
 let code=loadAppCode();
+// expose the page CSS so UI tests can assert real font sizes / dimensions
+{
+  // CSS comes from index.html wherever it lives — the repo copy, or the dev
+  // checkout when only main.js sits next to the runner.
+  const cands=[path.join(HERE,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html'];
+  const f=cands.find(p=>fs.existsSync(p));
+  global.__pageCss = f
+    ? [...fs.readFileSync(f,'utf8').matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n')
+    : '';
+}
 
 // ── Mock DOM ──
 const elems={};
@@ -39,6 +49,7 @@ global.document={
   createElement:t=>mkEl('_dyn_'+Math.random()),
   addEventListener(){},
   visibilityState:'visible',
+  get __cssText(){return global.__pageCss||''},
   body:mkEl('__body'),
   documentElement:mkEl('__html')
 };
@@ -67,9 +78,9 @@ const mkLayer=(opts)=>({_opts:opts||{},_latlngs:[],
   setIcon(i){this._icon=i},setLatLng(){return this},setZIndexOffset(z){this._opts.zIndexOffset=z},
   bindTooltip(){return this},bindPopup(){return this},openPopup(){}});
 global.L={
-  map:()=>({getContainer:()=>(global.__mapC??(global.__mapC={style:{},classList:{_s:new Set(),toggle(c,f){f?this._s.add(c):this._s.delete(c)},add(){},remove(){},contains(c){return this._s.has(c)}},querySelector:()=>null,addEventListener(){}})),on(){},invalidateSize(){},setView(){},fitBounds(){},setZoom(){},getZoom:()=>17,removeLayer(){},getSize:()=>({x:800,y:600})}),
+  map:()=>({getContainer:()=>(global.__mapC??(global.__mapC={style:{},classList:{_s:new Set(),toggle(c,f){f?this._s.add(c):this._s.delete(c)},add(){},remove(){},contains(c){return this._s.has(c)}},querySelector:()=>null,addEventListener(){}})),on(){},invalidateSize(){},setView(c,z){this._lastCenter=c;this._lastZoom=z;(global.__setViewLog=global.__setViewLog||[]).push({c,z});},fitBounds(){},setZoom(z){this._lastZoom=z;},getZoom(){return this._lastZoom??17},removeLayer(){},getSize:()=>({x:800,y:600})}),
   tileLayer:(u,o)=>mkLayer(o), polyline:(ll,o)=>{const L=mkLayer(o);L._latlngs=ll;return L},
-  marker:(ll,o)=>{const m=mkLayer(o);m._icon=o&&o.icon;return m},
+  marker:(ll,o)=>{const m=mkLayer(o);m._icon=o&&o.icon;m._latlng={lat:ll[0],lng:ll[1]};m.setLatLng=function(v){this._latlng={lat:v[0],lng:v[1]};return this};m.setIcon=function(i){this._icon=i};return m},
   circle:(ll,o)=>mkLayer(o), divIcon:(o)=>({_divIcon:true,...o}),
   control:{zoom:()=>({addTo(){}})}
 };
