@@ -538,6 +538,312 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .leaflet-popup-content-wrapper{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px}
 .leaflet-popup-tip{background:var(--panel)}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRIVER UX v4 — production navigation presentation
+   Presentation-only. Navigation / Playback state remains untouched.
+   Design goal: one-second glance recognition on an embedded 10" display.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --driver-surface:rgba(13,17,23,.96);
+  --driver-surface-2:rgba(22,27,34,.94);
+  --driver-line:rgba(255,255,255,.12);
+  --driver-shadow:0 10px 34px rgba(0,0,0,.48);
+  --driver-radius:16px;
+}
+
+/* The map is the stage; overlays should feel like one coherent navigation UI. */
+body.driver-mode .map-wrap{background:#0b0f14}
+body.driver-mode #map{background:#101722}
+
+/* ── Main guidance card: large, glanceable, no tiny "turn" strip ── */
+body.driver-mode .hud-instr{
+  position:absolute;
+  top:12px;left:12px;right:12px;
+  min-height:112px;
+  height:auto;
+  display:flex;
+  align-items:stretch;
+  overflow:hidden;
+  background:linear-gradient(135deg,rgba(13,17,23,.98),rgba(22,27,34,.96));
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:18px;
+  box-shadow:var(--driver-shadow);
+  backdrop-filter:blur(14px);
+  pointer-events:none;
+}
+body.driver-mode .hud-instr-icon{
+  width:116px;min-width:116px;
+  min-height:112px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:2px;
+  border-right:1px solid var(--driver-line);
+  background:rgba(240,165,0,.08);
+}
+body.driver-mode .hud-instr-icon.straight{background:rgba(88,166,255,.08)}
+body.driver-mode .hud-instr-icon.turn{background:rgba(240,165,0,.13)}
+body.driver-mode .hud-instr-icon.stop{background:rgba(248,81,73,.10)}
+body.driver-mode .hud-instr-icon.arrive{background:rgba(63,185,80,.10)}
+
+body.driver-mode #hud-icon-arrow{
+  width:88px;height:88px;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+body.driver-mode #hud-icon-arrow svg{
+  width:88px;height:88px;
+  display:block;
+}
+body.driver-mode .hud-icon-lbl{
+  display:none;
+}
+body.driver-mode .hud-instr-body{
+  padding:12px 18px;
+  justify-content:center;
+  gap:2px;
+}
+body.driver-mode .hud-instr-dist{
+  font-size:42px;
+  line-height:.95;
+  font-weight:800;
+  letter-spacing:-1px;
+}
+body.driver-mode .hud-instr-action{
+  font-size:24px;
+  line-height:1.05;
+  font-weight:800;
+  margin:4px 0 0;
+}
+body.driver-mode .hud-instr-detail{
+  font-size:13px;
+  line-height:1.2;
+}
+body.driver-mode .hud-next-preview{
+  font-size:12px;
+  margin-top:3px;
+}
+body.driver-mode .hud-instr-speed{
+  width:94px;min-width:94px;
+  padding:12px 10px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  border-left:1px solid var(--driver-line);
+  background:rgba(0,0,0,.12);
+}
+body.driver-mode .hud-spd-val{
+  font-size:38px;
+  line-height:.9;
+  font-weight:800;
+}
+body.driver-mode .hud-spd-unit{
+  font-size:11px;
+  margin-top:5px;
+}
+body.driver-mode .hud-tgt{
+  font-size:11px;
+  margin-top:8px;
+}
+
+/* ── Vehicle: much easier to spot ── */
+body.driver-mode .veh-wrap{
+  width:56px;height:56px;
+}
+body.driver-mode .veh-bus svg{
+  width:56px;height:56px;
+}
+body.driver-mode .veh-halo{
+  inset:-7px;
+}
+
+/* ── Map guidance marker is secondary to the big HUD arrow ── */
+body.driver-mode .guid-wrap{
+  width:72px;height:72px;
+  filter:drop-shadow(0 3px 7px rgba(0,0,0,.72));
+}
+body.driver-mode .guid-wrap svg{
+  width:72px;height:72px;
+}
+
+/* ── Next Stop: large, compact, lower-right, never in front of the guidance ── */
+body.driver-mode .nsc{
+  right:16px;
+  top:auto;
+  bottom:76px;
+  width:min(340px,44vw);
+  max-width:calc(100vw - 32px);
+  max-height:46vh;
+  overflow:hidden;
+  padding:14px 16px;
+  border:1px solid rgba(255,255,255,.14);
+  border-left:5px solid var(--accent);
+  border-radius:18px;
+  background:linear-gradient(145deg,rgba(13,17,23,.98),rgba(22,27,34,.96));
+  box-shadow:var(--driver-shadow);
+  backdrop-filter:blur(14px);
+}
+body.driver-mode .nsc-head{
+  font-size:12px;
+  letter-spacing:2px;
+}
+body.driver-mode .nsc-name{
+  font-size:25px;
+  line-height:1.05;
+  margin:5px 0 2px;
+}
+body.driver-mode .nsc-dist{
+  font-size:60px;
+  line-height:.95;
+  margin:5px 0 7px;
+  letter-spacing:-1px;
+}
+body.driver-mode .nsc-row{
+  font-size:14px;
+}
+body.driver-mode .nsc-leg{
+  font-size:13px;
+}
+body.driver-mode .nsc-events{
+  gap:7px;
+  margin:8px 0 3px;
+}
+body.driver-mode .evt-chip{
+  min-height:38px;
+  padding:7px 9px;
+  gap:6px;
+  border-radius:10px;
+  font-size:12px;
+}
+body.driver-mode .evt-chip svg{
+  width:24px!important;height:24px!important;
+}
+body.driver-mode .nsc-photo{
+  height:180px;
+  margin-top:9px;
+  border-radius:10px;
+  border-color:rgba(255,255,255,.16);
+}
+
+/* ── Route progress: clean, compact, bottom-left ── */
+body.driver-mode .hud-strip{
+  left:16px;right:auto;bottom:14px;
+  width:min(42vw,420px);
+  min-width:250px;
+  padding:8px 12px;
+  border-radius:12px;
+  background:rgba(13,17,23,.92);
+  border:1px solid rgba(255,255,255,.13);
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
+}
+body.driver-mode .hud-sbar{height:7px}
+body.driver-mode .hud-slbl{font-size:12px;font-weight:700}
+
+/* Stops drawer is secondary; it must never permanently cover the map. */
+body.driver-mode .hud-toggle{
+  left:16px;right:auto;bottom:58px;
+  padding:9px 13px;
+  border-radius:12px;
+  background:rgba(13,17,23,.92);
+  color:var(--text);
+  font-size:12px;
+  border-color:rgba(255,255,255,.16);
+}
+body.driver-mode .hud-stops-panel{
+  left:16px;right:16px;bottom:72px;
+  max-height:42vh;
+  border-radius:16px;
+}
+
+/* Hide secondary live-cycle metrics during actual driving. */
+body.driver-mode .lcm{display:none!important}
+
+/* Compass and audio controls become quiet utility controls. */
+body.driver-mode .hud-compass{
+  right:16px;top:138px;
+  width:50px;height:50px;
+  border-radius:50%;
+  background:rgba(13,17,23,.9);
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 5px 18px rgba(0,0,0,.35);
+}
+body.driver-mode #hud-voice{
+  right:16px!important;
+  top:196px!important;
+  width:50px!important;height:50px!important;
+  font-size:22px!important;
+  box-shadow:0 5px 18px rgba(0,0,0,.35);
+}
+
+/* The old photo overlay duplicates the Next Stop card during driver mode. */
+body.driver-mode .stop-photo-ov{display:none!important}
+
+/* Give route line labels / map a little more breathing room around overlays. */
+body.driver-mode .leaflet-control-zoom{
+  margin-top:135px!important;
+  margin-right:8px!important;
+}
+body.driver-mode .leaflet-control-attribution{
+  font-size:8px!important;
+  opacity:.65;
+}
+
+/* Tablet portrait: the screenshot supplied by the driver is effectively
+   a ~768px CSS-pixel viewport, so the old >=900px media query never applied. */
+@media (min-width:600px) and (max-width:899px){
+  body.driver-mode .hud-instr{
+    min-height:116px;
+  }
+  body.driver-mode .hud-instr-icon{
+    width:112px;min-width:112px;
+  }
+  body.driver-mode #hud-icon-arrow,
+  body.driver-mode #hud-icon-arrow svg{
+    width:84px;height:84px;
+  }
+  body.driver-mode .hud-instr-dist{font-size:40px}
+  body.driver-mode .hud-instr-action{font-size:23px}
+  body.driver-mode .hud-instr-speed{width:86px;min-width:86px}
+  body.driver-mode .hud-spd-val{font-size:34px}
+  body.driver-mode .nsc{
+    width:330px;
+    max-width:calc(100vw - 32px);
+    bottom:78px;
+  }
+  body.driver-mode .nsc-name{font-size:24px}
+  body.driver-mode .nsc-dist{font-size:58px}
+  body.driver-mode .nsc-photo{height:175px}
+}
+
+/* Phone / narrow layout: preserve hierarchy without crushing the map. */
+@media (max-width:599px){
+  body.driver-mode .hud-instr{top:8px;left:8px;right:8px;min-height:92px}
+  body.driver-mode .hud-instr-icon{width:82px;min-width:82px;min-height:92px}
+  body.driver-mode #hud-icon-arrow,
+  body.driver-mode #hud-icon-arrow svg{width:66px;height:66px}
+  body.driver-mode .hud-instr-dist{font-size:34px}
+  body.driver-mode .hud-instr-action{font-size:18px}
+  body.driver-mode .hud-instr-detail{font-size:10px}
+  body.driver-mode .hud-instr-speed{width:66px;min-width:66px}
+  body.driver-mode .hud-spd-val{font-size:28px}
+  body.driver-mode .nsc{
+    left:8px;right:8px;bottom:64px;width:auto;
+    max-width:none;
+    max-height:38vh;
+    padding:11px 12px;
+  }
+  body.driver-mode .nsc-name{font-size:20px}
+  body.driver-mode .nsc-dist{font-size:46px}
+  body.driver-mode .nsc-photo{height:130px}
+  body.driver-mode .hud-strip{left:8px;bottom:8px;width:calc(100% - 16px);min-width:0}
+}
+
+/* Reduced motion: keep the driver UI stable. */
+@media (prefers-reduced-motion:reduce){
+  body.driver-mode .hud-instr *,
+  body.driver-mode .nsc *{transition:none!important;animation:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -615,7 +921,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
     <!-- Main instruction strip (Waze-style) -->
     <div class="hud-instr" id="hud-instr">
       <div class="hud-instr-icon straight" id="hud-icon">
-        <span id="hud-icon-arrow">↑</span>
+        <span id="hud-icon-arrow" aria-hidden="true"></span>
         <span class="hud-icon-lbl" id="hud-icon-lbl"></span>
       </div>
       <div class="hud-instr-body">
@@ -1984,6 +2290,10 @@ function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
   navActive=true;
+  document.body.classList.add('driver-mode');
+  hudPanelOpen=false;
+  el('hud-sp').classList.remove('on');
+  document.body.classList.remove('stops-open');
   // Reset per-run state — without this, a 2nd run of the same route
   // starts with lastRouteIdx stuck at the end and matching never recovers.
   lastRouteIdx=0;_speedBuf=[];_headBuf=[];lastGPSForSpeed=null;
@@ -2016,6 +2326,7 @@ function startNav(){
 function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
   navActive=false;
+  document.body.classList.remove('driver-mode');
   Playback.stop();
   el('btn-nav').style.display='';el('btn-nav2').style.display='';
   el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
@@ -2039,7 +2350,7 @@ function stopNav(){
    The heading is NOT computed here: this consumes whatever currentHeading /
    getReliableHeading() already produced. When it is null the bus points up
    (neutral) rather than spinning on noise.                                 */
-const VEHICLE_PX=46;
+const VEHICLE_PX=56;
 
 function busSvg(){
   return `<svg viewBox="0 0 40 40" width="${VEHICLE_PX}" height="${VEHICLE_PX}" aria-hidden="true">
@@ -2067,7 +2378,7 @@ function vehicleMarkerHtml(headingDeg){
   const neutral=(headingDeg==null||isNaN(headingDeg));
   return `<div class="veh-wrap${neutral?' neutral':''}">
     <div class="veh-halo"></div>
-    <div class="veh-bus" style="transform:rotate(${rot}deg)">${busSvg()}</div>
+    <div class="veh-bus" style="transform:rotate(${rot}deg) scale(1.10)">${busSvg()}</div>
   </div>`;
 }
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2494,8 +2805,8 @@ function computeGuidance(routeM,speedKmh){
 
 /* Arrow SVG. Shape carries the meaning (§8: no emojis, no system fonts):
    straight shaft, swept shaft, or an L-shaped junction arrow.             */
-function guidanceArrowSvg(kind,dir){
-  const S=54, stroke='#0d1117';
+function guidanceArrowSvg(kind,dir,size=54){
+  const S=size, stroke='#0d1117';
   const body={
     STRAIGHT:'<path d="M27 8 L27 46 M27 8 L18 20 M27 8 L36 20"/>',
     CURVE_right:'<path d="M22 46 C22 30 28 20 38 14 M38 14 L28 13 M38 14 L34 23"/>',
@@ -2527,8 +2838,8 @@ function renderGuidanceArrow(g){
   // hard-coding "up" anywhere.
   const rot=g.bearing==null?0:g.bearing;
   const html=`<div class="guid-wrap" data-kind="${g.kind}" data-dir="${g.dir||''}"
-      style="transform:rotate(${rot}deg)">${guidanceArrowSvg(g.kind,g.dir)}</div>`;
-  const icon=L.divIcon({html,className:'guid-icon',iconSize:[54,54],iconAnchor:[27,27]});
+      style="transform:rotate(${rot}deg)">${guidanceArrowSvg(g.kind,g.dir,72)}</div>`;
+  const icon=L.divIcon({html,className:'guid-icon',iconSize:[72,72],iconAnchor:[36,36]});
   if(!guidanceMarker) guidanceMarker=L.marker([p.lat,p.lon],{icon,zIndexOffset:500,
                         interactive:false}).addTo(map);
   else{guidanceMarker.setLatLng([p.lat,p.lon]);guidanceMarker.setIcon(icon);}
@@ -2540,14 +2851,14 @@ function clearGuidanceArrow(){
 
 /* §19/§20: zoom follows speed, clamped so the driver never loses the scene. */
 const ZOOM_BY_SPEED=[
-  {maxKmh:10,zoom:18},{maxKmh:30,zoom:17.5},{maxKmh:60,zoom:17},{maxKmh:Infinity,zoom:16.5},
+  {maxKmh:10,zoom:18.5},{maxKmh:30,zoom:18.1},{maxKmh:60,zoom:17.8},{maxKmh:Infinity,zoom:17.4},
 ];
 function adaptiveZoom(speedKmh){
   const base=+el('rng-zoom').value||17;
   const row=ZOOM_BY_SPEED.find(r=>(speedKmh||0)<=r.maxKmh);
   // the slider stays the driver's baseline; speed shifts it within a band
   const z=base+(row.zoom-17);
-  return Math.max(15.5,Math.min(18.5,z));      // §20: never excessively wide
+  return Math.max(16.5,Math.min(19,z));      // driver UX: keep the road readable without losing context
 }
 function onGPS(pos){
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
@@ -3374,9 +3685,10 @@ function updRouteRemaining(nearIdx,distFromStart){
 
 function updInstruction(nearIdx,distFromStart){
   if(!currentPos)return;
+
   // GPS-only mode (Start GPS without a route loaded)
   if(!routePts.length){
-    el('hud-icon-arrow').textContent='📡';
+    el('hud-icon-arrow').innerHTML='<span style="font-size:44px">⌁</span>';
     el('hud-icon').className='hud-instr-icon straight';
     el('hud-icon-lbl').textContent='GPS';
     el('hud-dist').textContent='';
@@ -3384,19 +3696,79 @@ function updInstruction(nearIdx,distFromStart){
     el('hud-detail').textContent='Load a GPX or recording to navigate';
     return;
   }
+
+  /* Playback owns visual guidance.  The arrow is derived from route
+     geometry, never from the legacy maneuver text. */
+  if(Playback.active){
+    const g=computeGuidance(routeProgressM,Math.max(0,calcSpeedFromPoints(
+      currentPos.lat,currentPos.lng)??0));
+    const dirLabel=g.kind==='TURN'
+      ? `Turn ${g.dir||'ahead'}`
+      : g.kind==='CURVE'
+        ? `Follow ${g.dir||'curve'}`
+        : 'Follow route';
+
+    el('hud-icon-arrow').innerHTML=guidanceArrowSvg(g.kind,g.dir,88);
+    el('hud-icon').className=`hud-instr-icon ${g.kind==='TURN'?'turn':g.kind==='CURVE'?'straight':'straight'}`;
+    el('hud-icon-lbl').textContent='';
+
+    const ahead=Math.max(0,(g.anchorM||routeProgressM)-routeProgressM);
+    const distEl=el('hud-dist');
+    if(g.kind==='STRAIGHT'){
+      distEl.textContent='↑';
+      distEl.className='hud-instr-dist far';
+      el('hud-action').textContent='Follow route';
+    }else{
+      distEl.textContent=fmtDist(ahead);
+      distEl.className='hud-instr-dist '+(ahead>200?'far':ahead>50?'medium':'close');
+      el('hud-action').textContent=dirLabel;
+    }
+    el('hud-detail').textContent=g.kind==='CURVE'
+      ? 'Road curve — keep following the route'
+      : g.kind==='TURN'
+        ? 'Visual guidance'
+        : 'Stay on the recorded route';
+
+    const upcoming=maneuvers.filter(m=>m.idx>nearIdx&&m.distFromStart>distFromStart);
+    const nextNext=upcoming.find(m=>m.type!=='arrive');
+    const previewEl=el('hud-preview');
+    if(nextNext){
+      const d2=Math.max(0,(nextNext.distFromStart*1000)-routeProgressM);
+      previewEl.textContent=`Next decision · ${fmtDist(d2)}`;
+      previewEl.classList.add('visible');
+    }else{
+      previewEl.classList.remove('visible');
+    }
+
+    if(totalRouteDist>0){
+      const pct=Math.max(0,Math.min(100,(distFromStart/totalRouteDist)*100));
+      el('hud-pct').textContent=Math.round(pct)+'%';
+      el('hud-sfill').style.width=pct.toFixed(1)+'%';
+      const leftKm=Math.max(0,totalRouteDist-distFromStart);
+      el('hud-left').textContent=(leftKm>=1?leftKm.toFixed(1)+' km':Math.round(leftKm*1000)+' m')+' remaining';
+    }
+
+    // No generic turn voice in Playback. Stop/event voice remains owned by
+    // the Playback Voice Scheduler elsewhere in the application.
+    el('peek-icon').innerHTML=guidanceArrowSvg(g.kind,g.dir,34);
+    el('peek-name').textContent=dirLabel;
+    el('peek-sub').textContent=g.kind==='STRAIGHT'?'':fmtDist(ahead);
+    el('peek-dist').textContent='';
+    return;
+  }
+
+  // Normal navigation outside Playback keeps the legacy instruction/voice
+  // channel unchanged.
   const{dist,icon,label,detail,cls,type}=getNextManeuver(nearIdx,distFromStart);
   const distM=dist;
 
-  // ── Arrow icon ──
   el('hud-icon-arrow').textContent=icon;
   el('hud-icon').className=`hud-instr-icon ${cls}`;
 
-  // Short label under icon
   const iconLabels={straight:'STRAIGHT',right:'RIGHT',left:'LEFT',sr:'SLIGHT RT',
     sl:'SLIGHT LT',shr:'SHARP RT',shl:'SHARP LT',uturn:'U-TURN',stop:'STOP',arrive:'ARRIVE'};
   el('hud-icon-lbl').textContent=iconLabels[type]||'';
 
-  // ── Distance with urgency color ──
   const distEl=el('hud-dist');
   distEl.textContent=distM>0?fmtDist(distM):'';
   distEl.className='hud-instr-dist '+(distM>200?'far':distM>50?'medium':'close');
@@ -3404,7 +3776,6 @@ function updInstruction(nearIdx,distFromStart){
   el('hud-action').textContent=label;
   el('hud-detail').textContent=detail||'';
 
-  // ── Route progress strip (% done + distance remaining) ──
   if(totalRouteDist>0){
     const pct=Math.max(0,Math.min(100,(distFromStart/totalRouteDist)*100));
     el('hud-pct').textContent=Math.round(pct)+'%';
@@ -3413,40 +3784,22 @@ function updInstruction(nearIdx,distFromStart){
     el('hud-left').textContent=(leftKm>=1?leftKm.toFixed(1)+' km':Math.round(leftKm*1000)+' m')+' remaining';
   }
 
-  // ── Next-after-next preview ──
   const upcoming=maneuvers.filter(m=>m.idx>nearIdx&&m.distFromStart>distFromStart);
-  const nextNext=upcoming[1]; // [0] is current next, [1] is the one after
+  const nextNext=upcoming[1];
   const previewEl=el('hud-preview');
   if(nextNext&&nextNext.type!=='arrive'){
     const d2=haversine(currentPos.lat,currentPos.lng,nextNext.lat,nextNext.lon)*1000;
     previewEl.textContent=`then ${nextNext.icon} ${nextNext.label} in ${fmtDist(d2)}`;
     previewEl.classList.add('visible');
-  } else {
+  }else{
     previewEl.classList.remove('visible');
   }
 
-  // ── Voice guidance ──
-  // §8: during playback the Voice Scheduler owns every stop announcement.
-  // This instruction channel is RADIAL (getNextManeuver picks the nearest
-  // not-done stop within 4x radius), which is exactly the proximity voice the
-  // spec eliminates — on an out-and-back it says "Make a stop" for the other
-  // leg. 'arrive' is playback-owned too: right after a lap flip the vehicle
-  // is still standing on the arrive maneuver, so any distance-based exception
-  // leaks "Arrived at destination" into the new lap. Playback speaks its own
-  // endings ("Lap X of Y", "All laps complete"). The HUD still SHOWS every
-  // instruction; only the voice is gated, and turn voice keeps speaking.
-  // §5/§34: during playback the Guidance Arrow carries direction, so generic
-  // turn/keep instructions are suppressed — they were firing on ordinary road
-  // bends and telling drivers to turn where there is no junction. Every
-  // Voice Scheduler message (stops, prepare, events) is untouched: this gate
-  // only covers the maneuver instruction channel. §12: nothing is substituted
-  // when the arrow is unsure — silence beats a wrong instruction.
   const TURN_TYPES=['left','right','sl','sr','shl','shr','uturn','straight'];
   const _pbOwnsVoice=Playback.active&&
     (type==='stop'||type==='arrive'||TURN_TYPES.indexOf(type)>=0);
   if(distM>0&&distM<600&&!_pbOwnsVoice) maybeSpeak(type||cls,label,distM);
 
-  // Update peek bar
   el('peek-icon').textContent=icon;
   el('peek-name').textContent=label;
   el('peek-sub').textContent=dist>0?fmtDist(dist):'';
