@@ -901,6 +901,13 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .lap-step{background:none;border:none;color:var(--text);font-size:17px;font-weight:800;
   min-height:46px;min-width:40px;cursor:pointer}
 .lap-step:active{background:rgba(255,255,255,.08)}
+
+/* always-visible sequence pill (peek row) */
+.seq-peek{flex-shrink:0;margin-left:10px;min-height:46px;padding:0 14px;
+  background:#1f6feb;color:#fff;border:none;border-radius:12px;font-weight:800;
+  font-size:13px;letter-spacing:.4px;cursor:pointer;white-space:nowrap;
+  box-shadow:0 4px 14px rgba(31,111,235,.35)}
+.seq-peek:active{transform:scale(.97)}
 </style>
 </head>
 <body>
@@ -1136,6 +1143,8 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         <div class="peek-sub"  id="peek-sub">Tap 📂 to open a file</div>
       </div>
       <div class="peek-dist" id="peek-dist"></div>
+      <button class="seq-peek" id="seq-peek" onclick="seqPeekTap(event)"
+        style="display:none" title="Start the playback sequence"></button>
       <span class="lap-chip" id="lap-chip" title="Repetitions">
         <button class="lap-step" onclick="lapChipStep(event,-1)">−</button>
         <b id="lap-chip-val">1×</b>
@@ -1274,7 +1283,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
     </div>
 
     <!-- GRAVADAS PANE -->
-    <div class="pane" id="pane-gravadas">
+    <div class="pane" id="pane-gravadas" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
       <div class="rec-list" id="rec-list">
         <div class="empty" id="rec-empty">
           <div class="icon">⏺</div>
@@ -2576,7 +2585,28 @@ function renderSeqBar(){
   if(rs)rs.style.display=Sequence._resumable?'':'none';
   const total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);
   const tt=el('seq-total'); if(tt)tt.textContent=Sequence.items.length?`${Sequence.items.length} recordings · ${total} cycles`:'';
+  updSeqPeek();
 }
+/* Always-visible sequence control (field feedback 16 Aug: the in-pane bar
+   scrolled out of sight — .pane{overflow:hidden} between the sticky bar and
+   the scroller disabled position:sticky — and the driver had no confirmation
+   the sequence existed at all). The peek row never scrolls, so the pill
+   there is the guaranteed entry point: it shows the count and starts the
+   sequence with one tap. */
+function seqPeekTap(ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  if(Sequence.active)return;
+  Sequence.start();
+}
+function updSeqPeek(){
+  const b=el('seq-peek'); if(!b)return;
+  if(Sequence.items.length&&!Sequence.active){
+    const total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);
+    b.style.display='';
+    b.textContent=`▶ SEQ ${Sequence.items.length}·${total}×`;
+  }else b.style.display='none';
+}
+
 function seqAdd(idx,btn){
   if(!Sequence.add(idx,1))return;
   const n=Sequence.items.length, total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);

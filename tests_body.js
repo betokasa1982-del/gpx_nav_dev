@@ -2817,6 +2817,37 @@ function sqDriveLap(rec,base,hdgAdj){
   console.log('SEQ-9. 4× city → 2× rural → 1× highway: built, counted 7, started OK');
 })();
 
+
+// ── SEQ-10: the sequence is visible and startable WITHOUT scrolling ──
+(function(){
+  const {ia,ib}=sqSetup();
+  console.assert(el('seq-peek').style.display==='none','SEQ-10: pill visible with empty sequence');
+  Sequence.add(ia,1); Sequence.add(ib,1);
+  Sequence.setLaps(0,1);Sequence.setLaps(0,1);Sequence.setLaps(0,1);   // 4×
+  Sequence.setLaps(1,1);                                               // 2×
+  console.assert(el('seq-peek').style.display!=='none','SEQ-10: pill hidden with items');
+  console.assert(el('seq-peek').textContent==='▶ SEQ 2·6×',
+    'SEQ-10: pill label wrong: '+el('seq-peek').textContent);
+  // one tap starts the sequence from the always-visible row
+  seqPeekTap();
+  console.assert(Sequence.active===true&&navActive===true,'SEQ-10: pill tap did not start');
+  console.assert(LapManager.totalLaps===4,'SEQ-10: first item laps wrong');
+  console.assert(el('seq-peek').style.display==='none','SEQ-10: pill still visible while running');
+  seqPeekTap();                                            // tap while active = no-op
+  console.assert(Sequence.cur===0,'SEQ-10: tap while active restarted the sequence');
+  exitNavigation();
+  console.assert(el('seq-peek').style.display!=='none','SEQ-10: pill did not return after exit');
+  // and the in-pane bar now lives in a REAL scroller so sticky can pin
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html'].find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  console.assert(/id="pane-gravadas" style="overflow-y:auto/.test(html),
+    'SEQ-10: recordings pane is not its own scroller — sticky dies at .pane overflow:hidden');
+  Sequence.clear();
+  console.assert(el('seq-peek').style.display==='none','SEQ-10: pill survived clear');
+  console.log('SEQ-10. pill: hidden→"▶ SEQ 2·6×"→starts→hides→returns; pane scrolls itself OK');
+})();
+
 speakText=_realSpeakSq;
 console.log('ALL SEQUENCE TESTS PASSED');
 __group('Sequence tests');
