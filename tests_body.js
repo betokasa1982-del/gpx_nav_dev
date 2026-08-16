@@ -2407,22 +2407,36 @@ const ffCss=()=>document.__cssText||'';
   console.log('FF-3. ✕ ends simulation + navigation + cockpit OK');
 })();
 
-// ── FF-4: repetitions are one tap from START and share the single source ──
+// ── FF-4: repetitions — stepper reaches ANY count (spec change 16 Aug) ──
 (function(){
+  // SPEC CHANGE: the original chip cycled presets 1→2→3→5→10→∞ and the field
+  // request was explicit — "se quiser 4 vezes, 6, outro número não consigo
+  // setar". The chip is now a −/＋ stepper writing through #lap-select
+  // (which gained real options 1..20 + ∞; a <select> cannot hold a value it
+  // has no option for, which is what made presets the only choice before).
   el('lap-select').value='1'; updLapChip();
-  console.assert(el('lap-chip').textContent==='1×','FF-4: chip label wrong: '+el('lap-chip').textContent);
-  cycleLapChip(); cycleLapChip();          // 1 → 2 → 3
-  console.assert(el('lap-select').value==='3','FF-4: chip did not write through: '+el('lap-select').value);
-  console.assert(el('lap-chip').textContent==='3×','FF-4: chip label desynced');
-  ['5','10','inf','1'].forEach(v=>cycleLapChip());
-  console.assert(el('lap-select').value==='1','FF-4: cycle did not wrap: '+el('lap-select').value);
-  // and playback actually consumes it
-  el('lap-select').value='3';
+  console.assert(el('lap-chip-val').textContent==='1×','FF-4: label wrong: '+el('lap-chip-val').textContent);
+  lapChipStep(null,1);lapChipStep(null,1);lapChipStep(null,1);      // 1→4
+  console.assert(el('lap-select').value==='4','FF-4: cannot set 4×: '+el('lap-select').value);
+  lapChipStep(null,1);lapChipStep(null,1);                          // →6
+  console.assert(el('lap-select').value==='6','FF-4: cannot set 6×: '+el('lap-select').value);
+  for(let k=0;k<14;k++)lapChipStep(null,1);                         // 6→20
+  console.assert(el('lap-select').value==='20','FF-4: upper range wrong: '+el('lap-select').value);
+  lapChipStep(null,1);
+  console.assert(el('lap-select').value==='inf','FF-4: ∞ unreachable');
+  lapChipStep(null,1);
+  console.assert(el('lap-select').value==='inf','FF-4: stepped past ∞');
+  lapChipStep(null,-1);
+  console.assert(el('lap-select').value==='20','FF-4: − from ∞ broken');
+  el('lap-select').value='1';lapChipStep(null,-1);
+  console.assert(el('lap-select').value==='1','FF-4: lower clamp broken');
+  // and playback actually consumes an arbitrary count
+  el('lap-select').value='4';
   const rec=mkRec('ff4',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[]);
   loadFresh(rec); Playback.begin(el('lap-select').value);
-  console.assert(LapManager.totalLaps===3,'FF-4: Playback ignored the selector: '+LapManager.totalLaps);
+  console.assert(LapManager.totalLaps===4,'FF-4: Playback ignored 4×: '+LapManager.totalLaps);
   Playback.stop(); el('lap-select').value='1'; updLapChip();
-  console.log('FF-4. lap chip 1×→2×→3×→5×→10×→∞ writes through to Playback OK');
+  console.log('FF-4. stepper reaches 4×, 6×, 20, ∞; Playback consumes 4× OK');
 })();
 
 // ── FF-5: the dock photo is the dominant element ──
@@ -2628,8 +2642,14 @@ function sqDriveLap(rec,base,hdgAdj){
   const {ia,ib}=sqSetup();
   Sequence.add(ia,1); Sequence.add(ib,1); Sequence.add(ia,1);
   console.assert(Sequence.items.length===3,'SEQ-1: add failed');
-  Sequence.cycleLaps(0);Sequence.cycleLaps(0);Sequence.cycleLaps(0); // 1→2→3→5
-  console.assert(Sequence.items[0].laps===5,'SEQ-1: laps cycle wrong: '+Sequence.items[0].laps);
+  // steppers (spec change 16 Aug): any count, including the 4 the presets
+  // could never express
+  Sequence.setLaps(0,1);Sequence.setLaps(0,1);Sequence.setLaps(0,1);  // 1→4
+  console.assert(Sequence.items[0].laps===4,'SEQ-1: cannot set 4 laps: '+Sequence.items[0].laps);
+  Sequence.setLaps(0,-1);Sequence.setLaps(0,-1);Sequence.setLaps(0,-1);Sequence.setLaps(0,-1);
+  console.assert(Sequence.items[0].laps===1,'SEQ-1: lower clamp broken');
+  Sequence.setLaps(0,1);Sequence.setLaps(0,1);Sequence.setLaps(0,1);Sequence.setLaps(0,1);  // →5
+  console.assert(Sequence.items[0].laps===5,'SEQ-1: stepper drifted: '+Sequence.items[0].laps);
   Sequence.remove(2);
   console.assert(Sequence.items.length===2,'SEQ-1: remove failed');
   const saved=JSON.parse(localStorage.getItem('gpx-seq'));
@@ -2747,6 +2767,54 @@ function sqDriveLap(rec,base,hdgAdj){
   console.assert(Sequence.active===false,'SEQ-7: ✕ did not stop the sequence');
   console.assert(Playback.active===false&&navActive===false,'SEQ-7: playback survived ✕');
   console.log('SEQ-7. empty-start refused; ✕ ends the whole sequence OK');
+})();
+
+// ── SEQ-8: adding gives visible confirmation ──
+(function(){
+  const {ia}=sqSetup();
+  const btn={textContent:'＋ Seq',classList:{_s:new Set(),
+    add(c){this._s.add(c)},remove(c){this._s.delete(c)},contains(c){return this._s.has(c)}}};
+  // The harness runs timers ≤1000 ms inline (runner.js:87), so the 900 ms
+  // pulse-removal executes synchronously and the class can't be observed
+  // AFTER seqAdd returns. Observed through a spy on classList.add instead —
+  // the app behaviour (add then timed remove) is exactly what's asserted.
+  const barCl=el('seq-bar').classList; const seen=[];
+  const _add=barCl.add.bind(barCl);
+  barCl.add=(...c)=>{seen.push(...c);return _add(...c);};
+  seqAdd(ia,btn);
+  barCl.add=_add;
+  console.assert(/✓ Added \(1\)/.test(btn.textContent),'SEQ-8: button did not confirm: '+btn.textContent);
+  console.assert(btn.classList.contains('seq-added'),'SEQ-8: button not highlighted');
+  console.assert(seen.includes('pulse'),'SEQ-8: sequence bar never pulsed');
+  console.assert(!barCl.contains('pulse'),'SEQ-8: pulse not scheduled for removal');
+  console.assert(/1 recordings · 1 cycles/.test(el('seq-total').textContent),
+    'SEQ-8: total counter wrong: '+el('seq-total').textContent);
+  console.assert(/city loop/.test(el('seq-chips').innerHTML),'SEQ-8: chip not rendered');
+  const css=document.__cssText||'';
+  console.assert(/\.seq-bar\{position:sticky/.test(css),'SEQ-8: bar not sticky — invisible while scrolling');
+  console.log('SEQ-8. add confirms on the button, pulses the sticky bar, updates totals OK');
+})();
+
+// ── SEQ-9: the exact field scenario — 4× city, 2× rural, 1× highway ──
+(function(){
+  Sequence.clear();
+  const C=mkRec('sq9c',150,sqLoopA,[40]); C.name='Cycle city';
+  const R=mkRec('sq9r',150,sqLoopB,[40]); R.name='Cycle rural';
+  const H=mkRec('sq9h',150,sqLoopA,[]);   H.name='Cycle highway';
+  savedRecs.push(C,R,H);
+  const b=savedRecs.length;
+  Sequence.add(b-3,1);Sequence.add(b-2,1);Sequence.add(b-1,1);
+  Sequence.setLaps(0,1);Sequence.setLaps(0,1);Sequence.setLaps(0,1);   // city → 4
+  Sequence.setLaps(1,1);                                               // rural → 2
+  console.assert(Sequence.items.map(x=>x.laps).join(',')==='4,2,1',
+    'SEQ-9: 4/2/1 not expressible: '+Sequence.items.map(x=>x.laps));
+  console.assert(/3 recordings · 7 cycles/.test(el('seq-total').textContent),
+    'SEQ-9: total wrong: '+el('seq-total').textContent);
+  console.assert(Sequence.start()===true,'SEQ-9: start refused');
+  console.assert(LapManager.totalLaps===4,'SEQ-9: city not 4 laps');
+  console.assert(/CYCLE 1\/3 · Cycle city/.test(el('seq-badge').textContent),'SEQ-9: badge wrong');
+  exitNavigation();
+  console.log('SEQ-9. 4× city → 2× rural → 1× highway: built, counted 7, started OK');
 })();
 
 speakText=_realSpeakSq;

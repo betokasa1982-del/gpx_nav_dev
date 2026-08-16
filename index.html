@@ -883,6 +883,24 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
   background:rgba(16,20,28,.94);border:1px solid rgba(255,255,255,.12);border-radius:14px;
   padding:5px 14px;font-family:var(--mono);font-size:12px;font-weight:700;color:#e8eef6;
   max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* sequence usability (16 Aug): the bar stays pinned while the list scrolls,
+   pulses when an item lands, and every count is a −/＋ stepper */
+.seq-bar{position:sticky;top:0;z-index:6}
+.seq-bar.pulse{animation:seqPulse .9s ease}
+@keyframes seqPulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.7)}100%{box-shadow:0 0 0 14px rgba(63,185,80,0)}}
+.seq-chip .sq-step{font-style:normal;cursor:pointer;color:var(--accent);font-weight:800;
+  font-size:15px;padding:2px 6px;border:1px solid var(--border);border-radius:7px;min-width:26px;
+  text-align:center;user-select:none}
+.seq-chip .sq-x{font-style:normal;color:var(--muted);cursor:pointer;padding:0 2px;margin-left:2px}
+.seq-chip b{cursor:default;min-width:30px}
+.btn.seq-added{background:var(--green,#3fb950)!important;color:#08110a!important}
+.lap-chip{display:inline-flex;align-items:center;gap:0;margin-left:10px;
+  background:var(--panel2,#161b22);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.lap-chip b{color:var(--accent);font-size:15px;font-weight:800;min-width:44px;text-align:center}
+.lap-step{background:none;border:none;color:var(--text);font-size:17px;font-weight:800;
+  min-height:46px;min-width:40px;cursor:pointer}
+.lap-step:active{background:rgba(255,255,255,.08)}
 </style>
 </head>
 <body>
@@ -1118,7 +1136,11 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         <div class="peek-sub"  id="peek-sub">Tap 📂 to open a file</div>
       </div>
       <div class="peek-dist" id="peek-dist"></div>
-      <button class="lap-chip" id="lap-chip" onclick="cycleLapChip(event)" title="Cycle repetitions">1×</button>
+      <span class="lap-chip" id="lap-chip" title="Repetitions">
+        <button class="lap-step" onclick="lapChipStep(event,-1)">−</button>
+        <b id="lap-chip-val">1×</b>
+        <button class="lap-step" onclick="lapChipStep(event,1)">＋</button>
+      </span>
       <button class="big-start" id="big-start" onclick="bigStartTap(event)">▶ START</button>
     </div>
 
@@ -1203,12 +1225,26 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
           <span class="val" id="val-recdur">5s</span></div>
         <div class="nav-field"><label>Repetitions (laps)</label>
           <select id="lap-select" class="lap-select">
-            <option value="1" selected>1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="10">10</option>
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+            <option value="5">5×</option>
+            <option value="6">6×</option>
+            <option value="7">7×</option>
+            <option value="8">8×</option>
+            <option value="9">9×</option>
+            <option value="10">10×</option>
+            <option value="11">11×</option>
+            <option value="12">12×</option>
+            <option value="13">13×</option>
+            <option value="14">14×</option>
+            <option value="15">15×</option>
+            <option value="16">16×</option>
+            <option value="17">17×</option>
+            <option value="18">18×</option>
+            <option value="19">19×</option>
+            <option value="20">20×</option>
             <option value="inf">∞ Infinite</option>
           </select>
           <span class="val" id="val-laps"></span></div>
@@ -2366,21 +2402,26 @@ function updSummaryBar(){
 /* One primary action. Its meaning follows the app state so the first tap is
    always the useful one: no route → open the Route pane; route loaded →
    start navigation; navigating → stop. */
-/* Repetitions, one tap from START. The chip cycles the same values as the
-   buried GPS-pane selector and writes THROUGH it: Playback.begin still reads
+/* Repetitions, one tap from START — a −/＋ stepper (field request 16 Aug:
+   the preset cycle could not express 4× or 6×). Any count 1..20, then ∞.
+   It writes THROUGH the GPS-pane selector: Playback.begin still reads
    #lap-select, so there is exactly one source of truth. */
-const LAP_CHIP_SEQ=['1','2','3','5','10','inf'];
-function cycleLapChip(ev){
+function lapChipStep(ev,delta){
   if(ev&&ev.stopPropagation)ev.stopPropagation();
   const sel=el('lap-select'); if(!sel)return;
   const cur=String(sel.value||'1');
-  const next=LAP_CHIP_SEQ[(LAP_CHIP_SEQ.indexOf(cur)+1)%LAP_CHIP_SEQ.length];
+  let next;
+  if(cur==='inf') next = delta>0 ? 'inf' : '20';
+  else{
+    const n=(+cur||1)+delta;
+    next = n<1 ? '1' : n>20 ? 'inf' : String(n);
+  }
   sel.value=next;
   updLapChip();
 }
 function updLapChip(){
-  const c=el('lap-chip'), sel=el('lap-select');
-  if(c&&sel)c.textContent=(String(sel.value)==='inf'?'∞':sel.value+'×');
+  const v=el('lap-chip-val'), sel=el('lap-select');
+  if(v&&sel)v.textContent=(String(sel.value)==='inf'?'∞':sel.value+'×');
 }
 function bigStartTap(ev){
   if(ev&&ev.stopPropagation)ev.stopPropagation();   // sits inside the peek row
@@ -2415,10 +2456,12 @@ const Sequence={
     this.items.push({idx,name:rec.name||('Recording '+idx),laps:laps||1});
     this._save(); renderSeqBar(); return true;
   },
-  cycleLaps(i){
-    const SEQ=['1','2','3','5','10'];
+  /* arbitrary repetitions (field request 16 Aug): the preset cycle
+     1→2→3→5→10 could not express "4×" or "6×"; a −/＋ stepper can express
+     any count. Clamped 1..99. */
+  setLaps(i,delta){
     const it=this.items[i]; if(!it)return;
-    it.laps=+SEQ[(SEQ.indexOf(String(it.laps))+1)%SEQ.length]||1;
+    it.laps=Math.max(1,Math.min(99,(+it.laps||1)+delta));
     this._save(); renderSeqBar();
   },
   remove(i){this.items.splice(i,1);this._save();renderSeqBar();},
@@ -2522,8 +2565,11 @@ function renderSeqBar(){
   bar.innerHTML=Sequence.items.map((it,i)=>{
     const nm=(it.name||'').replace(/</g,'&lt;').slice(0,26);
     return `<span class="seq-chip${Sequence.active&&i===Sequence.cur?' cur':''}${!Sequence.active&&i<Sequence.cur?' done':''}">`+
-      `<b onclick="Sequence.cycleLaps(${i})" title="Tap to change repetitions">${it.laps}×</b> ${nm}`+
-      `<i onclick="Sequence.remove(${i})" title="Remove">✕</i></span>`;
+      `<i class="sq-step" onclick="Sequence.setLaps(${i},-1)" title="Fewer repetitions">−</i>`+
+      `<b>${it.laps}×</b>`+
+      `<i class="sq-step" onclick="Sequence.setLaps(${i},1)" title="More repetitions">＋</i>`+
+      ` ${nm}`+
+      `<i class="sq-x" onclick="Sequence.remove(${i})" title="Remove">✕</i></span>`;
   }).join('<span class="seq-arrow">→</span>');
   const st=el('seq-start'), rs=el('seq-resume');
   if(st)st.style.display=Sequence.items.length&&!Sequence.active?'':'none';
@@ -2531,7 +2577,18 @@ function renderSeqBar(){
   const total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);
   const tt=el('seq-total'); if(tt)tt.textContent=Sequence.items.length?`${Sequence.items.length} recordings · ${total} cycles`:'';
 }
-function seqAdd(idx){Sequence.add(idx,1);}
+function seqAdd(idx,btn){
+  if(!Sequence.add(idx,1))return;
+  const n=Sequence.items.length, total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);
+  // 1) the tapped button itself confirms
+  if(btn){const t=btn.textContent;btn.textContent=`✓ Added (${n})`;btn.classList.add('seq-added');
+    setTimeout(()=>{btn.textContent=t;btn.classList.remove('seq-added');},1400);}
+  // 2) the sequence bar pulses and scrolls into view, so the driver SEES
+  //    the chip land even when the card was far down the list
+  const bar=el('seq-bar');
+  if(bar){bar.classList.add('pulse');setTimeout(()=>bar.classList.remove('pulse'),900);
+    if(bar.scrollIntoView)try{bar.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}}
+}
 function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
@@ -4396,7 +4453,7 @@ function renderRecCard(rec,idx){
     </div>
     <div class="rec-card-btns">
       <button class="btn go"      style="flex:1;font-size:11px;padding:8px 4px" onclick="loadRec(${idx})">📂 Load</button>
-      <button class="btn seq-add" style="flex:1;font-size:11px;padding:8px 4px" onclick="seqAdd(${idx})" title="Add to playback sequence">＋ Seq</button>
+      <button class="btn seq-add" style="flex:1;font-size:11px;padding:8px 4px" onclick="seqAdd(${idx},this)" title="Add to playback sequence">＋ Seq</button>
       <button class="btn primary" style="flex:1;font-size:11px;padding:8px 4px" onclick="dlRecGPX(${idx})">↓ GPX</button>
       <button class="btn"         style="flex:1;font-size:11px;padding:8px 4px;border-color:var(--blue);color:var(--blue)" onclick="shareRec(${idx})">📤 JSON</button>
       <button class="btn"         style="font-size:11px;padding:8px 6px;border-color:#a371f7;color:#a371f7" title="Replay this cycle as live GPS (dev)" onclick="startSim(${idx})">▶ SIM</button>
