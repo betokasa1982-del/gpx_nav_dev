@@ -1005,6 +1005,201 @@ body.driver-mode #hud-voice{right:18px!important;top:188px!important;width:50px!
   body.driver-mode .evt-chip b{display:none}
 }
 
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRIVER UX V6 — NAVIGATION COCKPIT
+   Visual-only composition layer. Navigation, GPS, playback and data logic
+   remain untouched. The cockpit deliberately removes development chrome and
+   gives the driver one clear hierarchy: manoeuvre → road → next stop.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --v6-blue:#19a7ff;
+  --v6-cyan:#48d7ff;
+  --v6-surface:rgba(7,13,19,.88);
+  --v6-surface-solid:#081017;
+  --v6-line:rgba(255,255,255,.14);
+  --v6-shadow:0 14px 40px rgba(0,0,0,.52);
+}
+
+/* Driver Mode is a true cockpit: no desktop/application chrome. */
+body.driver-mode{background:#050a0f}
+body.driver-mode .topbar,
+body.driver-mode .sum-bar,
+body.driver-mode > .sheet,
+body.driver-mode .install-banner{display:none!important}
+body.driver-mode .map-wrap{position:absolute;inset:0;width:100%;height:100dvh;flex:none;z-index:1}
+body.driver-mode #map{background:#081018}
+body.driver-mode .nav-hud{z-index:1000}
+
+/* Subtle cinematic vignette keeps road markings readable behind cards. */
+body.driver-mode .map-wrap:after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:401;
+  background:
+    linear-gradient(180deg,rgba(2,7,12,.34) 0%,transparent 18%,transparent 72%,rgba(2,7,12,.34) 100%),
+    radial-gradient(ellipse at center,transparent 48%,rgba(0,0,0,.20) 100%);
+}
+
+/* Small live status pill, replacing the old topbar. */
+body.driver-mode .map-wrap:before{
+  content:"●  GPS  •  NAVIGATION";
+  position:absolute;left:18px;top:14px;z-index:1002;
+  padding:7px 11px;border:1px solid rgba(72,215,255,.28);
+  border-radius:999px;background:rgba(4,11,16,.72);
+  color:#bfefff;font:700 10px/1 var(--mono);letter-spacing:1.2px;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);backdrop-filter:blur(10px);
+}
+
+/* ── PRIMARY MANOEUVRE ───────────────────────────────────────────────── */
+body.driver-mode .hud-instr{
+  top:16px;left:18px;right:auto;width:min(430px,38vw);
+  min-height:220px;height:auto;display:grid;
+  grid-template-columns:150px minmax(0,1fr);
+  grid-template-rows:1fr auto;
+  overflow:hidden;padding:0;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:22px;background:rgba(5,12,18,.91);
+  box-shadow:var(--v6-shadow);backdrop-filter:blur(16px);
+  pointer-events:none;
+}
+body.driver-mode .hud-instr-icon{
+  grid-column:1;grid-row:1 / span 2;
+  width:150px;min-width:150px;min-height:220px;
+  border:0;border-right:1px solid rgba(255,255,255,.11);
+  background:linear-gradient(145deg,rgba(25,167,255,.12),rgba(240,165,0,.13));
+  display:flex;align-items:center;justify-content:center;
+}
+body.driver-mode .hud-instr-icon.turn{background:linear-gradient(145deg,rgba(240,165,0,.20),rgba(240,165,0,.05))}
+body.driver-mode .hud-instr-icon.straight{background:linear-gradient(145deg,rgba(25,167,255,.16),rgba(25,167,255,.04))}
+body.driver-mode .hud-instr-icon.stop{background:linear-gradient(145deg,rgba(248,81,73,.17),rgba(248,81,73,.04))}
+body.driver-mode .hud-instr-icon.arrive{background:linear-gradient(145deg,rgba(63,185,80,.17),rgba(63,185,80,.04))}
+body.driver-mode #hud-icon-arrow,
+body.driver-mode #hud-icon-arrow svg{
+  width:116px;height:116px;display:flex;align-items:center;justify-content:center;
+  filter:drop-shadow(0 5px 9px rgba(0,0,0,.55));
+}
+body.driver-mode .hud-icon-lbl{display:none}
+body.driver-mode .hud-instr-body{
+  grid-column:2;grid-row:1;padding:22px 20px 8px;
+  justify-content:center;min-width:0;
+}
+body.driver-mode .hud-instr-dist{
+  font-size:62px;line-height:.84;font-weight:800;letter-spacing:-2px;color:#fff;
+}
+body.driver-mode .hud-instr-dist.far{color:#fff}
+body.driver-mode .hud-instr-dist.medium{color:#fff}
+body.driver-mode .hud-instr-dist.close{color:#ffb000}
+body.driver-mode .hud-instr-action{
+  font-size:27px;line-height:1.02;font-weight:800;letter-spacing:.2px;
+  color:var(--v6-cyan);margin:8px 0 4px;text-transform:uppercase;
+}
+body.driver-mode .hud-instr-detail{font-size:13px;color:#dce8ef;font-family:var(--mono)}
+body.driver-mode .hud-next-preview{font-size:11px;color:#8295a3;margin-top:6px}
+
+/* Speed is a distinct instrument, not part of the instruction sentence. */
+body.driver-mode .hud-instr-speed{
+  position:absolute;right:18px;top:14px;
+  width:82px;height:82px;min-width:0;padding:0;
+  border:1px solid rgba(255,255,255,.22);border-radius:50%;
+  background:rgba(4,10,15,.84);display:flex;align-items:center;justify-content:center;
+  flex-direction:column;box-shadow:0 8px 20px rgba(0,0,0,.35);
+}
+body.driver-mode .hud-spd-val{font-size:31px;line-height:.9;font-weight:800;color:#fff}
+body.driver-mode .hud-spd-unit{font-size:9px;color:#9daeb9;margin-top:4px}
+body.driver-mode .hud-tgt{
+  position:absolute;right:-5px;top:-7px;margin:0;padding:3px 6px;
+  border:2px solid #fff;border-radius:999px;background:#f5f7f8;color:#111;
+  font-size:10px;font-weight:900;line-height:1;min-width:27px;text-align:center;
+}
+
+/* ── NEXT STOP DOCK ───────────────────────────────────────────────────── */
+body.driver-mode .nsc{
+  right:18px;bottom:20px;top:auto;
+  width:min(390px,30vw);height:auto;min-height:170px;
+  max-width:calc(100vw - 36px);max-height:240px;
+  display:block!important;overflow:hidden;padding:16px 17px;
+  border:1px solid rgba(255,255,255,.15);border-left:4px solid var(--v6-blue);
+  border-radius:20px;background:rgba(5,12,18,.91);
+  box-shadow:var(--v6-shadow);backdrop-filter:blur(16px);
+}
+body.driver-mode .nsc-head{font-size:10px;letter-spacing:1.8px;color:var(--v6-cyan)}
+body.driver-mode .nsc-name{font-size:25px;line-height:1.05;margin:7px 0 1px;color:#fff}
+body.driver-mode .nsc-dist{font-size:48px;line-height:.9;color:#fff;margin:7px 0 5px;letter-spacing:-1px}
+body.driver-mode .nsc-row{font-size:12px;color:#b9c7cf}
+body.driver-mode .nsc-events{margin-top:8px;gap:6px}
+body.driver-mode .evt-chip{min-height:30px;padding:5px 7px;border-radius:8px;font-size:10px}
+body.driver-mode .evt-chip svg{width:20px!important;height:20px!important}
+body.driver-mode .nsc-photo{height:78px;width:100%;margin-top:8px;border-radius:9px}
+
+/* ── ROUTE PROGRESS ───────────────────────────────────────────────────── */
+body.driver-mode .hud-strip{
+  left:50%;right:auto;bottom:18px;transform:translateX(-50%);
+  width:min(430px,34vw);min-width:250px;height:34px;padding:7px 11px;
+  border:1px solid rgba(255,255,255,.14);border-radius:999px;
+  background:rgba(5,12,18,.82);box-shadow:0 8px 24px rgba(0,0,0,.38);
+  backdrop-filter:blur(10px);
+}
+body.driver-mode .hud-sbar{height:6px;background:rgba(255,255,255,.10)}
+body.driver-mode .hud-slbl{font-size:10px;color:#c7d2d8}
+body.driver-mode .hud-sfill{background:linear-gradient(90deg,var(--v6-blue),var(--v6-cyan))}
+
+/* Utility controls are deliberately quiet. */
+body.driver-mode .hud-compass{
+  right:18px;top:118px;width:46px;height:46px;border-radius:50%;
+  background:rgba(5,12,18,.78);border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 7px 20px rgba(0,0,0,.35);backdrop-filter:blur(10px);
+}
+body.driver-mode #hud-voice{right:18px!important;top:174px!important;width:46px!important;height:46px!important;font-size:18px!important}
+body.driver-mode .hud-toggle{display:none!important}
+body.driver-mode:not(.stops-open) .hud-stops-panel{display:none!important}
+body.driver-mode .leaflet-control-zoom{display:none!important}
+body.driver-mode .leaflet-control-attribution{font-size:8px!important;opacity:.55}
+body.driver-mode .lcm{display:none!important}
+body.driver-mode .stop-photo-ov{display:none!important}
+
+/* Large 10" landscape displays — give the cockpit more breathing room. */
+@media (min-width:1200px){
+  body.driver-mode .hud-instr{width:470px;min-height:238px;grid-template-columns:166px minmax(0,1fr)}
+  body.driver-mode .hud-instr-icon{width:166px;min-width:166px;min-height:238px}
+  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:132px;height:132px}
+  body.driver-mode .hud-instr-dist{font-size:68px}
+  body.driver-mode .hud-instr-action{font-size:30px}
+  body.driver-mode .nsc{width:410px;min-height:184px}
+  body.driver-mode .nsc-name{font-size:28px}
+  body.driver-mode .nsc-dist{font-size:54px}
+}
+
+/* Tablet landscape / portrait. */
+@media (min-width:600px) and (max-width:1199px){
+  body.driver-mode .hud-instr{width:min(440px,48vw);min-height:208px;grid-template-columns:132px minmax(0,1fr)}
+  body.driver-mode .hud-instr-icon{width:132px;min-width:132px;min-height:208px}
+  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:104px;height:104px}
+  body.driver-mode .hud-instr-dist{font-size:56px}
+  body.driver-mode .hud-instr-action{font-size:24px}
+  body.driver-mode .nsc{width:340px;min-height:158px}
+  body.driver-mode .nsc-name{font-size:22px}
+  body.driver-mode .nsc-dist{font-size:44px}
+}
+
+/* Phone layout: keep the same hierarchy, but stack the stop dock. */
+@media (max-width:599px){
+  body.driver-mode .map-wrap:before{left:10px;top:9px;font-size:8px;padding:6px 8px}
+  body.driver-mode .hud-instr{top:46px;left:8px;width:calc(100vw - 16px);min-height:118px;grid-template-columns:92px minmax(0,1fr)}
+  body.driver-mode .hud-instr-icon{width:92px;min-width:92px;min-height:118px}
+  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:76px;height:76px}
+  body.driver-mode .hud-instr-body{padding:12px 12px 8px}
+  body.driver-mode .hud-instr-dist{font-size:42px}
+  body.driver-mode .hud-instr-action{font-size:18px}
+  body.driver-mode .hud-instr-detail{font-size:10px}
+  body.driver-mode .hud-instr-speed{right:8px;top:8px;width:62px;height:62px}
+  body.driver-mode .hud-spd-val{font-size:24px}
+  body.driver-mode .nsc{left:8px;right:8px;bottom:8px;width:auto;min-height:130px;padding:11px 12px}
+  body.driver-mode .nsc-name{font-size:19px}
+  body.driver-mode .nsc-dist{font-size:38px}
+  body.driver-mode .nsc-photo{height:55px}
+  body.driver-mode .hud-strip{bottom:146px;width:calc(100vw - 32px);min-width:0}
+}
+
 </style>
 </head>
 <body>
