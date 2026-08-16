@@ -1200,6 +1200,49 @@ body.driver-mode .stop-photo-ov{display:none!important}
   body.driver-mode .hud-strip{bottom:146px;width:calc(100vw - 32px);min-width:0}
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DRIVER UX V7 — TRUE NAVIGATION COCKPIT
+   This layer intentionally wins over every legacy/V6 rule above.
+   ═══════════════════════════════════════════════════════════════════════ */
+body.driver-mode{overflow:hidden!important;background:#050a0f!important}
+body.driver-mode .topbar,body.driver-mode .sum-bar,body.driver-mode>.sheet,
+body.driver-mode .install-banner,body.driver-mode .lcm,body.driver-mode .hud-toggle,
+body.driver-mode .hud-stops-panel{display:none!important}
+body.driver-mode .map-wrap{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:1!important}
+body.driver-mode .nav-hud{display:block!important;position:absolute!important;inset:0!important;z-index:1000!important}
+body.driver-mode .map-wrap:before{content:"GPS  ●   DRIVER MODE"!important;left:50%!important;top:14px!important;transform:translateX(-50%)!important;background:rgba(3,10,16,.76)!important;color:#bfefff!important;border:1px solid rgba(72,215,255,.25)!important;z-index:1003!important}
+body.driver-mode .map-wrap:after{z-index:400!important;background:linear-gradient(180deg,rgba(1,6,10,.30),transparent 22%,transparent 72%,rgba(1,6,10,.28))!important}
+
+/* Large left manoeuvre card — no speed embedded in it. */
+body.driver-mode .hud-instr{position:absolute!important;top:74px!important;left:22px!important;right:auto!important;width:360px!important;min-height:330px!important;height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;padding:0!important;border:1px solid rgba(255,255,255,.18)!important;border-radius:22px!important;background:rgba(4,11,17,.93)!important;box-shadow:0 18px 48px rgba(0,0,0,.58)!important;backdrop-filter:blur(16px)!important;overflow:hidden!important}
+body.driver-mode .hud-instr-icon{order:2!important;width:100%!important;min-width:0!important;min-height:130px!important;height:130px!important;border:0!important;background:transparent!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important}
+body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:124px!important;height:124px!important;max-width:124px!important;max-height:124px!important;color:#fff!important;filter:drop-shadow(0 6px 12px rgba(0,0,0,.6))!important}
+body.driver-mode .hud-instr-body{order:1!important;width:100%!important;padding:24px 24px 4px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;box-sizing:border-box!important}
+body.driver-mode .hud-instr-dist{font-size:64px!important;line-height:.9!important;color:#fff!important;font-weight:900!important;letter-spacing:-2px!important}
+body.driver-mode .hud-instr-action{order:3!important;font-size:27px!important;line-height:1.05!important;color:#32c6ff!important;font-weight:900!important;text-transform:uppercase!important;margin:8px 0 4px!important}
+body.driver-mode .hud-instr-detail{order:4!important;font-size:13px!important;line-height:1.3!important;color:#d8e4eb!important;white-space:normal!important}
+body.driver-mode .hud-next-preview{order:5!important;margin-top:10px!important;color:#90a4b1!important}
+body.driver-mode .hud-instr-speed{display:none!important}
+
+/* Independent speedometer, like an automotive instrument. */
+body.driver-mode .cockpit-speed{display:flex!important;position:absolute!important;right:24px!important;top:28px!important;width:112px!important;height:112px!important;border-radius:50%!important;z-index:1020!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;background:radial-gradient(circle at 50% 38%,rgba(25,167,255,.13),rgba(3,9,14,.96) 68%)!important;border:2px solid rgba(255,255,255,.22)!important;box-shadow:0 12px 34px rgba(0,0,0,.55),inset 0 0 0 5px rgba(255,255,255,.025)!important;color:#fff!important}
+.cockpit-speed{display:none}.cockpit-speed-value{font:900 45px/.88 var(--mono)}.cockpit-speed-unit{font:700 11px/1 var(--mono);color:#aebdc6;margin-top:7px}.cockpit-speed-target{position:absolute;right:-5px;top:-4px;min-width:30px;min-height:30px;border-radius:50%;background:#fff;border:3px solid #ef5a29;color:#111;font:900 13px/30px var(--mono);text-align:center}
+body.driver-mode .cockpit-exit{display:block!important;position:absolute!important;right:32px!important;top:154px!important;z-index:1020!important;width:42px!important;height:42px!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.18)!important;background:rgba(4,11,17,.86)!important;color:#fff!important;font-size:18px!important;cursor:pointer!important}
+.cockpit-exit{display:none}
+
+/* Right-side next stop card. */
+body.driver-mode .nsc{display:block!important;position:absolute!important;right:24px!important;bottom:28px!important;left:auto!important;top:auto!important;width:330px!important;min-height:188px!important;height:auto!important;max-height:310px!important;padding:18px!important;box-sizing:border-box!important;border:1px solid rgba(255,255,255,.17)!important;border-left:4px solid #19a7ff!important;border-radius:20px!important;background:rgba(4,11,17,.93)!important;box-shadow:0 18px 48px rgba(0,0,0,.55)!important;backdrop-filter:blur(16px)!important;overflow:hidden!important}
+body.driver-mode .nsc-head{font-size:11px!important;color:#45d3ff!important;letter-spacing:1.8px!important}body.driver-mode .nsc-name{font-size:27px!important;color:#fff!important;margin:8px 0 3px!important}body.driver-mode .nsc-dist{font-size:52px!important;color:#fff!important;margin:8px 0 7px!important;line-height:.9!important}body.driver-mode .nsc-photo{height:96px!important;width:100%!important;object-fit:cover!important;border-radius:10px!important;margin-top:10px!important}
+
+/* Progress floats low and central, leaving road visible. */
+body.driver-mode .hud-strip{position:absolute!important;left:50%!important;right:auto!important;bottom:24px!important;transform:translateX(-50%)!important;width:390px!important;max-width:32vw!important;min-width:270px!important;height:38px!important;padding:8px 12px!important;border-radius:999px!important;background:rgba(4,11,17,.86)!important;border:1px solid rgba(255,255,255,.14)!important;box-shadow:0 10px 28px rgba(0,0,0,.45)!important}
+body.driver-mode .hud-compass{position:absolute!important;right:24px!important;top:210px!important;width:48px!important;height:48px!important;background:rgba(4,11,17,.82)!important}
+body.driver-mode #hud-voice{right:24px!important;top:270px!important;width:48px!important;height:48px!important}
+body.driver-mode .leaflet-control-container{display:none!important}
+
+@media(max-width:900px){body.driver-mode .hud-instr{left:14px!important;top:62px!important;width:310px!important;min-height:285px!important}body.driver-mode .hud-instr-dist{font-size:54px!important}body.driver-mode .hud-instr-icon{height:110px!important;min-height:110px!important}body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:104px!important;height:104px!important}body.driver-mode .hud-instr-action{font-size:23px!important}body.driver-mode .cockpit-speed{right:16px!important;width:96px!important;height:96px!important}.cockpit-speed-value{font-size:38px}body.driver-mode .nsc{right:16px!important;bottom:18px!important;width:290px!important}body.driver-mode .hud-strip{bottom:18px!important;width:300px!important;min-width:220px!important}}
+
 </style>
 </head>
 <body>
@@ -1292,6 +1335,14 @@ body.driver-mode .stop-photo-ov{display:none!important}
         <div class="hud-tgt" id="hud-tgt" title="Recorded avg of this leg"></div>
       </div>
     </div>
+
+    <!-- V7 cockpit instruments: independent from the manoeuvre card -->
+    <div class="cockpit-speed" id="cockpit-speed" aria-label="Current speed">
+      <div class="cockpit-speed-value" id="cockpit-speed-value">0</div>
+      <div class="cockpit-speed-unit">km/h</div>
+      <div class="cockpit-speed-target" id="cockpit-speed-target"></div>
+    </div>
+    <button class="cockpit-exit" id="cockpit-exit" onclick="stopNav()" title="Exit navigation">✕</button>
 
     <!-- Compass -->
     <div class="lap-badge" id="lap-badge" style="display:none">LAP 1 / 1</div>
@@ -1541,7 +1592,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
 
 // ── PWA ────────────────────────────────────────────────
 let deferredInstall=null;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;el('install-banner').style.display='flex'});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;/* V7: no full-width install interruption while operating */});
 function doInstall(){if(!deferredInstall)return;deferredInstall.prompt();deferredInstall.userChoice.then(()=>{deferredInstall=null;hideInstall()})}
 function hideInstall(){el('install-banner').style.display='none'}
 window.addEventListener('appinstalled',hideInstall);
@@ -3234,6 +3285,7 @@ function onGPS(pos){
   headingSource=_hd.source;
   lastGPSForSpeed={lat,lng,t:Date.now()};
   el('hud-spd').textContent=spdKmh!=null?Math.round(spdKmh):'—';
+  if(el('cockpit-speed-value'))el('cockpit-speed-value').textContent=spdKmh!=null?Math.round(spdKmh):'—';
   // Pacing target: recorded avg speed of the leg towards the next pending stop
   if(navActive&&el('hud-tgt')){
     const _nx=stops.find(x=>x.state!=='done');
@@ -4694,6 +4746,10 @@ map.getContainer().addEventListener('drop',e=>{
   e.preventDefault();const f=e.dataTransfer.files[0];
   if(f?.name.endsWith('.gpx')){const r=new FileReader();r.onload=ev=>parseGPX(ev.target.result,f.name);r.readAsText(f)}
 });
+
+// V7: keep the independent cockpit speed-limit/target badge bound to the existing HUD value.
+window.addEventListener('DOMContentLoaded',()=>{const src=document.getElementById('hud-tgt'),dst=document.getElementById('cockpit-speed-target');if(src&&dst){const sync=()=>{dst.textContent=src.textContent||'';dst.style.display=dst.textContent?'block':'none'};new MutationObserver(sync).observe(src,{childList:true,subtree:true,characterData:true});sync();}});
+
 </script>
 </body>
 </html>
