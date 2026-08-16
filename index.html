@@ -1243,6 +1243,121 @@ body.driver-mode .leaflet-control-container{display:none!important}
 
 @media(max-width:900px){body.driver-mode .hud-instr{left:14px!important;top:62px!important;width:310px!important;min-height:285px!important}body.driver-mode .hud-instr-dist{font-size:54px!important}body.driver-mode .hud-instr-icon{height:110px!important;min-height:110px!important}body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:104px!important;height:104px!important}body.driver-mode .hud-instr-action{font-size:23px!important}body.driver-mode .cockpit-speed{right:16px!important;width:96px!important;height:96px!important}.cockpit-speed-value{font-size:38px}body.driver-mode .nsc{right:16px!important;bottom:18px!important;width:290px!important}body.driver-mode .hud-strip{bottom:18px!important;width:300px!important;min-width:220px!important}}
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRIVER UX v6 — NAVIGATION COCKPIT
+   The map is the protagonist. Everything else is a floating card with a
+   clear hierarchy: manoeuvre (top-left) · speed (top-right) · next stop
+   (right) · orientation (bottom). Technical readouts belong to Developer
+   mode, not here. Appended last so it wins over the legacy HUD rules.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.cockpit{--ck-card:rgba(16,20,28,.94);--ck-line:rgba(255,255,255,.10);
+  --ck-blue:#4c9dff;--ck-dim:#8b97a8}
+
+/* the map takes the whole screen; chrome is hidden */
+body.cockpit .topbar,body.cockpit .sum-bar,body.cockpit .lcm,
+body.cockpit .hud-strip,body.cockpit .hud-toggle,body.cockpit .hud-compass,
+body.cockpit .hud-instr-speed,body.cockpit .peek{display:none!important}
+body.cockpit .map-wrap{position:fixed;inset:0;height:100vh;width:100vw;z-index:1}
+body.cockpit #map{height:100%}
+
+/* ── manoeuvre card (top-left) ─────────────────────────────────────────── */
+body.cockpit .hud-instr{
+  position:absolute;left:14px;top:64px;width:300px;display:block;
+  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:22px;
+  padding:18px 20px 14px;box-shadow:0 14px 40px rgba(0,0,0,.55);
+  backdrop-filter:blur(14px);z-index:1200}
+body.cockpit .ck-dist-row{display:flex;align-items:baseline;gap:6px}
+body.cockpit .hud-instr-dist{font-size:56px;font-weight:800;line-height:1;
+  font-family:var(--mono);color:#fff!important;letter-spacing:-1px}
+body.cockpit .hud-instr-dist.close{animation:none}
+body.cockpit .hud-instr-icon{background:none!important;border:none!important;
+  width:auto;height:auto;padding:6px 0 2px;display:block;color:#fff}
+body.cockpit .hud-instr-icon svg{width:104px;height:104px}
+body.cockpit .hud-icon-lbl{display:none}
+body.cockpit .hud-instr-body{padding:0;display:block}
+body.cockpit .hud-instr-action{font-size:20px;font-weight:800;letter-spacing:.6px;
+  text-transform:uppercase;color:var(--ck-blue);margin:2px 0 6px}
+body.cockpit .ck-road{display:flex;align-items:center;gap:8px;min-height:22px}
+body.cockpit .ck-road-badge{background:#2ea043;color:#fff;font-size:12px;font-weight:800;
+  padding:2px 8px;border-radius:5px;letter-spacing:.5px}
+body.cockpit .hud-instr-detail{font-size:15px;color:#d5dde8;font-family:inherit;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.cockpit .hud-next-preview{font-size:12px;color:var(--ck-dim);margin-top:4px}
+body.cockpit .ck-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--ck-line)}
+body.cockpit .ck-minibar{height:4px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}
+body.cockpit .ck-minifill{height:100%;background:var(--ck-blue);border-radius:3px;transition:width .5s}
+body.cockpit .ck-foot-row{display:flex;justify-content:space-between;margin-top:7px;
+  font-family:var(--mono);font-size:15px;font-weight:700;color:#e8eef6}
+
+/* ── speed dial (top-right) ────────────────────────────────────────────── */
+body.cockpit .cockpit-speed{position:absolute;right:16px;top:64px;width:104px;height:104px;
+  border-radius:50%;background:var(--ck-card);border:1px solid var(--ck-line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);backdrop-filter:blur(14px);z-index:1200}
+body.cockpit .cockpit-speed-value{font-family:var(--mono);font-size:38px;font-weight:800;
+  line-height:1;color:#fff}
+body.cockpit .cockpit-speed-unit{font-size:11px;color:var(--ck-dim);font-family:var(--mono)}
+body.cockpit .cockpit-speed-target{position:absolute;top:112px;right:0;white-space:nowrap;
+  font-family:var(--mono);font-size:13px;font-weight:700;color:#3fb950;
+  background:rgba(16,20,28,.94);border:1px solid rgba(63,185,80,.45);
+  border-radius:14px;padding:3px 10px}
+
+/* ── next stop card (right, under the dial) ────────────────────────────── */
+body.cockpit .nsc{position:absolute;right:16px;top:auto;bottom:86px;width:250px;
+  background:var(--ck-card);border:1px solid var(--ck-line);border-left:1px solid var(--ck-line);
+  border-radius:18px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.55);
+  backdrop-filter:blur(14px);z-index:1200}
+body.cockpit .nsc-head{font-size:11px;letter-spacing:1.4px;color:var(--ck-blue);font-weight:800}
+body.cockpit .nsc-name{font-size:21px;font-weight:800;color:#fff;margin:3px 0 8px}
+body.cockpit .nsc-photo{height:112px;border-radius:12px;margin:0 0 10px}
+body.cockpit .nsc-dist{font-size:34px;color:#fff!important;font-weight:800;line-height:1}
+body.cockpit .nsc-row{border:none;padding:3px 0;font-size:13px;color:var(--ck-dim)}
+body.cockpit .nsc-eta{font-family:var(--mono);color:var(--ck-blue);font-weight:700}
+body.cockpit .nsc-events{gap:14px;justify-content:space-around;margin:8px 0 0;
+  padding-top:10px;border-top:1px solid var(--ck-line)}
+body.cockpit .nsc-events .evt-chip{flex-direction:column;gap:4px;border:none;background:none;
+  padding:0;font-size:10px;letter-spacing:.3px}
+body.cockpit .nsc-events .evt-chip svg{width:26px;height:26px}
+/* each event keeps its own colour so it reads without being read */
+body.cockpit .evt-chip[title="Open Door"]{color:#3fb950}
+body.cockpit .evt-chip[title="Kneeling"]{color:#4c9dff}
+body.cockpit .evt-chip[title="Hand Brake"]{color:#f85149}
+body.cockpit .nsc.atstop{border-color:rgba(63,185,80,.55)}
+
+/* ── status pill + orientation button ─────────────────────────────────── */
+body.cockpit .ck-status{position:absolute;left:16px;top:14px;display:flex;align-items:center;
+  gap:10px;z-index:1200;font-family:var(--mono);font-size:13px;color:#e8eef6}
+body.cockpit .ck-gps{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  background:rgba(16,20,28,.9);border:1px solid var(--ck-line);border-radius:12px;padding:3px 9px}
+body.cockpit .ck-gps i{width:7px;height:7px;border-radius:50%;background:#3fb950;display:block}
+body.cockpit .ck-gps.weak i{background:#f0a500}
+body.cockpit .ck-gps.bad  i{background:#f85149}
+body.cockpit .ck-orient{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;
+  display:inline-flex;align-items:center;gap:8px;z-index:1200;cursor:pointer;
+  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:22px;
+  padding:9px 16px;color:#e8eef6;font-size:12px;font-weight:800;letter-spacing:1px;
+  box-shadow:0 10px 26px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+body.cockpit .ck-orient-ico{display:inline-flex;width:20px;height:20px;align-items:center;
+  justify-content:center;border-radius:50%;background:rgba(255,255,255,.12);font-size:11px}
+body.cockpit .cockpit-exit{position:absolute;right:16px;bottom:22px;z-index:1200}
+body.cockpit .lap-badge{top:14px;left:50%;transform:translateX(-50%);z-index:1200}
+
+/* ── tunnel mode: dim the tiles, keep the route and cards bright ───────── */
+body.cockpit.tunnel #map .leaflet-tile-pane{filter:brightness(.45) saturate(.5)}
+body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)}
+
+/* ── narrow tablets in portrait ───────────────────────────────────────── */
+@media (max-width:820px){
+  body.cockpit .hud-instr{width:min(74vw,290px);top:56px;left:10px;padding:14px 16px 12px}
+  body.cockpit .hud-instr-dist{font-size:46px}
+  body.cockpit .hud-instr-icon svg{width:84px;height:84px}
+  body.cockpit .hud-instr-action{font-size:17px}
+  body.cockpit .cockpit-speed{width:88px;height:88px;right:10px;top:56px}
+  body.cockpit .cockpit-speed-value{font-size:32px}
+  body.cockpit .nsc{width:min(52vw,230px);right:10px;bottom:78px}
+  body.cockpit .nsc-photo{height:96px}
+}
 </style>
 </head>
 <body>
@@ -1301,11 +1416,11 @@ body.driver-mode .leaflet-control-container{display:none!important}
     <div class="nsc" id="nsc">
       <div class="nsc-head"><span id="nsc-title">NEXT STOP</span><span id="nsc-count">–/–</span></div>
       <div class="nsc-name" id="nsc-name"></div>
+      <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="Next stop photo — tap to enlarge">
       <div class="nsc-dist" id="nsc-dist">—</div>
-      <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span id="nsc-evt" class="nsc-evt"></span></div>
-      <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span></div>
+      <div class="nsc-row"><span id="nsc-plan">⏱ --:--</span><span class="nsc-eta" id="nsc-eta"></span></div>
+      <div class="nsc-row"><span class="nsc-leg" id="nsc-leg"></span><span id="nsc-evt" class="nsc-evt"></span></div>
       <div class="nsc-events" id="nsc-events" style="display:none"></div>
-    <img class="nsc-photo" id="nsc-photo" style="display:none" onclick="nscPhotoTap()" alt="Next stop photo — tap to enlarge">
     </div>
 
     <!-- Live cycle metrics: updated continuously during navigation -->
@@ -1319,15 +1434,25 @@ body.driver-mode .leaflet-control-container{display:none!important}
 
     <!-- Main instruction strip (Waze-style) -->
     <div class="hud-instr" id="hud-instr">
+      <div class="ck-dist-row"><div class="hud-instr-dist far" id="hud-dist">—</div></div>
       <div class="hud-instr-icon straight" id="hud-icon">
         <span id="hud-icon-arrow" aria-hidden="true"></span>
         <span class="hud-icon-lbl" id="hud-icon-lbl"></span>
       </div>
       <div class="hud-instr-body">
-        <div class="hud-instr-dist far" id="hud-dist">—</div>
         <div class="hud-instr-action"   id="hud-action">Waiting for GPS...</div>
-        <div class="hud-instr-detail"   id="hud-detail"></div>
+        <div class="ck-road">
+          <span class="ck-road-badge" id="ck-road-badge" style="display:none"></span>
+          <span class="hud-instr-detail" id="hud-detail"></span>
+        </div>
         <div class="hud-next-preview"   id="hud-preview"></div>
+      </div>
+      <div class="ck-foot">
+        <div class="ck-minibar"><div class="ck-minifill" id="ck-minifill" style="width:0%"></div></div>
+        <div class="ck-foot-row">
+          <span id="ck-foot-dist">—</span>
+          <span id="ck-foot-time">—</span>
+        </div>
       </div>
       <div class="hud-instr-speed">
         <div class="hud-spd-val"  id="hud-spd">0</div>
@@ -1337,6 +1462,15 @@ body.driver-mode .leaflet-control-container{display:none!important}
     </div>
 
     <!-- V7 cockpit instruments: independent from the manoeuvre card -->
+    <div class="ck-status" id="ck-status">
+      <span class="ck-clock" id="ck-clock">--:--</span>
+      <span class="ck-gps" id="ck-gps"><i></i>GPS</span>
+    </div>
+
+    <button class="ck-orient" id="ck-orient" onclick="toggleOrientMode()" title="Map orientation">
+      <span class="ck-orient-ico" id="ck-orient-ico">▲</span><span id="ck-orient-lbl">HEADING UP</span>
+    </button>
+
     <div class="cockpit-speed" id="cockpit-speed" aria-label="Current speed">
       <div class="cockpit-speed-value" id="cockpit-speed-value">0</div>
       <div class="cockpit-speed-unit">km/h</div>
@@ -2698,6 +2832,7 @@ function startNav(){
   if(!navigator.geolocation){alert('Geolocation not available.');return}
   navActive=true;
   document.body.classList.add('driver-mode');
+  setCockpit(cockpitMode);   // Driver Mode cockpit is the default while navigating
   hudPanelOpen=false;
   el('hud-sp').classList.remove('on');
   document.body.classList.remove('stops-open');
@@ -2734,6 +2869,7 @@ function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
   navActive=false;
   document.body.classList.remove('driver-mode');
+  document.body.classList.remove('cockpit');
   Playback.stop();
   el('btn-nav').style.display='';el('btn-nav2').style.display='';
   el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
@@ -3320,7 +3456,7 @@ function onGPS(pos){
     // §19: zoom tracks speed so the scale always matches how fast the scene
     // is changing — close in traffic, wider on the motorway, clamped both ways.
     const zoom=adaptiveZoom(rawKmh);
-    if((navActive||isRec)&&currentHeading!=null&&typeof DOMMatrix!=='undefined'){
+    if((navActive||isRec)&&currentHeading!=null&&orientMode==='HEADING'&&typeof DOMMatrix!=='undefined'){
       // Heading-up: rotate map to put direction of travel at top
       setMapBearing(-currentHeading); // negative = rotate map opposite to heading
       // §21: push the CENTRE ahead of the vehicle so the bus sits low on the
@@ -3350,6 +3486,9 @@ function onGPS(pos){
   // §4/§7: visual guidance derived from route geometry at the current
   // position — presentation only, computed after the engine has spoken.
   if(navActive&&routePts.length)renderGuidanceArrow(computeGuidance(routeProgressM,rawKmh));
+  // cockpit chrome — clock, GPS quality, route footer (presentation only)
+  updCockpitChrome(accuracy);
+  if(navActive)updCockpitFooter();
   checkArrival(lat,lng,rawKmh,match,accuracy);
   // §29: GPS → engine → routeProgressM → playback. No second matcher.
   if(navActive)Playback.update(routeProgressM);
@@ -3521,6 +3660,7 @@ function updNextStopCard(lat,lng){
     el('nsc-title').textContent='NEXT STOP';
     const dM=haversine(lat,lng,next.lat,next.lng)*1000;
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
+    updStopEta(dM);          // cockpit: arrival clock beside the planned time
   }
   el('nsc-plan').textContent='⏱ '+(next.dur_s?fmtC(next.dur_s):'--:--');
   // §26: the stop NAME is part of the glance-level answer, not a detail.
@@ -4091,8 +4231,88 @@ function updRouteRemaining(nearIdx,distFromStart){
   if(posMarker&&posMarker.setZIndexOffset)posMarker.setZIndexOffset(5000);
 }
 
+/* ══ COCKPIT (Driver UX v6) — presentation layer only ═══════════════════
+   Driver Mode is the default while navigating: map full-bleed, four cards,
+   nothing technical. Developer Mode restores the legacy bars and the
+   Navigation Debug overlay. No engine state is read or written here beyond
+   values the engine already published.                                   */
+let cockpitMode = true;          // Driver Mode by default (§ modes)
+let orientMode  = 'HEADING';     // 'HEADING' (heading-up) | 'NORTH'
+
+function setCockpit(on){
+  cockpitMode=!!on;
+  const b=document.body; if(!b||!b.classList)return;
+  b.classList.toggle('cockpit',cockpitMode&&navActive);
+  updCockpitChrome();
+}
+function toggleDriverMode(){ setCockpit(!cockpitMode); }
+
+/* NORTH UP / HEADING UP — the map rotation itself stays in onGPS. */
+function toggleOrientMode(){
+  orientMode = orientMode==='HEADING' ? 'NORTH' : 'HEADING';
+  const l=el('ck-orient-lbl'), i=el('ck-orient-ico');
+  if(l)l.textContent = orientMode==='HEADING' ? 'HEADING UP' : 'NORTH UP';
+  if(i)i.textContent = orientMode==='HEADING' ? '▲' : 'N';
+  if(orientMode==='NORTH')setMapBearing(0);
+  return orientMode;
+}
+
+/* clock + GPS quality pill */
+function updCockpitChrome(accuracyM){
+  const c=el('ck-clock');
+  if(c){const d=new Date();
+    c.textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+  const g=el('ck-gps');
+  if(g&&g.classList){
+    const a=accuracyM==null?null:accuracyM;
+    g.classList.toggle('weak', a!=null&&a>15&&a<=35);
+    g.classList.toggle('bad',  a!=null&&a>35);
+  }
+}
+
+/* Manoeuvre-card footer: distance left on the route and time to finish it,
+   plus the thin progress bar. Reads published values only. */
+function updCockpitFooter(){
+  const totalM=(totalRouteDist||0)*1000;
+  const doneM=Math.max(0,Math.min(totalM,routeProgressM||0));
+  const pct=totalM>0?(doneM/totalM)*100:0;
+  const f=el('ck-minifill'); if(f)f.style.width=pct.toFixed(1)+'%';
+  const fd=el('ck-foot-dist');
+  if(fd)fd.textContent=fmtDist(Math.max(0,totalM-doneM));
+  // remaining time from the leg pace the recording actually achieved, so the
+  // estimate matches this cycle rather than an arbitrary constant
+  const kmh=(live&&live.moving>0)?(live.dist/(live.moving/3600)):null;
+  const ft=el('ck-foot-time');
+  if(ft){
+    const remKm=Math.max(0,(totalM-doneM)/1000);
+    ft.textContent=(kmh&&kmh>3)?fmtTime(Math.round(remKm/kmh*3600)):'—';
+  }
+}
+
+/* Next-stop arrival clock, shown next to the planned duration */
+function updStopEta(distM){
+  const e=el('nsc-eta'); if(!e)return;
+  const kmh=(live&&live.moving>0)?(live.dist/(live.moving/3600)):null;
+  if(!kmh||kmh<=3||distM==null){e.textContent='';return;}
+  const secs=Math.round((distM/1000)/kmh*3600);
+  const at=new Date(Date.now()+secs*1000);
+  e.textContent=String(at.getHours()).padStart(2,'0')+':'+String(at.getMinutes()).padStart(2,'0');
+}
+
+/* Road badge + street name under the action line. The recording carries no
+   street data, so the badge shows only when a stop name supplies one; the
+   detail line keeps whatever the instruction already produced. */
+function updRoadBadge(text){
+  const b=el('ck-road-badge'); if(!b)return;
+  const m=text&&/^([A-Z]{1,2}\d{1,3})\b\s*(.*)$/.exec(text);
+  if(m){b.textContent=m[1];b.style.display='';
+    const d=el('hud-detail'); if(d)d.textContent=m[2]||'';}
+  else b.style.display='none';
+}
 function updInstruction(nearIdx,distFromStart){
   if(!currentPos)return;
+  // after the instruction renders, lift any road code into the badge
+  try{setTimeout(()=>{const d=el('hud-detail');if(d)updRoadBadge(d.textContent);},0);}catch(e){}
 
   // GPS-only mode (Start GPS without a route loaded)
   if(!routePts.length){

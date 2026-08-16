@@ -2111,3 +2111,138 @@ function uxDrive(shape,n,to,kmh,hdg){
 speakText=_realSpeak3;
 console.log('ALL DRIVER-UX TESTS PASSED');
 __group('Driver UX tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  COCKPIT v6 — driver-mode layout, orientation, footer, stop dock
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── cockpit v6 ──');
+const _realSpeakCk=speakText;
+speakText=(t,f)=>{_spoken.push(String(t));};
+
+const ckCss=()=>document.__cssText||'';
+const ckPx=(sel,prop)=>{
+  const m=new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\{[^}]*'+prop+':(\\d+)px').exec(ckCss());
+  return m?+m[1]:null;
+};
+function ckDrive(){
+  const rec=mkRec('ck',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[120]);
+  rec.stops[0].events=['openDoor','kneeling','handBrake'];
+  rec.stops[0].photo='data:image/jpeg;base64,CKCKCKCK';
+  beginPlayback(rec,1);
+  el('rng-follow').value='1'; el('rng-radius').value='80';
+  navActive=true; setCockpit(true);
+  drivePts(rec,0,40,30,0);
+  return rec;
+}
+
+// ── CK-1: Driver Mode puts the body in cockpit and hides the chrome ──
+(function(){
+  ckDrive();
+  console.assert(document.body.classList.contains('cockpit'),'CK-1: cockpit class not applied');
+  const css=ckCss();
+  console.assert(/body\.cockpit \.topbar[^{]*\{display:none/.test(css.replace(/\s*,\s*/g,',')) ||
+    /body\.cockpit \.topbar,[\s\S]{0,400}?display:none!important/.test(css),
+    'CK-1: top chrome not hidden in cockpit');
+  console.assert(/body\.cockpit \.map-wrap\{position:fixed/.test(css),'CK-1: map is not full-bleed');
+  console.log('CK-1. cockpit active, chrome hidden, map full-bleed OK');
+})();
+
+// ── CK-2: manoeuvre card is the dominant element (top-left) ──
+(function(){
+  const dist=ckPx('body.cockpit .hud-instr-dist','font-size');
+  const act =ckPx('body.cockpit .hud-instr-action','font-size');
+  const arrow=ckPx('body.cockpit .hud-instr-icon svg','width');
+  console.assert(dist>=50,'CK-2: manoeuvre distance only '+dist+'px');
+  console.assert(arrow>=96,'CK-2: manoeuvre arrow only '+arrow+'px');
+  console.assert(dist>act,'CK-2: distance is not dominant over the action line');
+  console.assert(/body\.cockpit \.hud-instr\{[^}]*left:14px/.test(ckCss()),'CK-2: card not top-left');
+  console.log(`CK-2. distance ${dist}px · arrow ${arrow}px · action ${act}px OK`);
+})();
+
+// ── CK-3: speed dial is round and top-right ──
+(function(){
+  const css=ckCss();
+  const m=/body\.cockpit \.cockpit-speed\{([^}]*)\}/.exec(css);
+  console.assert(m,'CK-3: no cockpit speed rule');
+  console.assert(/border-radius:50%/.test(m[1]),'CK-3: speed dial is not round');
+  console.assert(/right:16px/.test(m[1])&&/top:64px/.test(m[1]),'CK-3: dial not top-right');
+  console.assert(ckPx('body.cockpit .cockpit-speed-value','font-size')>=34,'CK-3: speed value too small');
+  console.log('CK-3. round speed dial, top-right OK');
+})();
+
+// ── CK-4: orientation toggle flips heading-up / north-up ──
+(function(){
+  orientMode='HEADING';
+  console.assert(toggleOrientMode()==='NORTH','CK-4: did not switch to NORTH');
+  console.assert(el('ck-orient-lbl').textContent==='NORTH UP','CK-4: label not updated');
+  console.assert(_lastBearing===0,'CK-4: north-up did not level the map: '+_lastBearing);
+  // and heading-up rotation resumes when switched back
+  // an explicit heading: drivePts only produces a movement bearing when one
+  // is supplied, and the assertion here is about rotation, not heading source
+  const rec=mkRec('ck4',120,i=>({lat:LAT0+i*DLAT,lng:LNG0+i*0.00012}),[]);
+  beginPlayback(rec,1); el('rng-follow').value='1'; navActive=true;
+  drivePts(rec,0,10,40,45);
+  console.assert(_lastBearing===0,'CK-4: map rotated while in NORTH UP: '+_lastBearing);
+  console.assert(toggleOrientMode()==='HEADING','CK-4: did not switch back');
+  drivePts(rec,11,20,40,45);
+  console.assert(_lastBearing!==0,'CK-4: heading-up did not resume rotating');
+  console.log('CK-4. NORTH UP holds the map level; HEADING UP resumes OK');
+})();
+
+// ── CK-5: manoeuvre footer shows distance left and a progress bar ──
+(function(){
+  const rec=ckDrive();
+  const total=(totalRouteDist||0)*1000;
+  updCockpitFooter();
+  const w=parseFloat(el('ck-minifill').style.width);
+  console.assert(w>0&&w<100,'CK-5: progress bar at '+w+'%');
+  const txt=el('ck-foot-dist').textContent;
+  console.assert(/\d/.test(txt),'CK-5: no remaining distance: '+txt);
+  const remM=total-routeProgressM;
+  const shown=/km/.test(txt)?parseFloat(txt)*1000:parseFloat(txt);
+  console.assert(Math.abs(shown-remM)<60,'CK-5: remaining '+txt+' vs actual '+remM.toFixed(0)+' m');
+  console.log(`CK-5. footer ${w.toFixed(0)}% · ${txt} remaining OK`);
+})();
+
+// ── CK-6: stop dock keeps photo, distance and the three coloured events ──
+(function(){
+  ckDrive();
+  updNextStopCard(LAT0,LNG0);
+  console.assert(el('nsc-photo').style.display==='block','CK-6: photo missing from the dock');
+  console.assert((el('nsc-events').innerHTML.match(/<svg/g)||[]).length===3,'CK-6: three events not shown');
+  const css=ckCss();
+  console.assert(/body\.cockpit \.evt-chip\[title="Open Door"\]\{color:#3fb950/.test(css),'CK-6: door not green');
+  console.assert(/body\.cockpit \.evt-chip\[title="Kneeling"\]\{color:#4c9dff/.test(css),'CK-6: kneeling not blue');
+  console.assert(/body\.cockpit \.evt-chip\[title="Hand Brake"\]\{color:#f85149/.test(css),'CK-6: brake not red');
+  console.assert(/body\.cockpit \.nsc\{[^}]*bottom:86px/.test(css),'CK-6: dock not anchored bottom-right');
+  console.log('CK-6. stop dock: photo + 3 colour-coded events, bottom-right OK');
+})();
+
+// ── CK-7: GPS quality pill reflects accuracy, clock is set ──
+(function(){
+  updCockpitChrome(8);
+  const g=el('ck-gps');
+  console.assert(!g.classList.contains('weak')&&!g.classList.contains('bad'),'CK-7: good fix flagged');
+  updCockpitChrome(25);
+  console.assert(g.classList.contains('weak'),'CK-7: 25 m not flagged weak');
+  updCockpitChrome(60);
+  console.assert(g.classList.contains('bad'),'CK-7: 60 m not flagged bad');
+  console.assert(/^\d\d:\d\d$/.test(el('ck-clock').textContent),'CK-7: clock not set: '+el('ck-clock').textContent);
+  console.log('CK-7. GPS pill good/weak/bad + clock OK');
+})();
+
+// ── CK-8: leaving navigation leaves cockpit; engine untouched by the UI ──
+(function(){
+  ckDrive();
+  const progBefore=routeProgressM, occBefore=(Playback._currentOccurrence()||{}).occurrenceId;
+  setCockpit(false); setCockpit(true); toggleOrientMode(); toggleOrientMode();
+  console.assert(routeProgressM===progBefore,'CK-8: UI changed route progress');
+  console.assert((Playback._currentOccurrence()||{}).occurrenceId===occBefore,'CK-8: UI changed the occurrence');
+  stopNav();
+  console.assert(!document.body.classList.contains('cockpit'),'CK-8: cockpit survived stopNav');
+  console.log('CK-8. cockpit toggles are inert on engine state; exits with nav OK');
+})();
+
+speakText=_realSpeakCk;
+console.log('ALL COCKPIT TESTS PASSED');
+__group('Cockpit tests');
