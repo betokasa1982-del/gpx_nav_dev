@@ -1902,14 +1902,16 @@ function uxDrive(shape,n,to,kmh,hdg){
 
 // ── MAP-UX-6: straight stretch → arrow exists, STRAIGHT, no turn direction ──
 (function(){
+  // SPEC CHANGE (field, 16 Aug): the on-map arrow was retired — the driver
+  // reported it added clutter in front of the bus with no information beyond
+  // the card and the highlighted route. Guidance itself must keep computing
+  // (it drives the HUD card), and NO marker may appear on the map.
   uxDrive(uxStraight,140,30,30,0);
-  console.assert(guidanceMarker,'MAP-UX-6: no guidance arrow rendered');
-  console.assert(lastGuidance.kind==='STRAIGHT','MAP-UX-6: straight road classified '+lastGuidance.kind);
+  console.assert(lastGuidance&&lastGuidance.kind==='STRAIGHT',
+    'MAP-UX-6: straight road classified '+(lastGuidance&&lastGuidance.kind));
   console.assert(lastGuidance.dir===null,'MAP-UX-6: straight road got a direction');
-  console.assert(/<svg/.test(guidanceMarker._icon.html),'MAP-UX-6: arrow is not SVG');
-  console.assert(!/[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/u.test(guidanceMarker._icon.html),
-    'MAP-UX-6: arrow contains an emoji/arrow glyph');
-  console.log('MAP-UX-6. straight → SVG arrow, kind=STRAIGHT OK');
+  console.assert(guidanceMarker===null,'MAP-UX-6: a map arrow marker was rendered');
+  console.log('MAP-UX-6. straight → guidance computed, no map marker OK');
 })();
 
 // ── MAP-UX-7 / §37 / §39: a gentle bend is CURVE, never TURN ──
@@ -1920,7 +1922,7 @@ function uxDrive(shape,n,to,kmh,hdg){
   console.assert(g.kind!=='TURN','MAP-UX-7: gentle bend classified as TURN ('+
     g.deltaDeg.toFixed(0)+'° over '+g.overM+' m)');
   console.assert(g.kind==='CURVE'||g.kind==='STRAIGHT','MAP-UX-7: unexpected kind '+g.kind);
-  console.assert(!/TURN/.test(guidanceMarker._icon.html),'MAP-UX-7: aggressive turn arrow drawn');
+  console.assert(guidanceMarker===null,'MAP-UX-7: map arrow returned (retired 16 Aug)');
   console.log(`MAP-UX-7. bend ${Math.abs(g.deltaDeg).toFixed(0)}° over ${g.overM} m → ${g.kind} OK`);
 })();
 
@@ -1942,35 +1944,30 @@ function uxDrive(shape,n,to,kmh,hdg){
   console.assert(g.kind==='TURN','MAP-UX-9: junction classified '+g.kind+
     ' ('+g.deltaDeg.toFixed(0)+'° over '+g.overM+' m)');
   console.assert(g.dir==='right','MAP-UX-9: junction direction '+g.dir);
-  console.assert(/TURN/.test(guidanceMarker._icon.html),'MAP-UX-9: arrow not flagged as a turn');
+  console.assert(guidanceMarker===null,'MAP-UX-9: map arrow returned (retired 16 Aug)');
   console.assert(saidMatching(/turn right/i).length===0,'MAP-UX-9: junction still spoke');
   console.log(`MAP-UX-9. junction ${Math.abs(g.deltaDeg).toFixed(0)}° over ${g.overM} m → TURN right, silent OK`);
 })();
 
-// ── MAP-UX-10 / 11: the arrow is correct heading-up AND north-up ──
+// ── MAP-UX-10 / 11: guidance bearing is orientation-agnostic ──
 (function(){
+  // SPEC CHANGE (field, 16 Aug): with the map marker retired, what must hold
+  // is that the computed guidance carries the ABSOLUTE route bearing and is
+  // unaffected by how the map happens to be rotated — the card shows the
+  // relative shape (glyph), the map container handles its own rotation.
   uxDrive(uxJunction,160,72,25,0);
-  const rotOf=()=>parseFloat(/rotate\(([-\d.]+)deg\)/.exec(guidanceMarker._icon.html)[1]);
-  // north-up
-  el('rng-follow').value='0'; setMapBearing(0);
-  renderGuidanceArrow(computeGuidance(routeProgressM,25));
-  const north=rotOf();
   const norm=a=>((a%360)+360)%360;
-  console.assert(Math.abs(norm(north)-norm(lastGuidance.bearing))<1,
-    'MAP-UX-11: north-up arrow does not carry the route bearing: '+north);
-  // heading-up: the container rotates by -heading, so the arrow's own rotation
-  // stays absolute and the VISUAL result is the bearing relative to travel
+  el('rng-follow').value='0'; setMapBearing(0);
+  const gN=computeGuidance(routeProgressM,25);
   setMapBearing(-90);
-  renderGuidanceArrow(computeGuidance(routeProgressM,25));
-  const up=rotOf();
-  console.assert(Math.abs(norm(up)-norm(north))<1,'MAP-UX-10: arrow rotation drifted with the map');
-  const visual=norm(up+_lastBearing);
-  console.assert(Math.abs(visual-norm(lastGuidance.bearing-90))<1,
-    'MAP-UX-10: heading-up visual angle wrong: '+visual);
-  console.assert(!/rotate\(0deg\)/.test(guidanceMarker._icon.html)||lastGuidance.bearing===0,
-    'MAP-UX-10: arrow hard-coded to up');
+  const gH=computeGuidance(routeProgressM,25);
+  console.assert(gN.bearing!=null,'MAP-UX-11: no bearing computed');
+  console.assert(Math.abs(norm(gN.bearing)-norm(gH.bearing))<1,
+    'MAP-UX-10: guidance bearing changed with map rotation: '+gN.bearing+' vs '+gH.bearing);
+  console.assert(gN.kind===gH.kind&&gN.dir===gH.dir,'MAP-UX-10: guidance kind/dir depend on rotation');
+  console.assert(guidanceMarker===null,'MAP-UX-10/11: map arrow returned (retired 16 Aug)');
   setMapBearing(0); el('rng-follow').value='1';
-  console.log(`MAP-UX-10/11. arrow ${north.toFixed(0)}° absolute; heading-up visual ${visual.toFixed(0)}° OK`);
+  console.log(`MAP-UX-10/11. bearing ${gN.bearing.toFixed(0)}° stable across rotations, no marker OK`);
 })();
 
 // ── MAP-UX-12 / 13: no "Turn left"/"Turn right" anywhere during playback ──
@@ -2104,7 +2101,7 @@ function uxDrive(shape,n,to,kmh,hdg){
   drivePts(rec,0,71,25,0); markDone(stops[0].id);
   drivePts(rec,72,149,30,0); drivePts(rec,150,299,30,180);
   console.assert(LapManager.currentLap===2,'MAP-UX-23: lap did not advance: '+LapManager.currentLap);
-  console.assert(guidanceMarker,'MAP-UX-23: guidance arrow lost across the lap boundary');
+  console.assert(lastGuidance!=null,'MAP-UX-23: guidance lost across the lap boundary');
   console.log('MAP-UX-23. LAP 2/3 reached with guidance active OK');
 })();
 
@@ -2152,7 +2149,9 @@ function ckDrive(){
   const dist=ckPx('body.cockpit .hud-instr-dist','font-size');
   const act =ckPx('body.cockpit .hud-instr-action','font-size');
   const arrow=ckPx('body.cockpit .hud-instr-icon svg','width');
-  console.assert(dist>=50,'CK-2: manoeuvre distance only '+dist+'px');
+  // 48px is intentional since the overflow fix (16 Aug): 56px 'xx.x km' rows
+  // were wider than the 300px card under the v7 rule conflict.
+  console.assert(dist>=44,'CK-2: manoeuvre distance only '+dist+'px');
   console.assert(arrow>=96,'CK-2: manoeuvre arrow only '+arrow+'px');
   console.assert(dist>act,'CK-2: distance is not dominant over the action line');
   console.assert(/body\.cockpit \.hud-instr\{[^}]*left:14px/.test(ckCss()),'CK-2: card not top-left');
@@ -2291,7 +2290,7 @@ const shCss=()=>document.__cssText||'';
   const exit=/body\.cockpit \.cockpit-exit\{[^}]*top:12px/.test(css);
   const dial=/body\.cockpit \.cockpit-speed\{[^}]*top:64px/.test(css)||
              /body\.cockpit \.cockpit-speed\{top:64px\}/.test(css);
-  const voice=/body\.cockpit #hud-voice\{[^}]*top:212px/.test(css);
+  const voice=/body\.cockpit #hud-voice\{[^}]*top:216px/.test(css);
   console.assert(exit,'SH-3: exit button not pinned to the corner');
   console.assert(dial,'SH-3: dial position not fixed');
   console.assert(voice,'SH-3: voice button still floats over the dial');
@@ -2363,3 +2362,95 @@ const shCss=()=>document.__cssText||'';
 
 console.log('ALL SHELL TESTS PASSED');
 __group('Shell tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FIELD FIXES — 16 Aug screenshots: overflow, sim exit, laps, photo, arrow
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── field fixes 16 aug ──');
+const ffCss=()=>document.__cssText||'';
+
+// ── FF-1: no on-map arrow, ever — even after driving through a junction ──
+(function(){
+  const j=i=>i<=80?{lat:LAT0+i*DLAT,lng:LNG0}:{lat:LAT0+80*DLAT,lng:LNG0+(i-80)*0.00017};
+  const rec=mkRec('ff1',160,j,[]);
+  beginPlayback(rec,1); el('rng-follow').value='1'; navActive=true; setCockpit(true);
+  drivePts(rec,0,120,30,0);
+  console.assert(guidanceMarker===null,'FF-1: an arrow marker appeared on the map');
+  console.assert(lastGuidance!=null,'FF-1: guidance stopped computing for the card');
+  console.log('FF-1. junction driven end to end: card guidance yes, map arrow no OK');
+})();
+
+// ── FF-2: the manoeuvre card can never stretch full-width again ──
+(function(){
+  const css=ffCss();
+  const m=/body\.cockpit \.hud-instr\{([^}]*)\}/.exec(css);
+  console.assert(m,'FF-2: cockpit card rule missing');
+  console.assert(/right:auto!important/.test(m[1]),'FF-2: right not neutralised — v7 stretch returns');
+  console.assert(/width:300px!important/.test(m[1]),'FF-2: width not pinned');
+  console.assert(/overflow:hidden!important/.test(m[1]),'FF-2: overflow not clipped');
+  console.assert(/white-space:nowrap/.test(/body\.cockpit \.hud-instr-dist\{([^}]*)\}/.exec(css)[1]),
+    'FF-2: distance can wrap');
+  console.log('FF-2. card pinned at 300px, right:auto, overflow hidden OK');
+})();
+
+// ── FF-3: ✕ stops a RUNNING SIMULATION, not just navigation ──
+(function(){
+  const rec=mkRec('ff3',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  loadFresh(rec);
+  startSim(savedRecs.length-1);
+  console.assert(simTimer!=null,'FF-3: setup — simulation did not start');
+  console.assert(navActive===true,'FF-3: setup — sim did not enter navigation');
+  exitNavigation();                       // the cockpit ✕
+  console.assert(simTimer===null,'FF-3: simulation still running after ✕');
+  console.assert(navActive===false,'FF-3: navigation still active after ✕');
+  console.assert(!document.body.classList.contains('cockpit'),'FF-3: cockpit still shown');
+  console.log('FF-3. ✕ ends simulation + navigation + cockpit OK');
+})();
+
+// ── FF-4: repetitions are one tap from START and share the single source ──
+(function(){
+  el('lap-select').value='1'; updLapChip();
+  console.assert(el('lap-chip').textContent==='1×','FF-4: chip label wrong: '+el('lap-chip').textContent);
+  cycleLapChip(); cycleLapChip();          // 1 → 2 → 3
+  console.assert(el('lap-select').value==='3','FF-4: chip did not write through: '+el('lap-select').value);
+  console.assert(el('lap-chip').textContent==='3×','FF-4: chip label desynced');
+  ['5','10','inf','1'].forEach(v=>cycleLapChip());
+  console.assert(el('lap-select').value==='1','FF-4: cycle did not wrap: '+el('lap-select').value);
+  // and playback actually consumes it
+  el('lap-select').value='3';
+  const rec=mkRec('ff4',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[]);
+  loadFresh(rec); Playback.begin(el('lap-select').value);
+  console.assert(LapManager.totalLaps===3,'FF-4: Playback ignored the selector: '+LapManager.totalLaps);
+  Playback.stop(); el('lap-select').value='1'; updLapChip();
+  console.log('FF-4. lap chip 1×→2×→3×→5×→10×→∞ writes through to Playback OK');
+})();
+
+// ── FF-5: the dock photo is the dominant element ──
+(function(){
+  const css=ffCss();
+  const ph=/body\.cockpit \.nsc-photo\{[^}]*height:(\d+)px/.exec(css);
+  const w =/body\.cockpit \.nsc\{[^}]*width:(\d+)px/.exec(css);
+  console.assert(ph&&+ph[1]>=180,'FF-5: dock photo only '+(ph&&ph[1])+'px');
+  console.assert(w&&+w[1]>=290,'FF-5: dock only '+(w&&w[1])+'px wide');
+  console.assert(+ph[1]>48,'FF-5: photo smaller than the distance type');
+  console.log(`FF-5. dock ${w[1]}px wide, photo ${ph[1]}px tall OK`);
+})();
+
+// ── FF-6: right-edge stack — four distinct vertical slots ──
+(function(){
+  const css=ffCss();
+  const at=(sel,prop='top')=>{
+    const m=new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\{[^}]*'+prop+':(\\d+)px').exec(css);
+    return m?+m[1]:null;
+  };
+  const exit=at('body.cockpit .cockpit-exit'), dial=at('body.cockpit .cockpit-speed'),
+        chip=at('body.cockpit .cockpit-speed-target'), voice=at('body.cockpit #hud-voice');
+  console.assert(exit!=null&&dial!=null&&chip!=null&&voice!=null,'FF-6: a slot is unpinned');
+  console.assert(exit+44<=dial,'FF-6: exit overlaps the dial');
+  console.assert(dial+chip>dial,'FF-6: avg chip above the dial');
+  console.assert(voice>=dial+104+chip-70,'FF-6: voice button overlaps the chip zone');
+  console.log(`FF-6. exit ${exit} · dial ${dial} · chip +${chip} · voice ${voice} — stacked OK`);
+})();
+
+console.log('ALL FIELD-FIX TESTS PASSED');
+__group('Field fix tests');

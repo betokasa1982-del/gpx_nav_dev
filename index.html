@@ -1265,14 +1265,19 @@ body.cockpit .map-wrap{position:fixed;inset:0;height:100vh;width:100vw;z-index:1
 
 /* ── manoeuvre card (top-left) ─────────────────────────────────────────── */
 body.cockpit .hud-instr{
-  position:absolute;left:14px;top:64px;width:300px;
-  display:flex;flex-direction:column;align-items:stretch;
+  /* !important: body carries BOTH driver-mode and cockpit; the v7 rules set
+     right:12px which stretched this card across the screen and made every
+     line overflow its box (field screenshots, 16 Aug). */
+  position:absolute;left:14px!important;top:60px!important;
+  right:auto!important;width:300px!important;min-height:0!important;
+  overflow:hidden!important;pointer-events:auto!important;
+  display:flex!important;flex-direction:column!important;align-items:stretch;
   background:var(--ck-card);border:1px solid var(--ck-line);border-radius:22px;
   padding:18px 20px 14px;box-shadow:0 14px 40px rgba(0,0,0,.55);
   backdrop-filter:blur(14px);z-index:1200}
 body.cockpit .ck-dist-row{display:flex;align-items:baseline;gap:6px}
-body.cockpit .hud-instr-dist{font-size:56px;font-weight:800;line-height:1;
-  font-family:var(--mono);color:#fff!important;letter-spacing:-1px}
+body.cockpit .hud-instr-dist{font-size:48px!important;font-weight:800;line-height:1!important;
+  font-family:var(--mono);color:#fff!important;letter-spacing:-1px;white-space:nowrap}
 body.cockpit .hud-instr-dist.close{animation:none}
 body.cockpit .hud-instr-icon{background:none!important;border:none!important;
   width:auto;height:auto;padding:6px 0 2px;display:block;color:#fff}
@@ -1307,13 +1312,14 @@ body.cockpit .cockpit-speed-target{position:absolute;top:112px;right:0;white-spa
   border-radius:14px;padding:3px 10px}
 
 /* ── next stop card (right, under the dial) ────────────────────────────── */
-body.cockpit .nsc{position:absolute;right:16px;top:auto;bottom:86px;width:250px;
+body.cockpit .nsc{position:absolute!important;right:14px!important;left:auto!important;
+  top:auto!important;bottom:86px!important;width:304px!important;
   background:var(--ck-card);border:1px solid var(--ck-line);border-left:1px solid var(--ck-line);
   border-radius:18px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.55);
   backdrop-filter:blur(14px);z-index:1200}
 body.cockpit .nsc-head{font-size:11px;letter-spacing:1.4px;color:var(--ck-blue);font-weight:800}
 body.cockpit .nsc-name{font-size:21px;font-weight:800;color:#fff;margin:3px 0 8px}
-body.cockpit .nsc-photo{height:112px;border-radius:12px;margin:0 0 10px}
+body.cockpit .nsc-photo{height:196px!important;border-radius:12px;margin:0 0 10px;display:block}
 body.cockpit .nsc-dist{font-size:34px;color:#fff!important;font-weight:800;line-height:1}
 body.cockpit .nsc-row{border:none;padding:3px 0;font-size:13px;color:var(--ck-dim)}
 body.cockpit .nsc-eta{font-family:var(--mono);color:var(--ck-blue);font-weight:700}
@@ -1343,10 +1349,12 @@ body.cockpit .ck-orient{position:absolute;left:50%;transform:translateX(-50%);bo
   box-shadow:0 10px 26px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
 body.cockpit .ck-orient-ico{display:inline-flex;width:20px;height:20px;align-items:center;
   justify-content:center;border-radius:50%;background:rgba(255,255,255,.12);font-size:11px}
-body.cockpit .cockpit-exit{position:absolute;right:16px;top:12px;bottom:auto;z-index:1300;
-  width:40px;height:40px;border-radius:50%}
-body.cockpit .cockpit-speed{top:64px}
-body.cockpit #hud-voice{right:16px!important;top:212px!important;left:auto!important;
+body.cockpit .cockpit-exit{position:absolute!important;right:14px!important;top:12px!important;
+  left:auto!important;bottom:auto!important;z-index:1300;
+  width:44px;height:44px;border-radius:50%}
+body.cockpit .cockpit-speed{top:68px!important;right:14px!important;left:auto!important;bottom:auto!important}
+body.cockpit .cockpit-speed-target{top:110px!important;right:2px!important;left:auto!important}
+body.cockpit #hud-voice{right:14px!important;top:216px!important;left:auto!important;
   bottom:auto!important;z-index:1200}
 body.cockpit .lap-badge{top:14px;left:50%;transform:translateX(-50%);z-index:1200}
 
@@ -1380,6 +1388,10 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
   background:var(--accent);border-radius:0 0 3px 3px}
 .stab-badge{font-size:9px;margin-left:3px;color:var(--accent)}
 .stab-chev{flex:0 0 44px;font-size:16px;justify-content:center}
+.lap-chip{flex-shrink:0;margin-left:10px;min-height:46px;min-width:52px;
+  background:var(--panel2,#161b22);color:var(--accent);border:1px solid var(--border);
+  border-radius:12px;font-weight:800;font-size:16px;cursor:pointer}
+.lap-chip:active{transform:scale(.95)}
 .big-start{flex-shrink:0;margin-left:10px;background:var(--green,#3fb950);color:#08110a;
   border:none;border-radius:12px;font-weight:800;font-size:15px;letter-spacing:.6px;
   padding:12px 18px;min-height:46px;cursor:pointer;box-shadow:0 4px 14px rgba(63,185,80,.35)}
@@ -1509,7 +1521,7 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
       <div class="cockpit-speed-unit">km/h</div>
       <div class="cockpit-speed-target" id="cockpit-speed-target"></div>
     </div>
-    <button class="cockpit-exit" id="cockpit-exit" onclick="stopNav()" title="Exit navigation">✕</button>
+    <button class="cockpit-exit" id="cockpit-exit" onclick="exitNavigation()" title="Exit navigation">✕</button>
 
     <!-- Compass -->
     <div class="lap-badge" id="lap-badge" style="display:none">LAP 1 / 1</div>
@@ -1626,6 +1638,7 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
         <div class="peek-sub"  id="peek-sub">Tap 📂 to open a file</div>
       </div>
       <div class="peek-dist" id="peek-dist"></div>
+      <button class="lap-chip" id="lap-chip" onclick="cycleLapChip(event)" title="Cycle repetitions">1×</button>
       <button class="big-start" id="big-start" onclick="bigStartTap(event)">▶ START</button>
     </div>
 
@@ -2872,6 +2885,22 @@ function updSummaryBar(){
 /* One primary action. Its meaning follows the app state so the first tap is
    always the useful one: no route → open the Route pane; route loaded →
    start navigation; navigating → stop. */
+/* Repetitions, one tap from START. The chip cycles the same values as the
+   buried GPS-pane selector and writes THROUGH it: Playback.begin still reads
+   #lap-select, so there is exactly one source of truth. */
+const LAP_CHIP_SEQ=['1','2','3','5','10','inf'];
+function cycleLapChip(ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  const sel=el('lap-select'); if(!sel)return;
+  const cur=String(sel.value||'1');
+  const next=LAP_CHIP_SEQ[(LAP_CHIP_SEQ.indexOf(cur)+1)%LAP_CHIP_SEQ.length];
+  sel.value=next;
+  updLapChip();
+}
+function updLapChip(){
+  const c=el('lap-chip'), sel=el('lap-select');
+  if(c&&sel)c.textContent=(String(sel.value)==='inf'?'∞':sel.value+'×');
+}
 function bigStartTap(ev){
   if(ev&&ev.stopPropagation)ev.stopPropagation();   // sits inside the peek row
   if(navActive){stopNav();updBigStart();return;}
@@ -2922,6 +2951,13 @@ function startNav(){
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
   setGPS('wait','Waiting for GPS...');
   watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+}
+/* The cockpit ✕ is the driver's only exit while everything else is hidden,
+   so it must end whatever is running: a live simulation kept feeding fixes
+   after stopNav, which is why the cycle "could not be stopped" in the field. */
+function exitNavigation(){
+  try{if(typeof simTimer!=='undefined'&&simTimer)stopSim();}catch(e){}
+  stopNav();
 }
 function stopNav(){
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
@@ -3425,10 +3461,17 @@ function guidanceArrowSvg(kind,dir,size=54){
 }
 
 let guidanceMarker=null, lastGuidance=null;
+/* FIELD DECISION (2026-08-16): no arrow marker on the map. The driver said
+   the on-map arrow in front of the bus adds nothing over the card and the
+   highlighted route — it only clutters the view. renderGuidanceArrow now
+   just records the guidance for the HUD card; it never adds a map layer. */
 
 /* Draw/refresh the arrow. §16: above the route, below stops and the vehicle. */
 function renderGuidanceArrow(g){
   lastGuidance=g;
+  if(guidanceMarker&&map){try{map.removeLayer(guidanceMarker);}catch(e){} guidanceMarker=null;}
+  return;   // map marker retired — see field note above
+  /* unreachable, kept for reference:
   if(!map||!g||!routePts.length){return;}
   const idx=idxAtMetres(g.anchorM);
   const p=routePts[idx];
@@ -3445,6 +3488,7 @@ function renderGuidanceArrow(g){
   if(!guidanceMarker) guidanceMarker=L.marker([p.lat,p.lon],{icon,zIndexOffset:500,
                         interactive:false}).addTo(map);
   else{guidanceMarker.setLatLng([p.lat,p.lon]);guidanceMarker.setIcon(icon);}
+  */
 }
 function clearGuidanceArrow(){
   if(guidanceMarker&&map){try{map.removeLayer(guidanceMarker);}catch(e){}}
