@@ -2595,3 +2595,160 @@ console.log('\n── css hygiene ──');
 })();
 console.log('ALL CSS-HYGIENE TESTS PASSED');
 __group('CSS hygiene tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CYCLE SEQUENCE — playlist of recordings with per-item repetitions
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── cycle sequence ──');
+const _realSpeakSq=speakText;
+speakText=(t,f)=>{_spoken.push(String(t));};
+
+/* two small closed loops, geometrically apart, each with one stop */
+const sqLoopA=i=>i<75?{lat:LAT0+i*DLAT,lng:LNG0}
+                    :{lat:LAT0+(149-i)*DLAT,lng:LNG0+0.00012};
+const sqLoopB=i=>i<75?{lat:LAT0+0.02+i*DLAT,lng:LNG0+0.02}
+                    :{lat:LAT0+0.02+(149-i)*DLAT,lng:LNG0+0.02+0.00012};
+function sqSetup(){
+  Sequence.clear(); _spoken=[];
+  const A=mkRec('seqA',150,sqLoopA,[40]); A.name='city loop';
+  const B=mkRec('seqB',150,sqLoopB,[40]); B.name='rural loop';
+  B.stops[0].events=['openDoor'];
+  savedRecs.push(A); const ia=savedRecs.length-1;
+  savedRecs.push(B); const ib=savedRecs.length-1;
+  return {A,B,ia,ib};
+}
+function sqDriveLap(rec,base,hdgAdj){
+  // one full loop: north leg then south leg back to start
+  for(let i=0;i<75;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,0);}
+  for(let i=75;i<150;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,180);}
+}
+
+// ── SEQ-1: builder — add, per-item laps, remove, persistence round-trip ──
+(function(){
+  const {ia,ib}=sqSetup();
+  Sequence.add(ia,1); Sequence.add(ib,1); Sequence.add(ia,1);
+  console.assert(Sequence.items.length===3,'SEQ-1: add failed');
+  Sequence.cycleLaps(0);Sequence.cycleLaps(0);Sequence.cycleLaps(0); // 1→2→3→5
+  console.assert(Sequence.items[0].laps===5,'SEQ-1: laps cycle wrong: '+Sequence.items[0].laps);
+  Sequence.remove(2);
+  console.assert(Sequence.items.length===2,'SEQ-1: remove failed');
+  const saved=JSON.parse(localStorage.getItem('gpx-seq'));
+  console.assert(saved.items.length===2&&saved.items[0].laps===5,'SEQ-1: not persisted');
+  Sequence.items=[];Sequence.restore();
+  console.assert(Sequence.items.length===2&&Sequence.items[0].name==='city loop',
+    'SEQ-1: restore lost the builder');
+  console.log('SEQ-1. builder + persistence round-trip OK');
+})();
+
+// ── SEQ-2: start loads the first cycle with its lap count ──
+(function(){
+  const {A,ia,ib}=sqSetup();
+  Sequence.add(ia,2); Sequence.add(ib,1);
+  console.assert(Sequence.start()===true,'SEQ-2: start refused');
+  console.assert(routePts.length===A.points.length,'SEQ-2: first cycle not loaded');
+  console.assert(LapManager.totalLaps===2,'SEQ-2: item laps not applied: '+LapManager.totalLaps);
+  console.assert(Playback.active===true&&Sequence.active===true,'SEQ-2: not running');
+  console.assert(saidMatching(/Sequence started\. Cycle 1 of 2: city loop/).length===1,
+    'SEQ-2: start voice missing');
+  console.assert(/CYCLE 1\/2/.test(el('seq-badge').textContent),'SEQ-2: badge wrong: '+el('seq-badge').textContent);
+  exitNavigation();
+  console.log('SEQ-2. start → city loop, 2 laps, badge CYCLE 1/2 OK');
+})();
+
+// ── SEQ-3: full progression — laps within item, then advance to next item ──
+(function(){
+  // COMPLETE fires ~40 m before the loop closes and the advance runs on the
+  // very next fix, i.e. INSIDE a naive full-loop drive. The observation
+  // points therefore sit fix-by-fix around the boundary.
+  const {A,B,ia,ib}=sqSetup();
+  Sequence.add(ia,2); Sequence.add(ib,1);
+  Sequence.start(); markDone(stops[0].id);
+  sqDriveLap(A);                                   // lap 1 of city
+  console.assert(LapManager.currentLap===2,'SEQ-3: lap 1→2 did not advance');
+  console.assert(Sequence.cur===0,'SEQ-3: sequence advanced too early');
+  markDone(stops[0].id);
+  // lap 2: stop short of the boundary, then step fix-by-fix
+  for(let i=0;i<140;i++){const p=A.points[i];gpsH(p.lat,p.lng,30,i<75?0:180);}
+  console.assert(Sequence.cur===0&&Playback.state!=='COMPLETE','SEQ-3: completed too early');
+  let sawComplete=false;
+  for(let i=140;i<150;i++){
+    const p=A.points[i];gpsH(p.lat,p.lng,30,180);
+    if(Playback.state==='COMPLETE'){sawComplete=true;
+      console.assert(Sequence._pendingAdvance===true,'SEQ-3: COMPLETE without advance flag');
+      break;}
+  }
+  console.assert(sawComplete,'SEQ-3: item 1 never completed');
+  console.assert(Sequence.cur===0,'SEQ-3: advance ran mid-fix instead of between fixes');
+  const p0=B.points[0]; gpsH(p0.lat,p0.lng,20,0);  // next fix executes the advance
+  console.assert(Sequence.cur===1,'SEQ-3: did not advance to item 2');
+  console.assert(routePts.length===B.points.length&&
+    Math.abs(routePts[0].lat-B.points[0].lat)<1e-9,'SEQ-3: rural loop not loaded');
+  console.assert(Playback.active&&Playback.state!=='COMPLETE','SEQ-3: playback not re-armed');
+  console.assert(LapManager.totalLaps===1&&LapManager.currentLap===1,'SEQ-3: item 2 laps wrong');
+  console.assert(saidMatching(/Cycle 2 of 2: rural loop/).length===1,'SEQ-3: transition voice missing');
+  console.assert(routeProgressM<100,'SEQ-3: matcher not reset on new cycle: '+routeProgressM.toFixed(0));
+  console.assert(stops[0].state==='waiting','SEQ-3: rural stop not fresh');
+  console.log('SEQ-3. city ×2 → COMPLETE at boundary → advance on next fix → rural ×1 OK');
+})();
+
+// ── SEQ-4: voice ownership intact in the SECOND cycle of a sequence ──
+(function(){
+  _spoken=[];
+  el('rng-radius').value='80';
+  const B=savedRecs[savedRecs.length-1];
+  for(let i=1;i<=41;i++){const p=B.points[i];gpsH(p.lat,p.lng,25,0);}
+  console.assert(saidMatching(/Stop 1 in 200 meters/).length===1,
+    'SEQ-4: scheduler approach voice lost after transition: '+JSON.stringify(_spoken.slice(0,4)));
+  console.assert(saidMatching(/open doors required/).length>=1,'SEQ-4: event voice lost');
+  console.assert(saidMatching(/^Arrived at stop/).length===0,'SEQ-4: engine arrival voice leaked');
+  console.log('SEQ-4. scheduler owns stop voice in cycle 2 OK');
+})();
+
+// ── SEQ-5: sequence completion — one line, then silence, no restart ──
+(function(){
+  const B=savedRecs[savedRecs.length-1];
+  markDone(stops[0].id); _spoken=[];
+  sqDriveLap(B);                                   // only lap of rural → COMPLETE
+  const p0=B.points[0]; gpsH(p0.lat,p0.lng,20,0);  // fix that would advance
+  console.assert(saidMatching(/Sequence complete/).length===1,'SEQ-5: completion voice missing/dup');
+  console.assert(Sequence.active===false,'SEQ-5: sequence still active');
+  console.assert(el('seq-badge').textContent==='SEQUENCE COMPLETE','SEQ-5: badge not final');
+  const lapBefore=LapManager.currentLap;
+  for(let i=0;i<10;i++)gpsH(p0.lat,p0.lng,20,0);
+  console.assert(LapManager.currentLap===lapBefore&&Playback.state==='COMPLETE',
+    'SEQ-5: something restarted after completion');
+  console.assert(saidMatching(/Sequence complete/).length===1,'SEQ-5: completion voice repeated');
+  exitNavigation();
+  console.log('SEQ-5. one completion line, then silence — §22 held OK');
+})();
+
+// ── SEQ-6: recordings reordered between sessions → resolved by NAME ──
+(function(){
+  const {ia,ib}=sqSetup();
+  Sequence.add(ia,1);
+  // simulate a reload where an extra rec shifted every index
+  savedRecs.splice(ia,0,null);
+  const idx=Sequence._recIdx(Sequence.items[0]);
+  console.assert(savedRecs[idx]&&savedRecs[idx].name==='city loop',
+    'SEQ-6: name fallback failed — would load the wrong cycle');
+  savedRecs.splice(ia,1);
+  console.log('SEQ-6. index shift resolved by name OK');
+})();
+
+// ── SEQ-7: guards — empty start refused; ✕ mid-sequence stops it ──
+(function(){
+  Sequence.clear();
+  console.assert(Sequence.start()===false,'SEQ-7: empty sequence started');
+  console.assert(!Sequence.active&&!navActive,'SEQ-7: state leaked');
+  const {ia,ib}=sqSetup();
+  Sequence.add(ia,1);Sequence.add(ib,1);
+  Sequence.start();
+  exitNavigation();                                 // driver presses ✕ mid-sequence
+  console.assert(Sequence.active===false,'SEQ-7: ✕ did not stop the sequence');
+  console.assert(Playback.active===false&&navActive===false,'SEQ-7: playback survived ✕');
+  console.log('SEQ-7. empty-start refused; ✕ ends the whole sequence OK');
+})();
+
+speakText=_realSpeakSq;
+console.log('ALL SEQUENCE TESTS PASSED');
+__group('Sequence tests');

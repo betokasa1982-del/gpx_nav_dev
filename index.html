@@ -859,6 +859,30 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .veh-wrap .veh-halo{z-index:0}
 .veh-wrap .veh-puck{z-index:1}
 .veh-wrap .veh-bus{z-index:2}
+
+/* ── Cycle sequence (layer 4) ─────────────────────────────────────────── */
+.seq-bar{background:var(--panel2,#161b22);border:1px solid var(--border);
+  border-radius:12px;padding:10px 12px;margin:0 0 12px}
+.seq-head{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:800;
+  letter-spacing:1.2px;color:var(--accent)}
+.seq-total{color:var(--muted);font-weight:600;letter-spacing:.3px;flex:1}
+.seq-clear{background:none;border:1px solid var(--border);border-radius:8px;
+  color:var(--muted);font-size:11px;padding:4px 10px;cursor:pointer}
+.seq-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 4px;min-height:8px}
+.seq-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel,#0d1117);
+  border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--text)}
+.seq-chip b{color:var(--accent);cursor:pointer;font-size:13px;min-width:24px;text-align:center}
+.seq-chip i{font-style:normal;color:var(--muted);cursor:pointer;padding:0 2px}
+.seq-chip.cur{border-color:var(--green,#3fb950);box-shadow:0 0 0 1px rgba(63,185,80,.4)}
+.seq-chip.done{opacity:.45}
+.seq-arrow{color:var(--muted);font-size:12px}
+.seq-start{width:100%;margin-top:8px;background:var(--green,#3fb950);color:#08110a;border:none;
+  border-radius:10px;font-weight:800;font-size:13px;letter-spacing:.6px;padding:11px;cursor:pointer}
+.seq-resume{background:var(--accent,#f0a500)}
+.seq-badge{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:1200;
+  background:rgba(16,20,28,.94);border:1px solid rgba(255,255,255,.12);border-radius:14px;
+  padding:5px 14px;font-family:var(--mono);font-size:12px;font-weight:700;color:#e8eef6;
+  max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1471,6 +1495,7 @@ function loadStoredRecordings(){
       savedRecs.push(rec);
       renderRecCard(rec,savedRecs.length-1);
     });
+    Sequence.restore();
     if(savedRecs.length){
       el('rec-badge').textContent=` (${savedRecs.length})`;
       el('rec-empty').style.display='none';
@@ -2369,6 +2394,144 @@ function updBigStart(){
   else if(!routePts.length){b.textContent='📂 LOAD ROUTE';b.classList.remove('stopping');b.classList.add('disabled');}
   else{b.textContent='▶ START';b.classList.remove('stopping');b.classList.remove('disabled');}
 }
+/* ══ CYCLE SEQUENCE (playlist) — app layer over Playback + LapManager ═════
+   "4× city, 2× rural, 1× highway, in order." Each item is a saved recording
+   plus a lap count; laps WITHIN an item stay the LapManager's job, moving to
+   the NEXT item is this object's job. It only composes existing entry points
+   (loadRec → Playback.begin) and never touches the engine.
+
+   Transition timing: COMPLETE is detected right after Playback.update, but
+   swapping the route mid-fix would leave the rest of onGPS working on stale
+   locals — so the advance is flagged and executed at the TOP of the NEXT
+   fix, between two complete engine passes.                                 */
+const Sequence={
+  items:[],            // [{idx, name, laps}]
+  cur:-1,
+  active:false,
+  _pendingAdvance:false,
+
+  add(idx,laps){
+    const rec=savedRecs[idx]; if(!rec)return false;
+    this.items.push({idx,name:rec.name||('Recording '+idx),laps:laps||1});
+    this._save(); renderSeqBar(); return true;
+  },
+  cycleLaps(i){
+    const SEQ=['1','2','3','5','10'];
+    const it=this.items[i]; if(!it)return;
+    it.laps=+SEQ[(SEQ.indexOf(String(it.laps))+1)%SEQ.length]||1;
+    this._save(); renderSeqBar();
+  },
+  remove(i){this.items.splice(i,1);this._save();renderSeqBar();},
+  clear(){this.items=[];this.cur=-1;this.active=false;this._save();renderSeqBar();},
+
+  /* recordings can be re-imported in a different order after a reload, so an
+     item is resolved by index first and by NAME as the fallback */
+  _recIdx(it){
+    if(savedRecs[it.idx]&&(savedRecs[it.idx].name===it.name))return it.idx;
+    const byName=savedRecs.findIndex(r=>r&&r.name===it.name);
+    return byName>=0?byName:(savedRecs[it.idx]?it.idx:-1);
+  },
+
+  /* the arming startNav performs before Playback.begin — shared by start()
+     when navigation is already running and by advance() between items */
+  _armAndBegin(it){
+    lastVoiceKey='';lastVoiceManeuver='';destinationAnnounced=false;evtAnnounced.clear();
+    stops.forEach(s=>evtAnnounced.add(s.id));
+    Playback.begin(String(it.laps));
+    if(LapManager.infinite||LapManager.totalLaps>1)destinationAnnounced=true;
+    refreshStopIcons();
+  },
+
+  start(){
+    if(!this.items.length)return false;
+    const idx=this._recIdx(this.items[0]);
+    if(idx<0){alert('Sequence: first recording not found.');return false;}
+    this.cur=0; this.active=true; this._pendingAdvance=false; this._save();
+    if(el('lap-select'))el('lap-select').value=String(this.items[0].laps);
+    if(typeof updLapChip==='function')updLapChip();
+    loadRec(idx);
+    if(navActive) this._armAndBegin(this.items[0]);   // already driving: switch in place
+    else startNav();                                  // fresh start: begin() reads lap-select
+    speakText(`Sequence started. Cycle 1 of ${this.items.length}: ${this.items[0].name}`,true);
+    this._badge(); renderSeqBar();
+    return true;
+  },
+
+  /* called between fixes once the current item's laps are COMPLETE */
+  advance(){
+    if(!this.active)return;
+    this.cur++;
+    if(this.cur>=this.items.length){
+      speakText('Sequence complete',true);
+      this.active=false; this._save(); this._badge(); renderSeqBar();
+      return;                          // Playback stays COMPLETE — §22, no restart
+    }
+    const it=this.items[this.cur];
+    const idx=this._recIdx(it);
+    if(idx<0){speakText('Next recording not found — sequence stopped',true);
+      this.active=false;this._save();this._badge();renderSeqBar();return;}
+    loadRec(idx);                      // rebuilds route+stops, compiles playlist, Playback.stop()
+    if(el('lap-select'))el('lap-select').value=String(it.laps);
+    if(typeof updLapChip==='function')updLapChip();
+    this._armAndBegin(it);
+    speakText(`Cycle ${this.cur+1} of ${this.items.length}: ${it.name}`,true);
+    this._badge(); renderSeqBar();
+  },
+
+  stop(){this.active=false;this._pendingAdvance=false;this._save();this._badge();renderSeqBar();},
+
+  _badge(){
+    const b=el('seq-badge'); if(!b)return;
+    if(this.active&&this.cur>=0&&this.items[this.cur]){
+      b.style.display='';
+      b.textContent=`CYCLE ${this.cur+1}/${this.items.length} · ${this.items[this.cur].name}`;
+    }else if(!this.active&&this.cur>=this.items.length&&this.items.length){
+      b.style.display=''; b.textContent='SEQUENCE COMPLETE';
+    }else b.style.display='none';
+  },
+
+  _save(){
+    try{localStorage.setItem('gpx-seq',JSON.stringify(
+      {items:this.items,cur:this.cur,active:this.active}));}catch(e){}
+  },
+  restore(){
+    try{
+      const s=JSON.parse(localStorage.getItem('gpx-seq')||'null');
+      if(s&&Array.isArray(s.items)){this.items=s.items;this.cur=s.cur??-1;this.active=false;
+        // active is NOT auto-resumed: the driver chooses RESUME explicitly,
+        // and Playback's own §27 recovery handles the within-cycle position.
+        this._resumable=!!s.active&&s.cur>=0&&s.cur<s.items.length;}
+    }catch(e){}
+    renderSeqBar();
+  },
+  resume(){
+    if(!this._resumable)return false;
+    const it=this.items[this.cur<0?0:this.cur];
+    const idx=this._recIdx(it); if(idx<0)return false;
+    this.active=true;this._resumable=false;this._save();
+    if(el('lap-select'))el('lap-select').value=String(it.laps);
+    loadRec(idx); startNav();          // begin() sees the saved session → recovery
+    this._badge(); renderSeqBar();
+    return true;
+  },
+};
+
+/* sequence builder UI (Recordings pane) */
+function renderSeqBar(){
+  const bar=el('seq-chips'); if(!bar)return;
+  bar.innerHTML=Sequence.items.map((it,i)=>{
+    const nm=(it.name||'').replace(/</g,'&lt;').slice(0,26);
+    return `<span class="seq-chip${Sequence.active&&i===Sequence.cur?' cur':''}${!Sequence.active&&i<Sequence.cur?' done':''}">`+
+      `<b onclick="Sequence.cycleLaps(${i})" title="Tap to change repetitions">${it.laps}×</b> ${nm}`+
+      `<i onclick="Sequence.remove(${i})" title="Remove">✕</i></span>`;
+  }).join('<span class="seq-arrow">→</span>');
+  const st=el('seq-start'), rs=el('seq-resume');
+  if(st)st.style.display=Sequence.items.length&&!Sequence.active?'':'none';
+  if(rs)rs.style.display=Sequence._resumable?'':'none';
+  const total=Sequence.items.reduce((a,x)=>a+(+x.laps||1),0);
+  const tt=el('seq-total'); if(tt)tt.textContent=Sequence.items.length?`${Sequence.items.length} recordings · ${total} cycles`:'';
+}
+function seqAdd(idx){Sequence.add(idx,1);}
 function startNav(){
   if(navActive)return;
   if(!navigator.geolocation){alert('Geolocation not available.');return}
@@ -2421,6 +2584,7 @@ function stopNav(){
   document.body.classList.remove('driver-mode');
   document.body.classList.remove('cockpit');
   updBigStart();
+  if(Sequence.active)Sequence.stop();
   Playback.stop();
   el('btn-nav').style.display='';el('btn-nav2').style.display='';
   el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
@@ -2964,6 +3128,9 @@ function adaptiveZoom(speedKmh){
   return Math.max(16.5,Math.min(19,z));      // driver UX: keep the road readable without losing context
 }
 function onGPS(pos){
+  // Sequence transition happens BETWEEN engine passes: the previous fix
+  // flagged COMPLETE, this fix starts on the next cycle's route.
+  if(Sequence._pendingAdvance){Sequence._pendingAdvance=false;Sequence.advance();}
   const{latitude:lat,longitude:lng,accuracy,altitude,speed,heading}=pos.coords;
   currentPos={lat,lng};
   // Position history feeds the movement bearing — the only direction source
@@ -3052,6 +3219,8 @@ function onGPS(pos){
   checkArrival(lat,lng,rawKmh,match,accuracy);
   // §29: GPS → engine → routeProgressM → playback. No second matcher.
   if(navActive)Playback.update(routeProgressM);
+  if(Sequence.active&&Playback.state==='COMPLETE'&&!Sequence._pendingAdvance)
+    Sequence._pendingAdvance=true;   // executed at the top of the next fix
   if(navDebug)renderNavDebug(lat,lng,accuracy,rawKmh,heading,match);
   updNextStopCard(lat,lng);
   updLiveMetrics(lat,lng,rawKmh,pos.timestamp,stopsBefore);
@@ -4227,6 +4396,7 @@ function renderRecCard(rec,idx){
     </div>
     <div class="rec-card-btns">
       <button class="btn go"      style="flex:1;font-size:11px;padding:8px 4px" onclick="loadRec(${idx})">📂 Load</button>
+      <button class="btn seq-add" style="flex:1;font-size:11px;padding:8px 4px" onclick="seqAdd(${idx})" title="Add to playback sequence">＋ Seq</button>
       <button class="btn primary" style="flex:1;font-size:11px;padding:8px 4px" onclick="dlRecGPX(${idx})">↓ GPX</button>
       <button class="btn"         style="flex:1;font-size:11px;padding:8px 4px;border-color:var(--blue);color:var(--blue)" onclick="shareRec(${idx})">📤 JSON</button>
       <button class="btn"         style="font-size:11px;padding:8px 6px;border-color:#a371f7;color:#a371f7" title="Replay this cycle as live GPS (dev)" onclick="startSim(${idx})">▶ SIM</button>
