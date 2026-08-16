@@ -879,7 +879,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .seq-start{width:100%;margin-top:8px;background:var(--green,#3fb950);color:#08110a;border:none;
   border-radius:10px;font-weight:800;font-size:13px;letter-spacing:.6px;padding:11px;cursor:pointer}
 .seq-resume{background:var(--accent,#f0a500)}
-.seq-badge{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:1200;
+.seq-badge{position:absolute;top:72px;left:50%;transform:translateX(-50%);z-index:1200;
   background:rgba(16,20,28,.94);border:1px solid rgba(255,255,255,.12);border-radius:14px;
   padding:5px 14px;font-family:var(--mono);font-size:12px;font-weight:700;color:#e8eef6;
   max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1030,6 +1030,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 
     <!-- Compass -->
     <div class="lap-badge" id="lap-badge" style="display:none">LAP 1 / 1</div>
+    <div class="seq-badge" id="seq-badge" style="display:none"></div>
     <div class="nav-debug" id="nav-debug"><pre id="nav-debug-txt"></pre></div>
     <div class="hud-compass">
       <div class="hud-compass-arrow" id="hud-compass">↑</div>
@@ -1284,6 +1285,18 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 
     <!-- GRAVADAS PANE -->
     <div class="pane" id="pane-gravadas" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
+      <div class="seq-bar" id="seq-bar">
+        <div class="seq-head">
+          <span>🔁 CYCLE SEQUENCE</span>
+          <span class="seq-total" id="seq-total"></span>
+          <button class="seq-clear" id="seq-clear" onclick="Sequence.clear()">CLEAR</button>
+        </div>
+        <div class="seq-chips" id="seq-chips"></div>
+        <button class="seq-start" id="seq-start" onclick="Sequence.start()"
+          style="display:none">▶ START SEQUENCE</button>
+        <button class="seq-start seq-resume" id="seq-resume" onclick="Sequence.resume()"
+          style="display:none">▶ RESUME SEQUENCE</button>
+      </div>
       <div class="rec-list" id="rec-list">
         <div class="empty" id="rec-empty">
           <div class="icon">⏺</div>

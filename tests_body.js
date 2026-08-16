@@ -2848,6 +2848,36 @@ function sqDriveLap(rec,base,hdgAdj){
   console.log('SEQ-10. pill: hidden→"▶ SEQ 2·6×"→starts→hides→returns; pane scrolls itself OK');
 })();
 
+
+// ── SEQ-11: DOM CONTRACT — every id the JS references must exist in the
+//    REAL html. The el() mock auto-creates any id on demand, which is how
+//    61 sequence tests passed while 7 of these elements were missing from
+//    the shipped file (16 Aug). This check reads the source, not the mock.
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const need=['seq-bar','seq-total','seq-clear','seq-chips','seq-start',
+              'seq-resume','seq-badge','seq-peek'];
+  const miss=need.filter(id=>!html.includes('id="'+id+'"'));
+  console.assert(miss.length===0,'SEQ-11: ids referenced by JS but absent from the DOM: '+miss.join(', '));
+  // structure per spec: builder inside the recordings pane, before the list;
+  // badge inside the nav layer
+  const iPane=html.indexOf('id="pane-gravadas"'),iBar=html.indexOf('id="seq-bar"'),
+        iList=html.indexOf('id="rec-list"');
+  console.assert(iPane>=0&&iPane<iBar&&iBar<iList,'SEQ-11: seq-bar not inside pane-gravadas before rec-list');
+  const iHud=html.indexOf('class="nav-hud"'),iBadge=html.indexOf('id="seq-badge"');
+  console.assert(iHud>=0&&iHud<iBadge,'SEQ-11: seq-badge outside the nav layer');
+  // buttons wired to the single source of truth (§8)
+  console.assert(/id="seq-clear" onclick="Sequence\.clear\(\)"/.test(html),'SEQ-11: CLEAR not wired');
+  console.assert(/id="seq-start" onclick="Sequence\.start\(\)"/.test(html),'SEQ-11: START not wired');
+  console.assert(/id="seq-resume" onclick="Sequence\.resume\(\)"/.test(html),'SEQ-11: RESUME not wired');
+  // init order (§13): restore() runs after the markup exists
+  console.assert(html.indexOf('Sequence.restore()')>iBar,'SEQ-11: restore() called before the DOM');
+  console.log('SEQ-11. DOM contract: all 8 ids real, correctly nested and wired OK');
+})();
+
 speakText=_realSpeakSq;
 console.log('ALL SEQUENCE TESTS PASSED');
 __group('Sequence tests');
