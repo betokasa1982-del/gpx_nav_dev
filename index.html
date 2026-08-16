@@ -16,6 +16,26 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   STYLE LAYERS — cleaned 16 Aug (CSS-only pass; JS untouched, verified by hash)
+
+   The v4-v7 "driver-mode" card generations were removed: dead skins fighting
+   the cockpit with !important — the source of the field clipping bugs.
+   What remains, in cascade order:
+
+     1. tokens + base app styles          (planning UI, recording, sheet)
+     2. nav base HUD                      (= Developer Mode look)
+     3. body.driver-mode minimal          (chrome/sheet hiding while
+                                           navigating — shared by Developer
+                                           Mode and the cockpit)
+     4. body.cockpit class layer          (Driver UX v6 cockpit)
+     5. CASCADE LOCK - body.cockpit #ids  (final authority on geometry)
+
+   House rule: nav-time styling goes in layer 4; anything positioning or
+   sizing a cockpit card goes in layer 5 with an ID selector. Never
+   reintroduce card visuals keyed on the driver-mode class.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root{
   --bg:#0d1117;--panel:#161b22;--panel2:#1c2128;--border:#30363d;
   --accent:#f0a500;--green:#3fb950;--red:#f85149;--blue:#58a6ff;
@@ -110,9 +130,6 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .nsc.atstop{border-left-color:#3fb950}
 .nsc-row{display:flex;justify-content:space-between;align-items:center;
   font-size:13px;margin-top:2px;color:#e6edf3}
-.guid-icon{background:none;border:none}
-.guid-wrap{width:54px;height:54px;line-height:0;pointer-events:none;
-  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));transition:transform .35s linear}
 .veh-icon{background:none;border:none}
 .veh-wrap{position:relative;width:46px;height:46px;display:flex;
   align-items:center;justify-content:center;pointer-events:none}
@@ -552,296 +569,10 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   --driver-shadow:0 10px 34px rgba(0,0,0,.48);
   --driver-radius:16px;
 }
-
-/* The map is the stage; overlays should feel like one coherent navigation UI. */
-body.driver-mode .map-wrap{background:#0b0f14}
-body.driver-mode #map{background:#101722}
-
-/* ── Main guidance card: large, glanceable, no tiny "turn" strip ── */
-body.driver-mode .hud-instr{
-  position:absolute;
-  top:12px;left:12px;right:12px;
-  min-height:112px;
-  height:auto;
-  display:flex;
-  align-items:stretch;
-  overflow:hidden;
-  background:linear-gradient(135deg,rgba(13,17,23,.98),rgba(22,27,34,.96));
-  border:1px solid rgba(255,255,255,.14);
-  border-radius:18px;
-  box-shadow:var(--driver-shadow);
-  backdrop-filter:blur(14px);
-  pointer-events:none;
-}
-body.driver-mode .hud-instr-icon{
-  width:116px;min-width:116px;
-  min-height:112px;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:2px;
-  border-right:1px solid var(--driver-line);
-  background:rgba(240,165,0,.08);
-}
-body.driver-mode .hud-instr-icon.straight{background:rgba(88,166,255,.08)}
-body.driver-mode .hud-instr-icon.turn{background:rgba(240,165,0,.13)}
-body.driver-mode .hud-instr-icon.stop{background:rgba(248,81,73,.10)}
-body.driver-mode .hud-instr-icon.arrive{background:rgba(63,185,80,.10)}
-
-body.driver-mode #hud-icon-arrow{
-  width:88px;height:88px;
-  display:flex;align-items:center;justify-content:center;
-  line-height:1;
-}
-body.driver-mode #hud-icon-arrow svg{
-  width:88px;height:88px;
-  display:block;
-}
-body.driver-mode .hud-icon-lbl{
-  display:none;
-}
-body.driver-mode .hud-instr-body{
-  padding:12px 18px;
-  justify-content:center;
-  gap:2px;
-}
-body.driver-mode .hud-instr-dist{
-  font-size:42px;
-  line-height:.95;
-  font-weight:800;
-  letter-spacing:-1px;
-}
-body.driver-mode .hud-instr-action{
-  font-size:24px;
-  line-height:1.05;
-  font-weight:800;
-  margin:4px 0 0;
-}
-body.driver-mode .hud-instr-detail{
-  font-size:13px;
-  line-height:1.2;
-}
-body.driver-mode .hud-next-preview{
-  font-size:12px;
-  margin-top:3px;
-}
-body.driver-mode .hud-instr-speed{
-  width:94px;min-width:94px;
-  padding:12px 10px;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  border-left:1px solid var(--driver-line);
-  background:rgba(0,0,0,.12);
-}
-body.driver-mode .hud-spd-val{
-  font-size:38px;
-  line-height:.9;
-  font-weight:800;
-}
-body.driver-mode .hud-spd-unit{
-  font-size:11px;
-  margin-top:5px;
-}
-body.driver-mode .hud-tgt{
-  font-size:11px;
-  margin-top:8px;
-}
-
-/* ── Vehicle: much easier to spot ── */
-body.driver-mode .veh-wrap{
-  width:56px;height:56px;
-}
-body.driver-mode .veh-bus svg{
-  width:56px;height:56px;
-}
-body.driver-mode .veh-halo{
-  inset:-7px;
-}
-
-/* ── Map guidance marker is secondary to the big HUD arrow ── */
-body.driver-mode .guid-wrap{
-  width:72px;height:72px;
-  filter:drop-shadow(0 3px 7px rgba(0,0,0,.72));
-}
-body.driver-mode .guid-wrap svg{
-  width:72px;height:72px;
-}
-
-/* ── Next Stop: large, compact, lower-right, never in front of the guidance ── */
-body.driver-mode .nsc{
-  right:16px;
-  top:auto;
-  bottom:76px;
-  width:min(340px,44vw);
-  max-width:calc(100vw - 32px);
-  max-height:46vh;
-  overflow:hidden;
-  padding:14px 16px;
-  border:1px solid rgba(255,255,255,.14);
-  border-left:5px solid var(--accent);
-  border-radius:18px;
-  background:linear-gradient(145deg,rgba(13,17,23,.98),rgba(22,27,34,.96));
-  box-shadow:var(--driver-shadow);
-  backdrop-filter:blur(14px);
-}
-body.driver-mode .nsc-head{
-  font-size:12px;
-  letter-spacing:2px;
-}
-body.driver-mode .nsc-name{
-  font-size:25px;
-  line-height:1.05;
-  margin:5px 0 2px;
-}
-body.driver-mode .nsc-dist{
-  font-size:60px;
-  line-height:.95;
-  margin:5px 0 7px;
-  letter-spacing:-1px;
-}
-body.driver-mode .nsc-row{
-  font-size:14px;
-}
-body.driver-mode .nsc-leg{
-  font-size:13px;
-}
-body.driver-mode .nsc-events{
-  gap:7px;
-  margin:8px 0 3px;
-}
-body.driver-mode .evt-chip{
-  min-height:38px;
-  padding:7px 9px;
-  gap:6px;
-  border-radius:10px;
-  font-size:12px;
-}
-body.driver-mode .evt-chip svg{
-  width:24px!important;height:24px!important;
-}
-body.driver-mode .nsc-photo{
-  height:180px;
-  margin-top:9px;
-  border-radius:10px;
-  border-color:rgba(255,255,255,.16);
-}
-
-/* ── Route progress: clean, compact, bottom-left ── */
-body.driver-mode .hud-strip{
-  left:16px;right:auto;bottom:14px;
-  width:min(42vw,420px);
-  min-width:250px;
-  padding:8px 12px;
-  border-radius:12px;
-  background:rgba(13,17,23,.92);
-  border:1px solid rgba(255,255,255,.13);
-  box-shadow:0 6px 20px rgba(0,0,0,.35);
-}
-body.driver-mode .hud-sbar{height:7px}
-body.driver-mode .hud-slbl{font-size:12px;font-weight:700}
-
-/* Stops drawer is secondary; it must never permanently cover the map. */
-body.driver-mode .hud-toggle{
-  left:16px;right:auto;bottom:58px;
-  padding:9px 13px;
-  border-radius:12px;
-  background:rgba(13,17,23,.92);
-  color:var(--text);
-  font-size:12px;
-  border-color:rgba(255,255,255,.16);
-}
 body.driver-mode .hud-stops-panel{
   left:16px;right:16px;bottom:72px;
   max-height:42vh;
   border-radius:16px;
-}
-
-/* Hide secondary live-cycle metrics during actual driving. */
-body.driver-mode .lcm{display:none!important}
-
-/* Compass and audio controls become quiet utility controls. */
-body.driver-mode .hud-compass{
-  right:16px;top:138px;
-  width:50px;height:50px;
-  border-radius:50%;
-  background:rgba(13,17,23,.9);
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow:0 5px 18px rgba(0,0,0,.35);
-}
-body.driver-mode #hud-voice{
-  right:16px!important;
-  top:196px!important;
-  width:50px!important;height:50px!important;
-  font-size:22px!important;
-  box-shadow:0 5px 18px rgba(0,0,0,.35);
-}
-
-/* The old photo overlay duplicates the Next Stop card during driver mode. */
-body.driver-mode .stop-photo-ov{display:none!important}
-
-/* Give route line labels / map a little more breathing room around overlays. */
-body.driver-mode .leaflet-control-zoom{
-  margin-top:135px!important;
-  margin-right:8px!important;
-}
-body.driver-mode .leaflet-control-attribution{
-  font-size:8px!important;
-  opacity:.65;
-}
-
-/* Tablet portrait: the screenshot supplied by the driver is effectively
-   a ~768px CSS-pixel viewport, so the old >=900px media query never applied. */
-@media (min-width:600px) and (max-width:899px){
-  body.driver-mode .hud-instr{
-    min-height:116px;
-  }
-  body.driver-mode .hud-instr-icon{
-    width:112px;min-width:112px;
-  }
-  body.driver-mode #hud-icon-arrow,
-  body.driver-mode #hud-icon-arrow svg{
-    width:84px;height:84px;
-  }
-  body.driver-mode .hud-instr-dist{font-size:40px}
-  body.driver-mode .hud-instr-action{font-size:23px}
-  body.driver-mode .hud-instr-speed{width:86px;min-width:86px}
-  body.driver-mode .hud-spd-val{font-size:34px}
-  body.driver-mode .nsc{
-    width:330px;
-    max-width:calc(100vw - 32px);
-    bottom:78px;
-  }
-  body.driver-mode .nsc-name{font-size:24px}
-  body.driver-mode .nsc-dist{font-size:58px}
-  body.driver-mode .nsc-photo{height:175px}
-}
-
-/* Phone / narrow layout: preserve hierarchy without crushing the map. */
-@media (max-width:599px){
-  body.driver-mode .hud-instr{top:8px;left:8px;right:8px;min-height:92px}
-  body.driver-mode .hud-instr-icon{width:82px;min-width:82px;min-height:92px}
-  body.driver-mode #hud-icon-arrow,
-  body.driver-mode #hud-icon-arrow svg{width:66px;height:66px}
-  body.driver-mode .hud-instr-dist{font-size:34px}
-  body.driver-mode .hud-instr-action{font-size:18px}
-  body.driver-mode .hud-instr-detail{font-size:10px}
-  body.driver-mode .hud-instr-speed{width:66px;min-width:66px}
-  body.driver-mode .hud-spd-val{font-size:28px}
-  body.driver-mode .nsc{
-    left:8px;right:8px;bottom:64px;width:auto;
-    max-width:none;
-    max-height:38vh;
-    padding:11px 12px;
-  }
-  body.driver-mode .nsc-name{font-size:20px}
-  body.driver-mode .nsc-dist{font-size:46px}
-  body.driver-mode .nsc-photo{height:130px}
-  body.driver-mode .hud-strip{left:8px;bottom:8px;width:calc(100% - 16px);min-width:0}
-}
-
-/* Reduced motion: keep the driver UI stable. */
-@media (prefers-reduced-motion:reduce){
-  body.driver-mode .hud-instr *,
-  body.driver-mode .nsc *{transition:none!important;animation:none!important}
 }
 
 
@@ -852,157 +583,20 @@ body.driver-mode .leaflet-control-attribution{
 body.driver-mode #map .leaflet-tile-pane{
   filter:saturate(1.08) contrast(1.10) brightness(.97);
 }
-body.driver-mode .map-wrap:after{
-  content:"";position:absolute;inset:0;pointer-events:none;z-index:400;
-  background:linear-gradient(180deg,rgba(255,255,255,.02) 0%,transparent 24%,transparent 72%,rgba(8,12,18,.08) 100%);
-}
-
-/* Navigation guidance: one clear visual instruction, not a dashboard full of cards. */
-body.driver-mode .hud-instr{
-  top:12px;left:16px;right:16px;
-  min-height:108px;height:108px;
-  border-radius:20px;
-  background:rgba(13,17,23,.965);
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow:0 12px 36px rgba(0,0,0,.42);
-}
-body.driver-mode .hud-instr-icon{
-  width:132px;min-width:132px;min-height:108px;
-  border-right:1px solid rgba(255,255,255,.11);
-  background:linear-gradient(135deg,rgba(240,165,0,.18),rgba(240,165,0,.05));
-}
-body.driver-mode #hud-icon-arrow,
-body.driver-mode #hud-icon-arrow svg{
-  width:96px;height:96px;
-}
-body.driver-mode .hud-instr-body{padding:10px 20px;gap:0}
-body.driver-mode .hud-instr-dist{
-  font-size:54px;line-height:.92;letter-spacing:-1.5px;
-}
-body.driver-mode .hud-instr-action{
-  font-size:27px;line-height:1;margin:5px 0 2px;
-}
-body.driver-mode .hud-instr-detail{font-size:12px;line-height:1.15}
-body.driver-mode .hud-next-preview{font-size:11px;margin-top:4px}
-body.driver-mode .hud-instr-speed{
-  width:104px;min-width:104px;padding:10px 8px;
-  background:rgba(255,255,255,.025);
-}
-body.driver-mode .hud-spd-val{font-size:40px}
-body.driver-mode .hud-spd-unit{font-size:11px}
-body.driver-mode .hud-tgt{font-size:10px;margin-top:7px}
-
-/* The map guidance arrow is a secondary road cue. Make it visible, but never
-   larger than the vehicle-facing guidance card. */
-body.driver-mode .guid-wrap{
-  width:96px;height:96px;
-  filter:drop-shadow(0 4px 9px rgba(0,0,0,.72));
-}
-body.driver-mode .guid-wrap svg{width:96px;height:96px}
 
 /* Vehicle: large enough for a one-second glance. */
 body.driver-mode .veh-wrap{width:68px;height:68px}
 body.driver-mode .veh-bus svg{width:68px;height:68px}
 body.driver-mode .veh-halo{inset:-9px}
-
-/* Driver stop dock: a single coherent card. Photo and events stay visible
-   instead of being pushed below the fold by a tall vertical card. */
-body.driver-mode .nsc{
-  right:18px;bottom:18px;top:auto;
-  width:min(560px,62vw);max-width:calc(100vw - 36px);
-  max-height:none;height:190px;
-  overflow:hidden;padding:14px 16px;
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 178px;
-  grid-template-rows:auto auto auto 1fr;
-  column-gap:14px;row-gap:2px;
-  border-left:5px solid var(--accent);
-  border-radius:18px;
-  background:rgba(13,17,23,.975);
-  box-shadow:0 14px 38px rgba(0,0,0,.48);
-}
-body.driver-mode .nsc-head{grid-column:1;font-size:11px;letter-spacing:2px}
-body.driver-mode .nsc-name{grid-column:1;font-size:26px;margin:2px 0 0;line-height:1}
-body.driver-mode .nsc-dist{grid-column:1;font-size:58px;line-height:.88;margin:5px 0 1px;letter-spacing:-1px}
-body.driver-mode .nsc-row{grid-column:1;font-size:12px;margin:0;justify-content:flex-start;gap:14px}
-body.driver-mode .nsc-row:has(.nsc-leg){display:none}
-body.driver-mode .nsc-events{
-  grid-column:1;display:flex!important;align-self:end;gap:7px;margin:5px 0 0;
-}
-body.driver-mode .evt-chip{
-  min-height:36px;padding:6px 8px;gap:5px;border-radius:9px;font-size:11px;
-}
-body.driver-mode .evt-chip svg{width:24px!important;height:24px!important}
-body.driver-mode .nsc-photo{
-  grid-column:2;grid-row:1 / span 4;
-  width:178px;height:158px;margin:0;align-self:center;
-  border-radius:11px;object-fit:cover;
-}
-body.driver-mode .nsc:has(.nsc-photo[style*="display: none"]) {
-  grid-template-columns:1fr;
-}
-body.driver-mode .nsc:has(.nsc-photo[style*="display: none"]) .nsc-photo{display:none!important}
-
-/* Keep the stop drawer out of the way in normal Driver Mode. If the driver
-   explicitly opens it, it becomes a dedicated sheet rather than a bar over
-   the Next Stop card. */
-body.driver-mode:not(.stops-open) .hud-stops-panel{display:none!important}
-body.driver-mode .hud-toggle{
-  left:16px;right:auto;bottom:18px;
-  padding:9px 12px;border-radius:12px;font-size:11px;
-  background:rgba(13,17,23,.94);box-shadow:0 8px 22px rgba(0,0,0,.35);
-}
 body.driver-mode.stops-open .hud-stops-panel{
   left:18px;right:18px;bottom:18px;max-height:46vh;border-radius:18px;
   box-shadow:0 14px 40px rgba(0,0,0,.55);
 }
 
-/* Compact progress dock; it should not compete with the stop card. */
-body.driver-mode .hud-strip{
-  left:18px;right:auto;bottom:18px;width:min(360px,34vw);min-width:220px;
-  height:34px;padding:6px 10px;border-radius:12px;
-  background:rgba(13,17,23,.92);
-}
-body.driver-mode .hud-sbar{height:6px}
-body.driver-mode .hud-slbl{font-size:10px}
-
-/* Quiet utility controls. */
-body.driver-mode .hud-compass{right:18px;top:132px;width:46px;height:46px}
-body.driver-mode #hud-voice{right:18px!important;top:188px!important;width:50px!important;height:50px!important}
-
 /* Tablet portrait is the actual field layout shown in the screenshots. */
 @media (min-width:600px) and (max-width:899px){
-  body.driver-mode .hud-instr{height:104px;min-height:104px;left:12px;right:12px}
-  body.driver-mode .hud-instr-icon{width:118px;min-width:118px;min-height:104px}
-  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:88px;height:88px}
-  body.driver-mode .hud-instr-dist{font-size:48px}
-  body.driver-mode .hud-instr-action{font-size:24px}
-  body.driver-mode .hud-instr-speed{width:90px;min-width:90px}
-  body.driver-mode .hud-spd-val{font-size:36px}
   body.driver-mode .veh-wrap{width:64px;height:64px}
   body.driver-mode .veh-bus svg{width:64px;height:64px}
-  body.driver-mode .nsc{width:min(520px,68vw);height:176px;grid-template-columns:minmax(0,1fr) 160px}
-  body.driver-mode .nsc-photo{width:160px;height:146px}
-  body.driver-mode .nsc-name{font-size:24px}
-  body.driver-mode .nsc-dist{font-size:54px}
-  body.driver-mode .evt-chip{min-height:34px;font-size:10px;padding:5px 7px}
-  body.driver-mode .evt-chip svg{width:22px!important;height:22px!important}
-}
-
-@media (max-width:599px){
-  body.driver-mode .hud-instr{height:92px;min-height:92px;left:8px;right:8px}
-  body.driver-mode .hud-instr-icon{width:88px;min-width:88px;min-height:92px}
-  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:74px;height:74px}
-  body.driver-mode .hud-instr-dist{font-size:38px}
-  body.driver-mode .hud-instr-action{font-size:19px}
-  body.driver-mode .hud-instr-speed{width:70px;min-width:70px}
-  body.driver-mode .hud-spd-val{font-size:30px}
-  body.driver-mode .nsc{left:8px;right:8px;bottom:8px;width:auto;max-width:none;height:154px;grid-template-columns:minmax(0,1fr) 120px}
-  body.driver-mode .nsc-photo{width:120px;height:126px}
-  body.driver-mode .nsc-name{font-size:20px}
-  body.driver-mode .nsc-dist{font-size:44px}
-  body.driver-mode .evt-chip{font-size:9px;padding:4px 5px}
-  body.driver-mode .evt-chip b{display:none}
 }
 
 
@@ -1021,135 +615,11 @@ body.driver-mode #hud-voice{right:18px!important;top:188px!important;width:50px!
   --v6-line:rgba(255,255,255,.14);
   --v6-shadow:0 14px 40px rgba(0,0,0,.52);
 }
-
-/* Driver Mode is a true cockpit: no desktop/application chrome. */
-body.driver-mode{background:#050a0f}
 body.driver-mode .topbar,
 body.driver-mode .sum-bar,
 body.driver-mode > .sheet,
 body.driver-mode .install-banner{display:none!important}
-body.driver-mode .map-wrap{position:absolute;inset:0;width:100%;height:100dvh;flex:none;z-index:1}
 body.driver-mode #map{background:#081018}
-body.driver-mode .nav-hud{z-index:1000}
-
-/* Subtle cinematic vignette keeps road markings readable behind cards. */
-body.driver-mode .map-wrap:after{
-  content:"";position:absolute;inset:0;pointer-events:none;z-index:401;
-  background:
-    linear-gradient(180deg,rgba(2,7,12,.34) 0%,transparent 18%,transparent 72%,rgba(2,7,12,.34) 100%),
-    radial-gradient(ellipse at center,transparent 48%,rgba(0,0,0,.20) 100%);
-}
-
-/* Small live status pill, replacing the old topbar. */
-body.driver-mode .map-wrap:before{
-  content:"●  GPS  •  NAVIGATION";
-  position:absolute;left:18px;top:14px;z-index:1002;
-  padding:7px 11px;border:1px solid rgba(72,215,255,.28);
-  border-radius:999px;background:rgba(4,11,16,.72);
-  color:#bfefff;font:700 10px/1 var(--mono);letter-spacing:1.2px;
-  box-shadow:0 6px 18px rgba(0,0,0,.35);backdrop-filter:blur(10px);
-}
-
-/* ── PRIMARY MANOEUVRE ───────────────────────────────────────────────── */
-body.driver-mode .hud-instr{
-  top:16px;left:18px;right:auto;width:min(430px,38vw);
-  min-height:220px;height:auto;display:grid;
-  grid-template-columns:150px minmax(0,1fr);
-  grid-template-rows:1fr auto;
-  overflow:hidden;padding:0;
-  border:1px solid rgba(255,255,255,.16);
-  border-radius:22px;background:rgba(5,12,18,.91);
-  box-shadow:var(--v6-shadow);backdrop-filter:blur(16px);
-  pointer-events:none;
-}
-body.driver-mode .hud-instr-icon{
-  grid-column:1;grid-row:1 / span 2;
-  width:150px;min-width:150px;min-height:220px;
-  border:0;border-right:1px solid rgba(255,255,255,.11);
-  background:linear-gradient(145deg,rgba(25,167,255,.12),rgba(240,165,0,.13));
-  display:flex;align-items:center;justify-content:center;
-}
-body.driver-mode .hud-instr-icon.turn{background:linear-gradient(145deg,rgba(240,165,0,.20),rgba(240,165,0,.05))}
-body.driver-mode .hud-instr-icon.straight{background:linear-gradient(145deg,rgba(25,167,255,.16),rgba(25,167,255,.04))}
-body.driver-mode .hud-instr-icon.stop{background:linear-gradient(145deg,rgba(248,81,73,.17),rgba(248,81,73,.04))}
-body.driver-mode .hud-instr-icon.arrive{background:linear-gradient(145deg,rgba(63,185,80,.17),rgba(63,185,80,.04))}
-body.driver-mode #hud-icon-arrow,
-body.driver-mode #hud-icon-arrow svg{
-  width:116px;height:116px;display:flex;align-items:center;justify-content:center;
-  filter:drop-shadow(0 5px 9px rgba(0,0,0,.55));
-}
-body.driver-mode .hud-icon-lbl{display:none}
-body.driver-mode .hud-instr-body{
-  grid-column:2;grid-row:1;padding:22px 20px 8px;
-  justify-content:center;min-width:0;
-}
-body.driver-mode .hud-instr-dist{
-  font-size:62px;line-height:.84;font-weight:800;letter-spacing:-2px;color:#fff;
-}
-body.driver-mode .hud-instr-dist.far{color:#fff}
-body.driver-mode .hud-instr-dist.medium{color:#fff}
-body.driver-mode .hud-instr-dist.close{color:#ffb000}
-body.driver-mode .hud-instr-action{
-  font-size:27px;line-height:1.02;font-weight:800;letter-spacing:.2px;
-  color:var(--v6-cyan);margin:8px 0 4px;text-transform:uppercase;
-}
-body.driver-mode .hud-instr-detail{font-size:13px;color:#dce8ef;font-family:var(--mono)}
-body.driver-mode .hud-next-preview{font-size:11px;color:#8295a3;margin-top:6px}
-
-/* Speed is a distinct instrument, not part of the instruction sentence. */
-body.driver-mode .hud-instr-speed{
-  position:absolute;right:18px;top:14px;
-  width:82px;height:82px;min-width:0;padding:0;
-  border:1px solid rgba(255,255,255,.22);border-radius:50%;
-  background:rgba(4,10,15,.84);display:flex;align-items:center;justify-content:center;
-  flex-direction:column;box-shadow:0 8px 20px rgba(0,0,0,.35);
-}
-body.driver-mode .hud-spd-val{font-size:31px;line-height:.9;font-weight:800;color:#fff}
-body.driver-mode .hud-spd-unit{font-size:9px;color:#9daeb9;margin-top:4px}
-body.driver-mode .hud-tgt{
-  position:absolute;right:-5px;top:-7px;margin:0;padding:3px 6px;
-  border:2px solid #fff;border-radius:999px;background:#f5f7f8;color:#111;
-  font-size:10px;font-weight:900;line-height:1;min-width:27px;text-align:center;
-}
-
-/* ── NEXT STOP DOCK ───────────────────────────────────────────────────── */
-body.driver-mode .nsc{
-  right:18px;bottom:20px;top:auto;
-  width:min(390px,30vw);height:auto;min-height:170px;
-  max-width:calc(100vw - 36px);max-height:240px;
-  display:block!important;overflow:hidden;padding:16px 17px;
-  border:1px solid rgba(255,255,255,.15);border-left:4px solid var(--v6-blue);
-  border-radius:20px;background:rgba(5,12,18,.91);
-  box-shadow:var(--v6-shadow);backdrop-filter:blur(16px);
-}
-body.driver-mode .nsc-head{font-size:10px;letter-spacing:1.8px;color:var(--v6-cyan)}
-body.driver-mode .nsc-name{font-size:25px;line-height:1.05;margin:7px 0 1px;color:#fff}
-body.driver-mode .nsc-dist{font-size:48px;line-height:.9;color:#fff;margin:7px 0 5px;letter-spacing:-1px}
-body.driver-mode .nsc-row{font-size:12px;color:#b9c7cf}
-body.driver-mode .nsc-events{margin-top:8px;gap:6px}
-body.driver-mode .evt-chip{min-height:30px;padding:5px 7px;border-radius:8px;font-size:10px}
-body.driver-mode .evt-chip svg{width:20px!important;height:20px!important}
-body.driver-mode .nsc-photo{height:78px;width:100%;margin-top:8px;border-radius:9px}
-
-/* ── ROUTE PROGRESS ───────────────────────────────────────────────────── */
-body.driver-mode .hud-strip{
-  left:50%;right:auto;bottom:18px;transform:translateX(-50%);
-  width:min(430px,34vw);min-width:250px;height:34px;padding:7px 11px;
-  border:1px solid rgba(255,255,255,.14);border-radius:999px;
-  background:rgba(5,12,18,.82);box-shadow:0 8px 24px rgba(0,0,0,.38);
-  backdrop-filter:blur(10px);
-}
-body.driver-mode .hud-sbar{height:6px;background:rgba(255,255,255,.10)}
-body.driver-mode .hud-slbl{font-size:10px;color:#c7d2d8}
-body.driver-mode .hud-sfill{background:linear-gradient(90deg,var(--v6-blue),var(--v6-cyan))}
-
-/* Utility controls are deliberately quiet. */
-body.driver-mode .hud-compass{
-  right:18px;top:118px;width:46px;height:46px;border-radius:50%;
-  background:rgba(5,12,18,.78);border:1px solid rgba(255,255,255,.16);
-  box-shadow:0 7px 20px rgba(0,0,0,.35);backdrop-filter:blur(10px);
-}
-body.driver-mode #hud-voice{right:18px!important;top:174px!important;width:46px!important;height:46px!important;font-size:18px!important}
 body.driver-mode .hud-toggle{display:none!important}
 body.driver-mode:not(.stops-open) .hud-stops-panel{display:none!important}
 body.driver-mode .leaflet-control-zoom{display:none!important}
@@ -1157,47 +627,9 @@ body.driver-mode .leaflet-control-attribution{font-size:8px!important;opacity:.5
 body.driver-mode .lcm{display:none!important}
 body.driver-mode .stop-photo-ov{display:none!important}
 
-/* Large 10" landscape displays — give the cockpit more breathing room. */
-@media (min-width:1200px){
-  body.driver-mode .hud-instr{width:470px;min-height:238px;grid-template-columns:166px minmax(0,1fr)}
-  body.driver-mode .hud-instr-icon{width:166px;min-width:166px;min-height:238px}
-  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:132px;height:132px}
-  body.driver-mode .hud-instr-dist{font-size:68px}
-  body.driver-mode .hud-instr-action{font-size:30px}
-  body.driver-mode .nsc{width:410px;min-height:184px}
-  body.driver-mode .nsc-name{font-size:28px}
-  body.driver-mode .nsc-dist{font-size:54px}
-}
-
-/* Tablet landscape / portrait. */
-@media (min-width:600px) and (max-width:1199px){
-  body.driver-mode .hud-instr{width:min(440px,48vw);min-height:208px;grid-template-columns:132px minmax(0,1fr)}
-  body.driver-mode .hud-instr-icon{width:132px;min-width:132px;min-height:208px}
-  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:104px;height:104px}
-  body.driver-mode .hud-instr-dist{font-size:56px}
-  body.driver-mode .hud-instr-action{font-size:24px}
-  body.driver-mode .nsc{width:340px;min-height:158px}
-  body.driver-mode .nsc-name{font-size:22px}
-  body.driver-mode .nsc-dist{font-size:44px}
-}
-
 /* Phone layout: keep the same hierarchy, but stack the stop dock. */
 @media (max-width:599px){
   body.driver-mode .map-wrap:before{left:10px;top:9px;font-size:8px;padding:6px 8px}
-  body.driver-mode .hud-instr{top:46px;left:8px;width:calc(100vw - 16px);min-height:118px;grid-template-columns:92px minmax(0,1fr)}
-  body.driver-mode .hud-instr-icon{width:92px;min-width:92px;min-height:118px}
-  body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:76px;height:76px}
-  body.driver-mode .hud-instr-body{padding:12px 12px 8px}
-  body.driver-mode .hud-instr-dist{font-size:42px}
-  body.driver-mode .hud-instr-action{font-size:18px}
-  body.driver-mode .hud-instr-detail{font-size:10px}
-  body.driver-mode .hud-instr-speed{right:8px;top:8px;width:62px;height:62px}
-  body.driver-mode .hud-spd-val{font-size:24px}
-  body.driver-mode .nsc{left:8px;right:8px;bottom:8px;width:auto;min-height:130px;padding:11px 12px}
-  body.driver-mode .nsc-name{font-size:19px}
-  body.driver-mode .nsc-dist{font-size:38px}
-  body.driver-mode .nsc-photo{height:55px}
-  body.driver-mode .hud-strip{bottom:146px;width:calc(100vw - 32px);min-width:0}
 }
 
 
@@ -1213,35 +645,11 @@ body.driver-mode .map-wrap{position:fixed!important;inset:0!important;width:100v
 body.driver-mode .nav-hud{display:block!important;position:absolute!important;inset:0!important;z-index:1000!important}
 body.driver-mode .map-wrap:before{content:"GPS  ●   DRIVER MODE"!important;left:50%!important;top:14px!important;transform:translateX(-50%)!important;background:rgba(3,10,16,.76)!important;color:#bfefff!important;border:1px solid rgba(72,215,255,.25)!important;z-index:1003!important}
 body.driver-mode .map-wrap:after{z-index:400!important;background:linear-gradient(180deg,rgba(1,6,10,.30),transparent 22%,transparent 72%,rgba(1,6,10,.28))!important}
-
-/* Large left manoeuvre card — no speed embedded in it. */
-body.driver-mode .hud-instr{position:absolute!important;top:74px!important;left:22px!important;right:auto!important;width:360px!important;min-height:330px!important;height:auto!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;padding:0!important;border:1px solid rgba(255,255,255,.18)!important;border-radius:22px!important;background:rgba(4,11,17,.93)!important;box-shadow:0 18px 48px rgba(0,0,0,.58)!important;backdrop-filter:blur(16px)!important;overflow:hidden!important}
-body.driver-mode .hud-instr-icon{order:2!important;width:100%!important;min-width:0!important;min-height:130px!important;height:130px!important;border:0!important;background:transparent!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important}
-body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:124px!important;height:124px!important;max-width:124px!important;max-height:124px!important;color:#fff!important;filter:drop-shadow(0 6px 12px rgba(0,0,0,.6))!important}
-body.driver-mode .hud-instr-body{order:1!important;width:100%!important;padding:24px 24px 4px!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;box-sizing:border-box!important}
-body.driver-mode .hud-instr-dist{font-size:64px!important;line-height:.9!important;color:#fff!important;font-weight:900!important;letter-spacing:-2px!important}
-body.driver-mode .hud-instr-action{order:3!important;font-size:27px!important;line-height:1.05!important;color:#32c6ff!important;font-weight:900!important;text-transform:uppercase!important;margin:8px 0 4px!important}
-body.driver-mode .hud-instr-detail{order:4!important;font-size:13px!important;line-height:1.3!important;color:#d8e4eb!important;white-space:normal!important}
-body.driver-mode .hud-next-preview{order:5!important;margin-top:10px!important;color:#90a4b1!important}
-body.driver-mode .hud-instr-speed{display:none!important}
-
-/* Independent speedometer, like an automotive instrument. */
-body.driver-mode .cockpit-speed{display:flex!important;position:absolute!important;right:24px!important;top:28px!important;width:112px!important;height:112px!important;border-radius:50%!important;z-index:1020!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;background:radial-gradient(circle at 50% 38%,rgba(25,167,255,.13),rgba(3,9,14,.96) 68%)!important;border:2px solid rgba(255,255,255,.22)!important;box-shadow:0 12px 34px rgba(0,0,0,.55),inset 0 0 0 5px rgba(255,255,255,.025)!important;color:#fff!important}
 .cockpit-speed{display:none}.cockpit-speed-value{font:900 45px/.88 var(--mono)}.cockpit-speed-unit{font:700 11px/1 var(--mono);color:#aebdc6;margin-top:7px}.cockpit-speed-target{position:absolute;right:-5px;top:-4px;min-width:30px;min-height:30px;border-radius:50%;background:#fff;border:3px solid #ef5a29;color:#111;font:900 13px/30px var(--mono);text-align:center}
-body.driver-mode .cockpit-exit{display:block!important;position:absolute!important;right:32px!important;top:154px!important;z-index:1020!important;width:42px!important;height:42px!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.18)!important;background:rgba(4,11,17,.86)!important;color:#fff!important;font-size:18px!important;cursor:pointer!important}
 .cockpit-exit{display:none}
-
-/* Right-side next stop card. */
-body.driver-mode .nsc{display:block!important;position:absolute!important;right:24px!important;bottom:28px!important;left:auto!important;top:auto!important;width:330px!important;min-height:188px!important;height:auto!important;max-height:310px!important;padding:18px!important;box-sizing:border-box!important;border:1px solid rgba(255,255,255,.17)!important;border-left:4px solid #19a7ff!important;border-radius:20px!important;background:rgba(4,11,17,.93)!important;box-shadow:0 18px 48px rgba(0,0,0,.55)!important;backdrop-filter:blur(16px)!important;overflow:hidden!important}
-body.driver-mode .nsc-head{font-size:11px!important;color:#45d3ff!important;letter-spacing:1.8px!important}body.driver-mode .nsc-name{font-size:27px!important;color:#fff!important;margin:8px 0 3px!important}body.driver-mode .nsc-dist{font-size:52px!important;color:#fff!important;margin:8px 0 7px!important;line-height:.9!important}body.driver-mode .nsc-photo{height:96px!important;width:100%!important;object-fit:cover!important;border-radius:10px!important;margin-top:10px!important}
-
-/* Progress floats low and central, leaving road visible. */
-body.driver-mode .hud-strip{position:absolute!important;left:50%!important;right:auto!important;bottom:24px!important;transform:translateX(-50%)!important;width:390px!important;max-width:32vw!important;min-width:270px!important;height:38px!important;padding:8px 12px!important;border-radius:999px!important;background:rgba(4,11,17,.86)!important;border:1px solid rgba(255,255,255,.14)!important;box-shadow:0 10px 28px rgba(0,0,0,.45)!important}
-body.driver-mode .hud-compass{position:absolute!important;right:24px!important;top:210px!important;width:48px!important;height:48px!important;background:rgba(4,11,17,.82)!important}
-body.driver-mode #hud-voice{right:24px!important;top:270px!important;width:48px!important;height:48px!important}
 body.driver-mode .leaflet-control-container{display:none!important}
 
-@media(max-width:900px){body.driver-mode .hud-instr{left:14px!important;top:62px!important;width:310px!important;min-height:285px!important}body.driver-mode .hud-instr-dist{font-size:54px!important}body.driver-mode .hud-instr-icon{height:110px!important;min-height:110px!important}body.driver-mode #hud-icon-arrow,body.driver-mode #hud-icon-arrow svg{width:104px!important;height:104px!important}body.driver-mode .hud-instr-action{font-size:23px!important}body.driver-mode .cockpit-speed{right:16px!important;width:96px!important;height:96px!important}.cockpit-speed-value{font-size:38px}body.driver-mode .nsc{right:16px!important;bottom:18px!important;width:290px!important}body.driver-mode .hud-strip{bottom:18px!important;width:300px!important;min-width:220px!important}}
+@media(max-width:900px){.cockpit-speed-value{font-size:38px}}
 
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1403,6 +811,54 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
   .stab{font-size:10px}.stab svg{width:20px;height:20px}
   .big-start{font-size:13px;padding:10px 14px}
 }
+
+/* ══ CASCADE LOCK (16 Aug, 2nd field round) ═══════════════════════════════
+   index.html accumulated five generations of `body.driver-mode` card rules,
+   several with !important — one pinned the stop dock to max-height:310px
+   with overflow:hidden (the clipped "489 m"), another forced padding:0 on
+   the manoeuvre card (the "50 m" glued to the edge). Class selectors cannot
+   win this reliably, so the cockpit geometry is locked here with ID
+   selectors, which outrank every class chain regardless of source order.
+   If a future skin needs to move these cards, it must use IDs too.        */
+body.cockpit #hud-instr{
+  position:absolute!important;left:14px!important;top:60px!important;
+  right:auto!important;bottom:auto!important;width:300px!important;
+  min-height:0!important;height:auto!important;max-height:none!important;
+  padding:18px 20px 14px!important;overflow:hidden!important;
+  display:flex!important;flex-direction:column!important;align-items:stretch!important;
+  grid-template-columns:none!important}
+body.cockpit #nsc{
+  position:absolute!important;right:14px!important;left:auto!important;
+  top:auto!important;bottom:86px!important;width:304px!important;
+  min-height:0!important;height:auto!important;
+  max-height:calc(100vh - 170px)!important;
+  padding:14px 16px!important;display:block!important;overflow:hidden!important;
+  grid-template-columns:none!important}
+body.cockpit #nsc .nsc-photo{height:180px!important;width:100%!important;display:block}
+body.cockpit #nsc .nsc-leg{display:none!important}  /* dev pacing — not driver info */
+body.cockpit #cockpit-speed{position:absolute!important;right:14px!important;
+  top:68px!important;left:auto!important;bottom:auto!important;
+  width:104px!important;height:104px!important}
+body.cockpit #cockpit-exit{position:absolute!important;right:14px!important;
+  top:12px!important;left:auto!important;bottom:auto!important;
+  width:44px!important;height:44px!important}
+body.cockpit #hud-voice{position:absolute!important;right:14px!important;
+  top:216px!important;left:auto!important;bottom:auto!important}
+@media (max-width:820px){
+  body.cockpit #hud-instr{width:288px!important;padding:14px 16px 12px!important}
+  body.cockpit #nsc{width:288px!important;bottom:78px!important}
+  body.cockpit #nsc .nsc-photo{height:164px!important}
+}
+
+/* ══ VEHICLE CONTRAST ═════════════════════════════════════════════════════
+   The pale-blue bus melted into the pale-blue route line under sunlight.
+   A solid white puck now sits behind it and the bus body is a deeper blue
+   with a heavier white outline — shape and value contrast, not hue alone. */
+.veh-puck{position:absolute;inset:-6px;border-radius:50%;background:#fff;
+  border:2px solid rgba(13,17,23,.35);box-shadow:0 3px 10px rgba(0,0,0,.45)}
+.veh-wrap .veh-halo{z-index:0}
+.veh-wrap .veh-puck{z-index:1}
+.veh-wrap .veh-bus{z-index:2}
 </style>
 </head>
 <body>
@@ -2995,7 +2451,7 @@ function busSvg(){
     <g stroke-linejoin="round" stroke-linecap="round">
       <!-- body: front (windscreen) at the top -->
       <rect x="11" y="5.5" width="18" height="29" rx="4.5"
-            fill="var(--blue,#58a6ff)" stroke="#fff" stroke-width="2.4"/>
+            fill="#1a6ef5" stroke="#fff" stroke-width="3.2"/>
       <!-- windscreen marks the front unambiguously -->
       <path d="M13.6 11.2c2-1.6 10.8-1.6 12.8 0v3.4H13.6z" fill="#fff" opacity=".95"/>
       <!-- side windows -->
@@ -3016,6 +2472,7 @@ function vehicleMarkerHtml(headingDeg){
   const neutral=(headingDeg==null||isNaN(headingDeg));
   return `<div class="veh-wrap${neutral?' neutral':''}">
     <div class="veh-halo"></div>
+    <div class="veh-puck"></div>
     <div class="veh-bus" style="transform:rotate(${rot}deg) scale(1.10)">${busSvg()}</div>
   </div>`;
 }

@@ -2454,3 +2454,144 @@ const ffCss=()=>document.__cssText||'';
 
 console.log('ALL FIELD-FIX TESTS PASSED');
 __group('Field fix tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FIELD FIXES 2 — cascade lock, dock fit, vehicle contrast
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── field fixes 2 ──');
+const f2Css=()=>document.__cssText||'';
+
+// ── F2-1: ID-locked geometry beats every legacy class rule ──
+(function(){
+  const css=f2Css();
+  const instr=/body\.cockpit #hud-instr\{([^}]*)\}/.exec(css);
+  console.assert(instr,'F2-1: no ID rule for the manoeuvre card');
+  console.assert(/padding:18px 20px 14px!important/.test(instr[1]),
+    'F2-1: padding not locked — v7 padding:0 wins again');
+  console.assert(/max-height:none!important/.test(instr[1]),'F2-1: min/max-height not neutralised');
+  console.assert(/width:300px!important/.test(instr[1]),'F2-1: width not locked');
+  // CSS CLEANUP (16 Aug, by request): the v4-v7 conflicting generations were
+  // REMOVED, so this sentinel flips — the padding:0 rule must now be absent.
+  console.assert(!/body\.driver-mode \.hud-instr\{[^}]*padding:0!important/.test(css),
+    'F2-1: a driver-mode padding:0 card rule crept back in');
+  console.log('F2-1. #hud-instr ID lock: padding, width, heights OK');
+})();
+
+// ── F2-2: the dock can no longer be clipped at 310px ──
+(function(){
+  const css=f2Css();
+  const nsc=/body\.cockpit #nsc\{([^}]*)\}/.exec(css);
+  console.assert(nsc,'F2-2: no ID rule for the stop dock');
+  console.assert(/bottom:86px!important/.test(nsc[1]),'F2-2: dock not bottom-anchored');
+  console.assert(/max-height:calc\(100vh - 170px\)!important/.test(nsc[1]),
+    'F2-2: dock max-height not viewport-derived');
+  console.assert(/min-height:0!important/.test(nsc[1]),'F2-2: v7 min-height:188 can still win');
+  // CSS CLEANUP (16 Aug): the 310px clipping rule was removed with the rest
+  // of the v4-v7 generations — it must stay gone.
+  console.assert(!/body\.driver-mode \.nsc\{[^}]*max-height:310px!important/.test(css),
+    'F2-2: the 310px dock-clipping rule crept back in');
+  // content budget fits: photo 180 + chrome must stay under the max at 1060px
+  const ph=/body\.cockpit #nsc \.nsc-photo\{height:(\d+)px!important/.exec(css);
+  console.assert(ph&&+ph[1]<=180,'F2-2: photo '+(ph&&ph[1])+'px busts the height budget');
+  console.assert(/body\.cockpit #nsc \.nsc-leg\{display:none!important/.test(css),
+    'F2-2: dev pacing row still occupies dock space');
+  console.log(`F2-2. #nsc bottom-anchored, max-height viewport-derived, photo ${ph[1]}px OK`);
+})();
+
+// ── F2-3: every cockpit card is ID-locked, not class-locked ──
+(function(){
+  const css=f2Css();
+  // two generations of body.cockpit ID rules can coexist (the earlier round
+  // wrote one without position); the LOCK is satisfied if any block carries
+  // the full set — in the cascade the later one wins anyway.
+  ['#cockpit-speed','#cockpit-exit','#hud-voice'].forEach(id=>{
+    const re=new RegExp('body\\.cockpit '+id+'\\{([^}]*)\\}','g');
+    let m,ok=false;
+    while((m=re.exec(css)))if(/position:absolute!important/.test(m[1])&&/right:14px!important/.test(m[1]))ok=true;
+    console.assert(ok,'F2-3: '+id+' not ID-locked');
+  });
+  console.log('F2-3. speed dial, exit, voice — ID-locked OK');
+})();
+
+// ── F2-4: vehicle marker carries the white contrast puck ──
+(function(){
+  const rec=mkRec('f24',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[]);
+  beginPlayback(rec,1); el('rng-follow').value='1'; navActive=true; posMarker=null;
+  drivePts(rec,0,8,30,0);
+  const html=posMarker._icon.html;
+  console.assert(/veh-puck/.test(html),'F2-4: no puck behind the bus');
+  console.assert(html.indexOf('veh-puck')<html.indexOf('veh-bus'),
+    'F2-4: puck drawn over the bus, not under');
+  console.assert(/fill="#1a6ef5"/.test(html),'F2-4: bus body still the pale route blue');
+  console.assert(/stroke-width="3.2"/.test(html),'F2-4: bus outline not thickened');
+  const css=f2Css();
+  console.assert(/\.veh-puck\{[^}]*background:#fff/.test(css),'F2-4: puck is not solid white');
+  console.log('F2-4. white puck under a deep-blue, heavy-outline bus OK');
+})();
+
+console.log('ALL FIELD-FIX-2 TESTS PASSED');
+__group('Field fix 2 tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CSS HYGIENE — the cleaned stylesheet must stay clean
+//  (The scanner is depth-aware: a responsive override inside @media is the
+//  intended mechanism, not a duplicated generation — the first version of
+//  these checks flagged exactly that and was wrong, not the CSS.)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── css hygiene ──');
+(function(){
+  const css=document.__cssText||'';
+  const strip=s=>s.replace(/\/\*[\s\S]*?\*\//g,'');
+  // level-aware rule walk: returns [{sel,level}] where level 0 = top,
+  // and rules inside a media query carry that media's own scope id
+  function walk(text,scope,out){
+    let i=0;
+    while(true){
+      const j=text.indexOf('{',i); if(j<0)break;
+      const sel=text.slice(i,j).trim();
+      let d=0,k=j;
+      for(;k<text.length;k++){if(text[k]==='{')d++;else if(text[k]==='}'){d--;if(!d)break;}}
+      if(sel.startsWith('@media')) walk(text.slice(j+1,k),scope+'|'+sel.replace(/\s+/g,''),out);
+      else out.push({sel,scope});
+      i=k+1;
+    }
+    return out;
+  }
+  const sels=walk(strip(css),'top',[]);
+  const CARD=/hud-instr|\.nsc|cockpit-speed|hud-voice|hud-strip|lap-badge|hud-compass|hud-spd|hud-tgt|hud-icon/;
+
+  // H-1: zero driver-mode card rules — the five dead generations stay dead
+  const zombie=sels.filter(r=>/driver-mode/.test(r.sel)&&(CARD.test(r.sel)||/evt-chip|cockpit-exit/.test(r.sel)));
+  console.assert(zombie.length===0,'H-1: driver-mode card rules returned: '+zombie.slice(0,3).map(r=>r.sel).join(' | '));
+  console.log('H-1. zero driver-mode card rules OK');
+
+  // H-2: the guidance-marker css died with the marker
+  console.assert(!/\.guid-(wrap|icon)/.test(strip(css)),'H-2: retired .guid-* css returned');
+  console.log('H-2. no orphan .guid-* rules OK');
+
+  // H-3: exactly ONE top-level lock generation per cockpit card
+  //      (the @media copy is the responsive override, counted separately)
+  ['#hud-instr','#nsc'].forEach(id=>{
+    const top=sels.filter(r=>r.scope==='top'&&r.sel==='body.cockpit '+id).length;
+    console.assert(top===1,'H-3: '+id+' has '+top+' top-level lock generations (must be 1)');
+    const med=sels.filter(r=>r.scope!=='top'&&r.sel==='body.cockpit '+id).length;
+    console.assert(med<=1,'H-3: '+id+' has '+med+' media overrides (max 1)');
+  });
+  console.log('H-3. one top-level lock + at most one media override per card OK');
+
+  // H-4: within any single scope, no selector appears twice — stacked
+  //      same-level generations are the conflict pattern we just removed
+  const seen={};let dup=null;
+  sels.filter(r=>/driver-mode/.test(r.sel)).forEach(r=>{
+    const k=r.scope+'::'+r.sel.replace(/\s+/g,' ');
+    if(seen[k])dup=k; seen[k]=1;
+  });
+  console.assert(!dup,'H-4: duplicated driver-mode generation in one scope: '+dup);
+  console.log('H-4. no same-scope duplicated driver-mode selectors OK');
+
+  // H-5: the layer contract is documented at the top of the sheet
+  console.assert(/STYLE LAYERS/.test(css)&&/CASCADE LOCK/.test(css),'H-5: layer banner missing');
+  console.log('H-5. layer contract banner present OK');
+})();
+console.log('ALL CSS-HYGIENE TESTS PASSED');
+__group('CSS hygiene tests');
