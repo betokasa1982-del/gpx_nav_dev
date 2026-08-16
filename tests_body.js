@@ -2246,3 +2246,120 @@ function ckDrive(){
 speakText=_realSpeakCk;
 console.log('ALL COCKPIT TESTS PASSED');
 __group('Cockpit tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SHELL v6.1 — cockpit field fixes + one-thumb app shell
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── shell v6.1 ──');
+const shCss=()=>document.__cssText||'';
+
+// ── SH-1: the diagonal-wedge regression can never return ──
+(function(){
+  const css=shCss();
+  // base rule keeps the 200% oversize…
+  console.assert(/#map\{position:absolute;top:-50%;left:-50%;width:200%;height:200%/.test(css),
+    'SH-1: base #map oversize rule lost');
+  // …and no cockpit rule shrinks it again
+  const bad=/body\.cockpit #map\{[^}]*(width|height):100%/.test(css);
+  console.assert(!bad,'SH-1: cockpit overrides #map size — the black wedge is back');
+  console.log('SH-1. rotated map keeps 200% oversize in cockpit OK');
+})();
+
+// ── SH-2: manoeuvre card is a column — dist, arrow, action, footer in order ──
+(function(){
+  const css=shCss();
+  const m=/body\.cockpit \.hud-instr\{([^}]*)\}/.exec(css);
+  console.assert(m&&/flex-direction:column/.test(m[1]),'SH-2: card is not a column');
+  // DOM order inside the card is the visual order
+  const html=(function(){
+    const fs=require('fs'),path=require('path');
+    const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+      .find(p=>fs.existsSync(p));
+    const h=fs.readFileSync(f,'utf8');
+    const i=h.indexOf('<div class="hud-instr" id="hud-instr">');
+    return h.slice(i,h.indexOf('hud-instr-speed',i));
+  })();
+  const order=['ck-dist-row','hud-icon','hud-instr-body','ck-foot'].map(id=>html.indexOf(id));
+  console.assert(order.every((v,i)=>v>=0&&(i===0||v>order[i-1])),
+    'SH-2: card children out of order: '+order.join(','));
+  console.log('SH-2. cockpit card: distance → arrow → action → footer OK');
+})();
+
+// ── SH-3: top-right stack has distinct, non-overlapping slots ──
+(function(){
+  const css=shCss();
+  const exit=/body\.cockpit \.cockpit-exit\{[^}]*top:12px/.test(css);
+  const dial=/body\.cockpit \.cockpit-speed\{[^}]*top:64px/.test(css)||
+             /body\.cockpit \.cockpit-speed\{top:64px\}/.test(css);
+  const voice=/body\.cockpit #hud-voice\{[^}]*top:212px/.test(css);
+  console.assert(exit,'SH-3: exit button not pinned to the corner');
+  console.assert(dial,'SH-3: dial position not fixed');
+  console.assert(voice,'SH-3: voice button still floats over the dial');
+  console.log('SH-3. exit 12px · dial 64px · voice 212px — separate slots OK');
+})();
+
+// ── SH-4: app bar — four areas, icons, ≥56px targets ──
+(function(){
+  const css=shCss();
+  console.assert(/\.stab\{[^}]*min-height:56px/.test(css),'SH-4: tab targets below 56px');
+  console.assert(/\.sheet-tabs\{height:62px/.test(css),'SH-4: app bar not 62px');
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const h=fs.readFileSync(f,'utf8');
+  const bar=h.slice(h.indexOf('class="sheet-tabs"'),h.indexOf('<!-- ROTA PANE -->'));
+  ['stab-rota','stab-nav','stab-paradas','stab-gravadas'].forEach(id=>{
+    const seg=bar.slice(bar.indexOf(id),bar.indexOf(id)+520);
+    console.assert(/<svg/.test(seg),'SH-4: tab '+id+' has no icon');
+  });
+  console.assert(/role="tablist"/.test(bar),'SH-4: tablist role missing');
+  console.log('SH-4. app bar: 4 areas with icons, 56px+ targets OK');
+})();
+
+// ── SH-5: switching areas still works after the redesign ──
+(function(){
+  switchTab('gravadas',true);
+  console.assert(el('pane-gravadas').classList.contains('active'),'SH-5: recordings pane not active');
+  console.assert(el('stab-gravadas').classList.contains('active'),'SH-5: recordings tab not active');
+  console.assert(!el('pane-rota').classList.contains('active'),'SH-5: route pane still active');
+  switchTab('rota',true);
+  console.assert(el('pane-rota').classList.contains('active'),'SH-5: route pane did not return');
+  console.log('SH-5. tab switching intact OK');
+})();
+
+// ── SH-6: the primary button follows the state machine ──
+(function(){
+  // no route → the button routes to the Route pane
+  const savedPts=routePts; routePts=[]; navActive=false; updBigStart();
+  console.assert(/LOAD ROUTE/.test(el('big-start').textContent),'SH-6: empty state label wrong');
+  switchTab('gravadas',true);
+  bigStartTap();
+  console.assert(el('pane-rota').classList.contains('active'),'SH-6: empty tap did not open Route');
+  console.assert(navActive===false,'SH-6: navigation started with no route');
+  routePts=savedPts;
+  // route loaded → START; while navigating → STOP
+  const rec=mkRec('sh6',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[]);
+  loadFresh(rec); navActive=false; updBigStart();
+  console.assert(/START/.test(el('big-start').textContent),'SH-6: loaded state label wrong');
+  navActive=true; updBigStart();
+  console.assert(/STOP/.test(el('big-start').textContent)&&
+                 el('big-start').classList.contains('stopping'),'SH-6: nav state label wrong');
+  navActive=false; updBigStart();
+  console.log('SH-6. LOAD ROUTE → START → STOP state machine OK');
+})();
+
+// ── SH-7: engine untouched by any shell interaction ──
+(function(){
+  const rec=mkRec('sh7',150,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[70]);
+  beginPlayback(rec,1);
+  drivePts(rec,0,30,30,0);
+  const prog=routeProgressM, seg=Playback.lastSegIdx;
+  switchTab('paradas',true);switchTab('nav',true);switchTab('rota',true);
+  updBigStart();toggleSheetCollapse();toggleSheetCollapse();
+  console.assert(routeProgressM===prog&&Playback.lastSegIdx===seg,
+    'SH-7: shell interaction moved engine state');
+  console.log('SH-7. shell interactions inert on the engine OK');
+})();
+
+console.log('ALL SHELL TESTS PASSED');
+__group('Shell tests');
