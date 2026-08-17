@@ -2878,6 +2878,50 @@ function sqDriveLap(rec,base,hdgAdj){
   console.log('SEQ-11. DOM contract: all 8 ids real, correctly nested and wired OK');
 })();
 
+
+// ── SEQ-12: the field trap and the lost counter can never return ──
+(function(){
+  // (a) the exit button must be DISPLAYED in cockpit — its base rule says
+  // display:none and the old enabler died in the CSS cleanup
+  const css=document.__cssText||'';
+  const lock=/body\.cockpit #cockpit-exit\{([^}]*)\}/.exec(css);
+  console.assert(lock&&/display:flex!important/.test(lock[1]),
+    'SEQ-12: exit button has no display enabler — driver trapped in navigation');
+  console.assert(/\.cockpit-exit\{display:none\}/.test(css),
+    'SEQ-12: sanity — base hide rule vanished, the lock enabler is untested');
+
+  // (b) resume() must land on the SAVED lap, not lap 1: simulate a mid-item
+  // app restart during 2×city → 3×rural → 2×highway at rural lap 2
+  const {ia,ib}=sqSetup();
+  const H=savedRecs.push(mkRec('s12h',150,sqLoopA,[]))-1; savedRecs[H].name='highway';
+  Sequence.add(ia,2);Sequence.add(ib,3);Sequence.add(H,2);
+  Sequence.start();
+  const A=savedRecs[ia],B=savedRecs[ib];
+  markDone(stops[0].id); sqDriveLap(A); markDone(stops[0].id); sqDriveLap(A);
+  gpsH(B.points[0].lat,B.points[0].lng,20,0);            // → item 2 (rural, 3 laps)
+  markDone(stops[0].id); sqDriveLap(B);                  // rural lap 1 done → lap 2
+  console.assert(LapManager.currentLap===2&&LapManager.totalLaps===3,
+    'SEQ-12: setup — expected rural lap 2/3, got '+LapManager.currentLap+'/'+LapManager.totalLaps);
+  const savedSession=localStorage.getItem('gpx-playback-session');
+  console.assert(savedSession&&JSON.parse(savedSession).currentLap===2,
+    'SEQ-12: setup — session not at lap 2');
+  // app dies: nav state gone, sequence persisted as active
+  exitNavigation.call ? (function(){ // simulate kill, NOT clean exit:
+    navActive=false; Playback.active=false;
+    document.body.classList.remove('cockpit');document.body.classList.remove('driver-mode');
+    localStorage.setItem('gpx-playback-session',savedSession);   // survived the "kill"
+    Sequence.active=false; Sequence._resumable=true;
+  })():0;
+  console.assert(Sequence.resume()===true,'SEQ-12: resume refused');
+  console.assert(LapManager.totalLaps===3,'SEQ-12: resume lost the item lap count');
+  console.assert(LapManager.currentLap===2,
+    'SEQ-12: resume restarted at lap '+LapManager.currentLap+' — the counter was lost');
+  console.assert(Playback.recoveryPending===true,'SEQ-12: recovery not armed');
+  console.assert(/CYCLE 2\/3/.test(el('seq-badge').textContent),'SEQ-12: badge lost the item');
+  exitNavigation();
+  console.log('SEQ-12. exit displayed; resume lands on rural lap 2/3 with recovery armed OK');
+})();
+
 speakText=_realSpeakSq;
 console.log('ALL SEQUENCE TESTS PASSED');
 __group('Sequence tests');

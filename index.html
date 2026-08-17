@@ -841,7 +841,16 @@ body.cockpit #cockpit-speed{position:absolute!important;right:14px!important;
   width:104px!important;height:104px!important}
 body.cockpit #cockpit-exit{position:absolute!important;right:14px!important;
   top:12px!important;left:auto!important;bottom:auto!important;
-  width:44px!important;height:44px!important}
+  width:44px!important;height:44px!important;
+  /* the base rule says display:none and its old driver-mode enabler was
+     removed in the CSS cleanup — the driver was left inside navigation with
+     no way out (field, 16 Aug). The lock now owns the display too. */
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  font-size:18px}
+/* landscape safety: shorter viewport, slightly shorter dock photo */
+@media (orientation:landscape) and (max-height:860px){
+  body.cockpit #nsc .nsc-photo{height:132px!important}
+}
 body.cockpit #hud-voice{position:absolute!important;right:14px!important;
   top:216px!important;left:auto!important;bottom:auto!important}
 @media (max-width:820px){
@@ -2575,7 +2584,14 @@ const Sequence={
     const idx=this._recIdx(it); if(idx<0)return false;
     this.active=true;this._resumable=false;this._save();
     if(el('lap-select'))el('lap-select').value=String(it.laps);
-    loadRec(idx); startNav();          // begin() sees the saved session → recovery
+    // loadRec → Playback.stop() WIPES the saved session — the very thing
+    // recovery needs. Carry it across the load, or resume always restarts
+    // at lap 1 and the lap counter "gets lost" (field, 16 Aug).
+    let sess=null;
+    try{sess=localStorage.getItem('gpx-playback-session');}catch(e){}
+    loadRec(idx);
+    if(sess)try{localStorage.setItem('gpx-playback-session',sess);}catch(e){}
+    startNav();                        // begin() now truly sees the session → recovery
     this._badge(); renderSeqBar();
     return true;
   },
