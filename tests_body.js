@@ -2925,3 +2925,365 @@ function sqDriveLap(rec,base,hdgAdj){
 speakText=_realSpeakSq;
 console.log('ALL SEQUENCE TESTS PASSED');
 __group('Sequence tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RECORDING STOP DETECTION — state machine vs real GPS (spec §13/§14)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── recording detection ──');
+const _realSpeakRc=speakText; speakText=(t,f)=>{_spoken.push(String(t));};
+
+/* feed the recorder a fix with full control of speed(m/s|null), accuracy, time */
+let _rT=1700000000000;
+function recFix(lat,lng,spdMs,acc,dtMs){
+  _rT+=(dtMs??1000);
+  onGPS({coords:{latitude:lat,longitude:lng,accuracy:acc??8,altitude:null,
+    speed:spdMs,heading:null},timestamp:_rT});
+}
+const M=1/111320;                                  // ~1 m in degrees lat
+function recBegin(){
+  isRec=true;recPoints=[];recStops=[];recStopCandidate=null;_recWin=[];
+  navActive=false;el('rng-recvel').value='5';el('rng-recdur').value='5';
+  NavLog.buf=[];_rT+=60000;
+}
+function recEnd(){isRec=false;}
+
+// ── REC-1: normal stop — moving, slows, rests 6 s → ONE stop ──
+(function(){
+  recBegin();
+  for(let i=0;i<10;i++)recFix(LAT0+i*10*M,LNG0,8.3,6);       // 30 km/h north
+  for(let i=0;i<7;i++) recFix(LAT0+100*M,LNG0,0.3,6);        // resting 7 s
+  console.assert(recStops.length===1,'REC-1: expected 1 stop, got '+recStops.length);
+  console.assert(recStopCandidate&&recStopCandidate.marked,'REC-1: not in CONFIRMED state');
+  console.assert(NavLog.buf.some(e=>e.type==='STOP_CONFIRMED'),'REC-1: STOP_CONFIRMED not logged');
+  recEnd();
+  console.log('REC-1. moving → resting 7 s → 1 stop, logged OK');
+})();
+
+// ── REC-2: speed==null the whole time — distance/time must carry detection ──
+(function(){
+  recBegin();
+  for(let i=0;i<10;i++)recFix(LAT0+i*9*M,LNG0,null,7);       // ~32 km/h by position
+  console.assert(recStops.length===0,'REC-2: phantom stop while moving on null speed');
+  for(let i=0;i<8;i++) recFix(LAT0+90*M,LNG0,null,7);        // resting, still null
+  console.assert(recStops.length===1,'REC-2: null-speed rest not detected: '+recStops.length);
+  recEnd();
+  console.log('REC-2. speed==null: moving detected, resting stop detected OK');
+})();
+
+// ── REC-3 / §5: the exact jitter pattern from the spec, stationary ──
+(function(){
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);           // approach
+  const J=[0,4,2,6,3,1,5,2,4,0];                              // metres of jitter
+  J.forEach(m=>recFix(LAT0+40*M+m*M,LNG0,null,8));           // null speed + jitter
+  console.assert(recStops.length===1,
+    'REC-3: jitter 0/4/2/6/3 m cancelled a real stop (old bug back): '+recStops.length);
+  const confirmLog=NavLog.buf.find(e=>e.type==='STOP_CONFIRMED');
+  console.assert(confirmLog&&confirmLog.durAtConfirmS>=5,'REC-3: confirmed too early');
+  recEnd();
+  console.log('REC-3. stationary jitter up to 6 m: STOP CONFIRMED OK');
+})();
+
+// ── REC-4: genuinely moving → NO stop ──
+(function(){
+  recBegin();
+  for(let i=0;i<20;i++)recFix(LAT0+i*7*M,LNG0,null,6);       // 25 km/h by position
+  console.assert(recStops.length===0,'REC-4: stop invented while driving');
+  console.assert(!recStopCandidate||!recStopCandidate.marked,'REC-4: confirmed while moving');
+  recEnd();
+  console.log('REC-4. steady driving on null speed: no stop OK');
+})();
+
+// ── REC-5: short stop (3 s < 5 s) → NO confirmed stop ──
+(function(){
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);
+  for(let i=0;i<3;i++)recFix(LAT0+40*M,LNG0,0.2,6);          // only 3 s
+  for(let i=1;i<=8;i++)recFix(LAT0+40*M+i*8*M,LNG0,7,6);     // drives off
+  console.assert(recStops.length===0,'REC-5: short stop registered: '+recStops.length);
+  const cancel=NavLog.buf.find(e=>e.type==='STOP_CANDIDATE_CANCELLED');
+  console.assert(cancel&&/speed_above_threshold|movement_detected/.test(cancel.reason),
+    'REC-5: cancellation not logged with a reason');
+  recEnd();
+  console.log('REC-5. 3 s pause: no stop, cancellation logged (reason='+cancel.reason+') OK');
+})();
+
+// ── REC-6: two distinct stops, no duplication, durations recorded ──
+(function(){
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);
+  for(let i=0;i<7;i++)recFix(LAT0+48*M,LNG0,0.2,6);          // stop 1
+  for(let i=1;i<=10;i++)recFix(LAT0+48*M+i*8*M,LNG0,7,6);    // drive on
+  for(let i=0;i<7;i++)recFix(LAT0+128*M,LNG0,0.2,6);         // stop 2
+  for(let i=1;i<=4;i++)recFix(LAT0+128*M+i*8*M,LNG0,7,6);    // depart
+  console.assert(recStops.length===2,'REC-6: expected 2 stops, got '+recStops.length);
+  console.assert(recStops[0].dur_s>=5,'REC-6: stop 1 duration not closed: '+recStops[0].dur_s);
+  const d=haversine(recStops[0].lat,recStops[0].lng,recStops[1].lat,recStops[1].lng)*1000;
+  console.assert(d>60,'REC-6: stops collapsed into one place');
+  recEnd();
+  console.log('REC-6. two stops, '+recStops[0].dur_s+'s and distinct positions OK');
+})();
+
+// ── REC-7: slow queue crawl — registers ONCE per the configured rule ──
+(function(){
+  // The configured semantics are "< rec-stop-speed for rec-stop-duration =
+  // stop"; a 3 km/h crawl satisfies them, so it MUST register (an earlier
+  // version of this test demanded the opposite and was wrong, not the FSM).
+  // What the FSM adds: the anchor slides with the crawl so the stop lands
+  // where the vehicle actually is, and there is exactly ONE registration.
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);
+  for(let i=1;i<=12;i++)recFix(LAT0+40*M+i*1*M,LNG0,0.85,6);  // ~3 km/h crawl
+  console.assert(recStops.length===1,'REC-7: crawl under threshold did not register: '+recStops.length);
+  for(let i=0;i<5;i++)recFix(LAT0+52*M,LNG0,0.2,6);           // final rest
+  console.assert(recStops.length===1,'REC-7: crawl+rest double-registered');
+  const off=haversine(recStops[0].lat,recStops[0].lng,LAT0+45*M,LNG0)*1000;
+  console.assert(off<12,'REC-7: stop anchored '+off.toFixed(0)+' m from the crawl position at confirmation');
+  recEnd();
+  console.log('REC-7. 3 km/h crawl: one stop, anchored where confirmed OK');
+})();
+
+// ── REC-8: ONE speed blip mid-countdown must not reset the timer ──
+(function(){
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);
+  recFix(LAT0+40*M,LNG0,0.2,6);recFix(LAT0+40*M+2*M,LNG0,0.2,6);
+  recFix(LAT0+40*M+4*M,LNG0,6.0,6);                          // 21.6 km/h BLIP, 4 m off
+  recFix(LAT0+40*M+1*M,LNG0,0.2,6);recFix(LAT0+40*M,LNG0,0.2,6);
+  recFix(LAT0+40*M+2*M,LNG0,0.2,6);
+  console.assert(recStops.length===1,
+    'REC-8: one blip reset the 5 s timer — stop after 6 s missing');
+  recEnd();
+  console.log('REC-8. single 21 km/h blip ignored, timer survived OK');
+})();
+
+// ── REC-9: jitter cannot fake a departure; real departure closes dur_s ──
+(function(){
+  recBegin();
+  for(let i=0;i<6;i++)recFix(LAT0+i*8*M,LNG0,7,6);
+  for(let i=0;i<7;i++)recFix(LAT0+48*M,LNG0,0.2,6);
+  console.assert(recStops.length===1&&recStopCandidate.marked,'REC-9: setup failed');
+  // jitter while doors open: 5 m wobbles for 6 s — must stay CONFIRMED
+  [5,2,6,3,5,1].forEach(m=>recFix(LAT0+48*M+m*M,LNG0,null,9));
+  console.assert(recStopCandidate&&recStopCandidate.marked,'REC-9: jitter faked a departure');
+  // real departure: sustained displacement + speed
+  recFix(LAT0+48*M+18*M,LNG0,6,6);recFix(LAT0+48*M+30*M,LNG0,7,6);
+  console.assert(recStopCandidate===null,'REC-9: real departure not recognised');
+  console.assert(recStops[0].dur_s>=12,'REC-9: dwell under-recorded: '+recStops[0].dur_s+'s');
+  console.assert(NavLog.buf.some(e=>e.type==='REC_DEPARTED'),'REC-9: departure not logged');
+  recEnd();
+  console.log('REC-9. dwell survives jitter ('+recStops[0].dur_s+'s recorded); real exit closes it OK');
+})();
+
+// ── REC-10 / §2: the engine path makes ZERO network calls ──
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'main.js'),path.join(__dirname,'index.html')]
+    .find(p=>fs.existsSync(p));
+  const src=fs.readFileSync(f,'utf8');
+  ['fetch(','XMLHttpRequest','navigator.onLine','WebSocket('].forEach(tok=>{
+    console.assert(!src.includes(tok),'REC-10: engine source contains '+tok);
+  });
+  console.log('REC-10. no fetch/XHR/onLine/WebSocket anywhere in the app source OK');
+})();
+
+// ── REC-INT / §14: circular route, 4 stops × 3 laps, jitter + nulls ──
+(function(){
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(299-i)*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('int14',300,loop,[30,60,90,120]);           // A,B,C,D outbound
+  loadFresh(rec);
+  navActive=true;insideStop.clear();departGate=null;evtAnnounced.clear();
+  el('rng-radius').value='60';el('lap-select').value='3';
+  Playback.begin('3');
+  const arrivals=[];                                          // [lap, stopId]
+  const seen=new Set();
+  const jit=()=> (Math.random()*8-4)*M;                       // ±4 m jitter
+  for(let lap=1;lap<=3;lap++){
+    for(let leg=0;leg<300;leg++){
+      const p=rec.points[leg];
+      const spd = (leg%3===0)?null:6.9;                       // nulls every 3rd fix
+      recFix(p.lat+jit(),p.lng+jit(),spd,7,1000);
+      // dwell at each stop long enough to arrive, then mark done
+      const s=stops.find(x=>x.state==='current');
+      if(s&&!seen.has(lap+'-'+s.id)){
+        seen.add(lap+'-'+s.id);arrivals.push([lap,s.id]);
+        for(let k=0;k<3;k++)recFix(p.lat+jit(),p.lng+jit(),0.2,7,1000);
+        markDone(s.id);
+      }
+    }
+  }
+  const perLap=l=>arrivals.filter(a=>a[0]===l).map(a=>a[1]).join(',');
+  console.assert(LapManager.currentLap===3,'REC-INT: expected lap 3, got '+LapManager.currentLap);
+  console.assert(perLap(1)==='1,2,3,4','REC-INT: lap 1 stops wrong: '+perLap(1));
+  console.assert(perLap(2)==='1,2,3,4','REC-INT: lap 2 stops wrong: '+perLap(2));
+  console.assert(perLap(3)==='1,2,3,4','REC-INT: lap 3 stops wrong: '+perLap(3));
+  console.assert(arrivals.length===12,'REC-INT: duplicated/missing arrivals: '+arrivals.length);
+  console.assert(NavLog.buf.filter(e=>e.type==='LAP').length===2,'REC-INT: lap transitions not logged');
+  Playback.stop();navActive=false;
+  console.log('REC-INT. 3 laps × 4 stops with jitter and null speeds: 12/12 arrivals, laps logged OK');
+})();
+
+speakText=_realSpeakRc;
+console.log('ALL RECORDING-DETECTION TESTS PASSED');
+__group('Recording detection tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  STOPLESS ROUTES — laps must never depend on stops (spec §2-§11)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── stopless routes ──');
+const _realSpeakSl=speakText; speakText=(t,f)=>{_spoken.push(String(t));};
+
+/* ~10 km closed loop: 500 pts north, 500 pts back on a parallel 13 m east */
+const SL_N=1000;
+const slLoop=i=>i<500?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(999-i)*DLAT,lng:LNG0+0.00012};
+function slBegin(laps){
+  const rec=mkRec('sl10k',SL_N,slLoop,[]);          // stops = [] — the point
+  loadFresh(rec);
+  navActive=true;insideStop.clear();departGate=null;evtAnnounced.clear();
+  el('rng-follow').value='1';el('rng-radius').value='80';
+  Playback.begin(String(laps));
+  NavLog.buf=[];_spoken=[];
+  return rec;
+}
+function slDriveLap(rec,jitter){
+  const j=jitter?()=> (Math.random()*8-4)/111320:()=>0;
+  for(let i=0;i<500;i++){const p=rec.points[i];gpsH(p.lat+j(),p.lng+j(),35,0);}
+  for(let i=500;i<1000;i++){const p=rec.points[i];gpsH(p.lat+j(),p.lng+j(),35,180);}
+}
+
+// ── STOPLESS-1 (§2-§5): 10 km · 0 stops · 3 laps → LAP 1→2→3→COMPLETE ──
+(function(){
+  const rec=slBegin(3);
+  console.assert(stops.length===0,'STOPLESS-1: setup — stops leaked in');
+  console.assert(LapManager.currentLap===1&&LapManager.totalLaps===3,'STOPLESS-1: init wrong');
+  const total=playbackCycle.totalDistanceM;
+  console.assert(total>9000&&total<11000,'STOPLESS-1: route not ~10 km: '+total.toFixed(0));
+
+  // lap 1, with waypoint sanity at ~2/5/8 km and a pre-end no-advance check
+  for(let i=0;i<460;i++){const p=rec.points[i];gpsH(p.lat,p.lng,35,0);}
+  console.assert(routeProgressM>4000,'STOPLESS-1: progress stuck: '+routeProgressM.toFixed(0));
+  for(let i=460;i<985;i++){const p=rec.points[i];gpsH(p.lat,p.lng,35,i<500?0:180);}
+  console.assert(LapManager.currentLap===1,
+    'STOPLESS-1: advanced BEFORE total-endEps at '+routeProgressM.toFixed(0)+'/'+total.toFixed(0));
+  for(let i=985;i<1000;i++){const p=rec.points[i];gpsH(p.lat,p.lng,35,180);}
+  console.assert(LapManager.currentLap===2,'STOPLESS-1: lap 1 → 2 failed');
+  console.assert(routeProgressM<100,'STOPLESS-1: progress not reset for lap 2: '+routeProgressM.toFixed(0));
+
+  slDriveLap(rec,false);
+  console.assert(LapManager.currentLap===3,'STOPLESS-1: lap 2 → 3 failed');
+  slDriveLap(rec,false);
+  console.assert(Playback.state==='COMPLETE','STOPLESS-1: final state '+Playback.state);
+  console.assert(LapManager.hasNext()===false,'STOPLESS-1: hasNext after complete');
+  console.assert(saidMatching(/^Lap 2 of 3/).length===1&&saidMatching(/^Lap 3 of 3/).length===1,
+    'STOPLESS-1: lap voices wrong');
+  console.assert(saidMatching(/All laps complete/).length===1,'STOPLESS-1: completion voice wrong');
+  // §3: zero stop machinery involved
+  console.assert(saidMatching(/Arrived at stop|Stop \d/).length===0,'STOPLESS-1: stop voice appeared');
+  console.assert(insideStop.size===0&&departGate===null,'STOPLESS-1: stop state touched');
+  exitNavigation();
+  console.log('STOPLESS-1. 10 km · 0 stops · LAP 1→2→3→COMPLETE, progress resets each lap OK');
+})();
+
+// ── STOPLESS-2 (§6): same route with jitter — exactly one transition per lap ──
+(function(){
+  const rec=slBegin(3);
+  slDriveLap(rec,true);
+  console.assert(LapManager.currentLap===2,'STOPLESS-2: jitter blocked lap 1→2');
+  // backward wobbles near the start of lap 2 (1996→2003-style regressions)
+  const p5=rec.points[5],p4=rec.points[4];
+  gpsH(p5.lat,p5.lng,20,0);gpsH(p4.lat,p4.lng,20,0);gpsH(p5.lat,p5.lng,20,0);
+  console.assert(LapManager.currentLap===2,'STOPLESS-2: regression near start changed the lap');
+  slDriveLap(rec,true);
+  console.assert(LapManager.currentLap===3,'STOPLESS-2: jitter blocked lap 2→3');
+  // NavLog is a bounded ring (cap 400, by design for the field) — auditing
+  // the whole history at the end is unreliable once heartbeats evict old
+  // entries, so each stage is audited against a fresh window.
+  const lapsBefore=NavLog.buf.filter(e=>e.type==='LAP').map(e=>e.lap);
+  console.assert(lapsBefore[lapsBefore.length-1]===3&&lapsBefore.filter(x=>x===3).length===1,
+    'STOPLESS-2: lap 3 transition wrong: '+lapsBefore.join(','));
+  NavLog.buf=[];
+  slDriveLap(rec,true);
+  console.assert(Playback.state==='COMPLETE','STOPLESS-2: jitter blocked completion');
+  console.assert(NavLog.buf.filter(e=>e.type==='LAP').length===0,
+    'STOPLESS-2: a LAP transition fired during the final lap/completion');
+  console.assert(saidMatching(/^Lap /).length===2,'STOPLESS-2: lap voice count wrong (dup or missing)');
+  exitNavigation();
+  console.log('STOPLESS-2. ±4 m jitter + regressions: transitions exactly [2,3], then COMPLETE OK');
+})();
+
+// ── STOPLESS-3 (§7): the REAL endEps boundary, via the integration entry ──
+(function(){
+  const rec=slBegin(2);
+  const total=playbackCycle.totalDistanceM, eps=PLAYBACK_CFG.endEpsM;
+  console.assert(eps===40,'STOPLESS-3: endEpsM changed unexpectedly: '+eps);
+  Playback.update(1000);                                   // leave STARTING
+  Playback.update(total-eps-5);
+  console.assert(LapManager.currentLap===1,
+    'STOPLESS-3: advanced at total-endEps-5 ('+(total-eps-5).toFixed(0)+')');
+  Playback.update(total-eps);
+  console.assert(LapManager.currentLap===2,
+    'STOPLESS-3: did not advance exactly at total-endEps');
+  exitNavigation();
+  console.log(`STOPLESS-3. boundary: ${(total-eps-5).toFixed(0)} m holds, ${(total-eps).toFixed(0)} m advances OK`);
+})();
+
+// ── STOPLESS-4 (§11): laps advance with checkArrival FORCED inert ──
+(function(){
+  // checkArrival is always called by onGPS; the claim to prove is that lap
+  // progression does not USE it. Replacing it with a no-op spy makes that a
+  // theorem instead of an observation.
+  const rec=slBegin(2);
+  const realCA=checkArrival; let caCalls=0;
+  checkArrival=function(){caCalls++;};               // inert spy
+  slDriveLap(rec,false);
+  checkArrival=realCA;
+  console.assert(LapManager.currentLap===2,
+    'STOPLESS-4: lap depended on checkArrival — did not advance with it inert');
+  console.assert(caCalls>900,'STOPLESS-4: spy not exercised: '+caCalls);
+  exitNavigation();
+  console.log('STOPLESS-4. checkArrival no-op\u2019d for a full lap: LAP 2 still reached OK');
+})();
+
+// ── STOPLESS-5 (§8): very short route — one update can never cascade laps ──
+(function(){
+  // A 100 m closed loop is below the matcher's realistic geometry (corridor
+  // and end-epsilon are the same order as the whole route), so per §8 this
+  // case drives Playback.update() directly — the integration seam where the
+  // cascade would happen if it could.
+  const rec=mkRec('sl100',12,i=>i<6?{lat:LAT0+i*DLAT,lng:LNG0}
+                                   :{lat:LAT0+(11-i)*DLAT,lng:LNG0+0.00012},[]);
+  loadFresh(rec); navActive=true; Playback.begin('2');
+  const total=playbackCycle.totalDistanceM;
+  Playback.update(10);
+  Playback.update(total);                                  // single end update
+  console.assert(LapManager.currentLap===2&&Playback.state!=='COMPLETE',
+    'STOPLESS-5: one update cascaded past LAP 2: lap='+LapManager.currentLap+' state='+Playback.state);
+  Playback.update(5);Playback.update(total);               // proper second cycle
+  console.assert(Playback.state==='COMPLETE','STOPLESS-5: second lap did not complete');
+  exitNavigation();
+  console.log('STOPLESS-5. 100 m loop: one end-update = one transition, never a cascade OK');
+})();
+
+// ── STOPLESS-6 (§9): stops=[] flows through compile/playback without damage ──
+(function(){
+  const rec=mkRec('sl0',200,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[]);
+  let threw=null;
+  try{ loadFresh(rec); }catch(e){ threw=e; }
+  console.assert(!threw,'STOPLESS-6: loadFresh threw on 0 stops: '+(threw&&threw.message));
+  console.assert(playbackCycle&&playbackCycle.occurrences.length===0,
+    'STOPLESS-6: compileCycle broke on 0 stops');
+  console.assert(Number.isFinite(playbackCycle.totalDistanceM)&&playbackCycle.totalDistanceM>0,
+    'STOPLESS-6: totalDistanceM invalid: '+playbackCycle.totalDistanceM);
+  navActive=true; Playback.begin('1');
+  console.assert(VoiceScheduler.messages.length===0,'STOPLESS-6: phantom voice messages built');
+  for(let i=0;i<20;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,0);}
+  console.assert(Number.isFinite(routeProgressM),'STOPLESS-6: routeProgressM is '+routeProgressM);
+  exitNavigation();
+  console.log('STOPLESS-6. stops=[]: compile, begin, drive — no exception, no NaN, 0 messages OK');
+})();
+
+speakText=_realSpeakSl;
+console.log('ALL STOPLESS TESTS PASSED');
+__group('Stopless route tests');

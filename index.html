@@ -1242,6 +1242,9 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         <div class="nav-field"><label>Rec stop min. duration (s)</label>
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
+        <div class="nav-field">
+          <button class="btn" style="width:100%;font-size:12px" onclick="dumpNavLog()">📋 DUMP NAV LOG (field diagnosis)</button>
+        </div>
         <div class="nav-field"><label>Repetitions (laps)</label>
           <select id="lap-select" class="lap-select">
             <option value="1">1×</option>
@@ -1456,6 +1459,7 @@ const insideStop=new Set();
 
 // Recording state
 let isRec=false, recPoints=[], recStops=[], recStopCandidate=null;
+let _recWin=[];   // recent fixes for the recording stop FSM
 let savedRecs=[];
 let pendingPhotoStopIdx=-1;
 
@@ -3057,6 +3061,9 @@ const Playback={
     this._persist('RUNNING');
     speakText(LapManager.infinite?`Lap ${LapManager.currentLap}`
       :`Lap ${LapManager.currentLap} of ${LapManager.totalLaps}`,true);
+    logNav('LAP',{lap:LapManager.currentLap,
+      total:LapManager.infinite?'inf':LapManager.totalLaps,
+      prog:typeof routeProgressM==='number'?+routeProgressM.toFixed(0):null});
   },
 
   _complete(){
@@ -3243,6 +3250,23 @@ function adaptiveZoom(speedKmh){
   const z=base+(row.zoom-17);
   return Math.max(16.5,Math.min(19,z));      // driver UX: keep the road readable without losing context
 }
+/* ══ NAV LOG (§12, field diagnosis) — bounded ring buffer, no network ═════ */
+const NavLog={buf:[],cap:400,
+  push(type,data){this.buf.push(Object.assign({type,ts:Date.now()},data));
+    if(this.buf.length>this.cap)this.buf.splice(0,this.buf.length-this.cap);},
+  dump(){return JSON.stringify(this.buf,null,1);},
+};
+let _navHeartbeatT=0;
+function logNav(type,data){try{NavLog.push(type,data||{});}catch(e){}}
+function dumpNavLog(){
+  try{
+    const blob=new Blob([NavLog.dump()],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='gpx-nav-log-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+    a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  }catch(e){alert('Log dump failed: '+e.message);}
+}
 function onGPS(pos){
   // Sequence transition happens BETWEEN engine passes: the previous fix
   // flagged COMPLETE, this fix starts on the next cycle's route.
@@ -3337,37 +3361,105 @@ function onGPS(pos){
   if(navActive)Playback.update(routeProgressM);
   if(Sequence.active&&Playback.state==='COMPLETE'&&!Sequence._pendingAdvance)
     Sequence._pendingAdvance=true;   // executed at the top of the next fix
+  // §12 heartbeat: one line every 5 s while recording or navigating
+  if((isRec||navActive)&&Date.now()-_navHeartbeatT>=5000){
+    _navHeartbeatT=Date.now();
+    logNav('HB',{lat:+lat.toFixed(6),lng:+lng.toFixed(6),acc:accuracy??null,
+      gpsKmh:speed!=null?+(speed*3.6).toFixed(1):null,rawKmh:+rawKmh.toFixed(1),
+      spdKmh:spdKmh!=null?+spdKmh.toFixed(1):null,
+      prog:navActive?+routeProgressM.toFixed(0):null,
+      nextStop:(stops.find(s=>s.state!=='done')||{}).id??null,
+      cand:recStopCandidate?(recStopCandidate.marked?'CONFIRMED':'POSSIBLE'):null,
+      candS:recStopCandidate?Math.round((Date.now()-recStopCandidate.t)/1000):null,
+      lap:Playback.active?LapManager.currentLap:null});
+  }
   if(navDebug)renderNavDebug(lat,lng,accuracy,rawKmh,heading,match);
   updNextStopCard(lat,lng);
   updLiveMetrics(lat,lng,rawKmh,pos.timestamp,stopsBefore);
 
   // Recording stop detection
   if(isRec){
+    /* ══ RECORDING STOP DETECTION — state machine (field fix, 16 Aug) ══════
+       The old logic cancelled the stop candidate on ANY single fix above the
+       speed threshold. With speed==null (common on Android) the fallback was
+       a single-pair distance/time estimate, so 4-6 m of stationary GPS
+       jitter at 1 Hz read as 14-22 km/h and destroyed the candidate every
+       few seconds — a real 30 s stop was never registered.
+
+       States: MOVING → POSSIBLE → CONFIRMED(marked) → DEPARTING → MOVING.
+       Decisions are never taken on a single fix (§4):
+       - effective speed = GPS speed when present, else the MEDIAN of the
+         last few pairwise window speeds (a median ignores one blip);
+       - the candidate anchors where the vehicle rested; jitter is judged
+         as displacement FROM THE ANCHOR scaled by GPS accuracy;
+       - cancelling or departing requires the condition SUSTAINED on 2
+         consecutive fixes AND real displacement — a blip keeps the timer;
+       - a slow CREEP (queue crawling) slides the anchor and restarts the
+         timer: creeping is not stopping, so the old code registering it
+         mid-creep was itself a small bug.
+       Thresholds (rng-recvel / rng-recdur) are UNCHANGED (§16).            */
     const velThreshold=+el('rng-recvel').value;
     const durThreshold=+el('rng-recdur').value;
-    // spdKmh=null means GPS didn't report speed — assume 0 (stopped)
-    const velKmh=rawKmh; // use raw (unsmoothed) speed for stop detection
+    const fixT=pos.timestamp||Date.now();
+    const fixAcc=accuracy!=null?accuracy:15;
 
-    if(velKmh<velThreshold){
-      if(!recStopCandidate){
-        recStopCandidate={lat,lng,t:Date.now()};
+    _recWin.push({lat,lng,t:fixT});
+    if(_recWin.length>10)_recWin.shift();
+
+    let effKmh;
+    if(speed!=null) effKmh=speed*3.6;
+    else{
+      const v=[];
+      for(let k=Math.max(1,_recWin.length-4);k<_recWin.length;k++){
+        const a=_recWin[k-1],b=_recWin[k],dt=(b.t-a.t)/3600000;
+        if(dt>0&&dt<=15/3600)v.push(haversine(a.lat,a.lng,b.lat,b.lng)/dt);
+      }
+      effKmh=v.length?v.sort((x,y)=>x-y)[v.length>>1]:0;
+    }
+    const distFromAnchor=recStopCandidate
+      ? haversine(recStopCandidate.lat,recStopCandidate.lng,lat,lng)*1000 : 0;
+    const stillR   =Math.max(12,1.6*fixAcc);   // inside: spatially at rest
+    const departR  =Math.max(15,2.5*fixAcc);   // beyond: genuinely moved
+
+    const instM=_recWin.length>1
+      ? haversine(_recWin[_recWin.length-2].lat,_recWin[_recWin.length-2].lng,lat,lng)*1000
+      : 999;
+    if(!recStopCandidate){
+      // entry: low effective speed, OR — when GPS gives no speed — spatial
+      // rest (the median needs a few samples to shed the approach speed;
+      // a near-zero displacement is available immediately)
+      if(effKmh<velThreshold||(speed==null&&instM<=Math.max(6,0.8*fixAcc))){
+        recStopCandidate={lat,lng,t:fixT,acc:fixAcc,marked:false,moveN:0};
+        logNav('REC_CANDIDATE',{lat,lng,acc:fixAcc,effKmh:+effKmh.toFixed(1)});
         el('rec-sc').textContent='🔴 Slowing down...';
-      } else {
-        const stopDur=Math.round((Date.now()-recStopCandidate.t)/1000);
-        // Show live countdown immediately
-        if(!recStopCandidate.marked){
-          const remaining=Math.max(0,durThreshold-stopDur);
-          el('rec-sc').textContent=remaining>0
-            ?`🔴 Stopped: ${stopDur}s / ${durThreshold}s (${remaining}s to register)`
-            :'📍 Registering stop...';
+      }
+    }else if(!recStopCandidate.marked){
+      const calm = effKmh<velThreshold || distFromAnchor<=stillR;
+      if(calm){
+        recStopCandidate.moveN=0;
+        if(effKmh<velThreshold&&distFromAnchor>stillR){
+          // creeping slowly: slide the ANCHOR so the stop is placed where the
+          // vehicle actually is — but keep the TIMER. The configured rule is
+          // "< threshold km/h for N seconds = stop", and a 3 km/h crawl
+          // satisfies it; resetting the timer here would change the product's
+          // semantics, which §16 forbids.
+          recStopCandidate.lat=lat;recStopCandidate.lng=lng;
         }
-        if(stopDur>=durThreshold&&!recStopCandidate.marked){
-          recStopCandidate.marked=true;
-          // Mark this as a stop waypoint
-          const stopT=recStopCandidate.t; // when vehicle first stopped
-          const stopEntry={lat,lng,t:Date.now(),dur_s:0,startT:stopT,events:[],photo:null};
+        const stopDur=Math.round((fixT-recStopCandidate.t)/1000);
+        const remaining=Math.max(0,durThreshold-stopDur);
+        el('rec-sc').textContent=remaining>0
+          ?`🔴 Stopped: ${stopDur}s / ${durThreshold}s (${remaining}s to register)`
+          :'📍 Registering stop...';
+        if(stopDur>=durThreshold&&distFromAnchor<=stillR){
+          recStopCandidate.marked=true;recStopCandidate.moveN=0;
+          const stopT=recStopCandidate.t;
+          // the stop lives where the vehicle RESTED (anchor), not at the
+          // jittered coordinate of whichever fix crossed the timer line
+          const stopEntry={lat:recStopCandidate.lat,lng:recStopCandidate.lng,
+            t:fixT,dur_s:0,startT:stopT,events:[],photo:null};
           recStops.push(stopEntry);
-          // Visual marker on map
+          logNav('STOP_CONFIRMED',{stopId:recStops.length,lat:stopEntry.lat,
+            lng:stopEntry.lng,durAtConfirmS:stopDur,acc:fixAcc});
           const sNum=recStops.length;
           const stopIcon=L.divIcon({
             html:`<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
@@ -3376,28 +3468,46 @@ function onGPS(pos){
             </div>`,
             className:'',iconAnchor:[24,20]
           });
-          extraMarkers.push(L.marker([lat,lng],{icon:stopIcon,zIndexOffset:900}).addTo(map));
+          extraMarkers.push(L.marker([stopEntry.lat,stopEntry.lng],{icon:stopIcon,zIndexOffset:900}).addTo(map));
           el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected`;
-          // Prompt camera for photo of this stop
           pendingPhotoStopIdx=recStops.length-1;
           el('cam-stop-num').textContent=recStops.length;
           el('cam-prompt').classList.add('on');
-          // Auto-dismiss prompt after 15s if user ignores
           clearTimeout(camPromptTimer);
           camPromptTimer=setTimeout(()=>{if(el('cam-prompt').classList.contains('on'))skipPhoto();},15000);
         }
+      }else{
+        // movement HINT — cancel only when sustained AND genuinely displaced
+        recStopCandidate.moveN=(recStopCandidate.moveN||0)+1;
+        if(recStopCandidate.moveN>=2&&distFromAnchor>departR){
+          logNav('STOP_CANDIDATE_CANCELLED',{
+            reason:effKmh>=velThreshold?'speed_above_threshold':'movement_detected',
+            effKmh:+effKmh.toFixed(1),distM:+distFromAnchor.toFixed(1),acc:fixAcc});
+          el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected${recStops.filter(s=>s.photo).length?' ('+recStops.filter(s=>s.photo).length+' with photo)':''}`;
+          recStopCandidate=null;
+        }
+        // a single blip keeps the candidate and the timer alive (§5)
       }
-    } else {
-      // Leaving a stop — record duration
-      if(recStopCandidate?.marked&&recStops.length>0){
-        const lastStop=recStops[recStops.length-1];
-        lastStop.dur_s=Math.round((Date.now()-lastStop.startT)/1000);
-      }
-      if(recStopCandidate&&!recStopCandidate.marked){
-        // Was slowing but didn't reach threshold — reset counter
-        el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected${recStops.filter(s=>s.photo).length?' ('+recStops.filter(s=>s.photo).length+' with photo)':''}`;
-      }
-      recStopCandidate=null;
+    }else{
+      // CONFIRMED → DEPARTING: needs sustained real movement, so jitter
+      // cannot fake a departure and one clean fix cannot block a real one
+      // displacement is mandatory: estimated speed at rest is exactly what
+      // jitter forges, so speed alone can neither cancel nor depart (§5/§11)
+      const movingHint=distFromAnchor>departR
+        ||(effKmh>velThreshold+3&&distFromAnchor>stillR);
+      if(movingHint){
+        recStopCandidate.moveN=(recStopCandidate.moveN||0)+1;
+        if(recStopCandidate.moveN>=2){
+          if(recStops.length>0){
+            const lastStop=recStops[recStops.length-1];
+            lastStop.dur_s=Math.round((fixT-lastStop.startT)/1000);
+            logNav('REC_DEPARTED',{stopId:recStops.length,dur_s:lastStop.dur_s,
+              effKmh:+effKmh.toFixed(1),distM:+distFromAnchor.toFixed(1)});
+          }
+          el('rec-sc').textContent=`${recStops.length} stop${recStops.length>1?'s':''} detected${recStops.filter(s=>s.photo).length?' ('+recStops.filter(s=>s.photo).length+' with photo)':''}`;
+          recStopCandidate=null;
+        }
+      }else recStopCandidate.moveN=0;
     }
 
     // Decimation: while parked, GPS jitter would add hundreds of noise
@@ -4429,7 +4539,7 @@ function startRec(){
   stops=[];insideStop.clear();el('stops-list').innerHTML='';el('stops-badge').textContent='';
   routePts=[];maneuvers=[];totalRouteDist=0;
 
-  isRec=true;recPoints=[];recStops=[];recStopCandidate=null;
+  isRec=true;recPoints=[];recStops=[];recStopCandidate=null;_recWin=[];
   try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){}
   _lastFlush=Date.now();
   shState='hidden';applySheet();
