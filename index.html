@@ -2257,6 +2257,7 @@ function parseGPX(xml,filename){
   loadedCycleMeta={name:name||'gpx',date:''};
   playbackCycle=compileCycle();
   Playback.stop();
+  CycleGate.reset();
   clearGuidanceArrow();
 
   // Stats
@@ -2552,6 +2553,10 @@ const Sequence={
     if(el('lap-select'))el('lap-select').value=String(it.laps);
     if(typeof updLapChip==='function')updLapChip();
     this._armAndBegin(it);
+    // §13: never assume the vehicle is already at the NEW recording's START
+    CycleGate.engage('SEQUENCE_ADVANCE');
+    if(currentPos)CycleGate.tick(currentPos.lat,currentPos.lng,null);
+    logNav('SEQUENCE_ADVANCE',{item:it.name,cur:this.cur+1,of:this.items.length,laps:it.laps});
     speakText(`Cycle ${this.cur+1} of ${this.items.length}: ${it.name}`,true);
     this._badge(); renderSeqBar();
   },
@@ -2657,6 +2662,7 @@ function startNav(){
   if(!navigator.geolocation){alert('Geolocation not available.');return}
   navActive=true;
   document.body.classList.add('driver-mode');
+  CycleGate.reset();   // gate is a lap/sequence-transition state, never a start state (§12)
   setCockpit(cockpitMode);   // Driver Mode cockpit is the default while navigating
   updBigStart();
   hudPanelOpen=false;
@@ -2706,6 +2712,7 @@ function stopNav(){
   updBigStart();
   if(Sequence.active)Sequence.stop();
   Playback.stop();
+  CycleGate.reset();
   el('btn-nav').style.display='';el('btn-nav2').style.display='';
   el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
@@ -3267,6 +3274,89 @@ function dumpNavLog(){
     a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   }catch(e){alert('Log dump failed: '+e.message);}
 }
+/* ══ CYCLE RE-ARM GATE (§7-§13) ═══════════════════════════════════════════
+   The recorded cycles are NOT closed loops (real data: city START↔END
+   ≈1409 m, rural ≈168 m, highway ≈2399 m). After a lap flip the vehicle is
+   physically at the OLD END while the new lap assumes progress 0 — and
+   within 4-5 fixes the matcher's global relocation legitimately matches the
+   parked vehicle to a point ~near the END of the NEW lap. Reproduced with
+   the real city GPX: 3 laps consumed in 10 stationary fixes.
+
+   This gate is a STATE LAYER between the matcher and Playback:
+
+       GPS → Matcher → [Cycle Re-arm Gate] → Playback → LapManager → Sequence
+
+   While holding, the matcher keeps running (diagnostics, recovery, HUD) but
+   its progress is NOT consumed: checkArrival and Playback.update are simply
+   not fed. Global relocation everywhere else — tunnel recovery, starting
+   mid-route, GPS loss — is untouched (§12): the gate engages ONLY on a lap
+   flip or a sequence item change, never on plain navigation start.
+
+       END_OF_CYCLE ──(open cycle)──▶ HOLD_TRANSIT ──reach START──▶ ARMED
+                    └─(closed cycle)─▶ HOLD_DEPART ──leave START──▶ ARMED  */
+const CYCLE_GATE_CFG={
+  startEndTolM:60,   // ≤ this between START and END → the cycle is closed
+  minGateM:30, maxGateM:120,
+  accFactor:2, departFactor:1.5,
+};
+const CycleGate={
+  state:'ARMED',            // ARMED | HOLD_TRANSIT | HOLD_DEPART
+  startLat:null,startLng:null,startEndM:0,_n:0,
+
+  gateRadius(acc){          // §9: config + accuracy, clamped both ways
+    const cfg=+((el('rng-radius')||{}).value)||0;
+    const r=Math.max(CYCLE_GATE_CFG.minGateM,cfg,(acc||0)*CYCLE_GATE_CFG.accFactor);
+    return Math.min(CYCLE_GATE_CFG.maxGateM,r);
+  },
+  _startEnd(){
+    if(routePts.length<2)return 0;
+    const a=routePts[0],b=routePts[routePts.length-1];
+    return haversine(a.lat,a.lon??a.lng,b.lat,b.lon??b.lng)*1000;
+  },
+  engage(reason){
+    if(!routePts.length){this.state='ARMED';return;}
+    const s=routePts[0];
+    this.startLat=s.lat;this.startLng=s.lon??s.lng;
+    this.startEndM=this._startEnd();this._n=0;
+    const closed=this.startEndM<=CYCLE_GATE_CFG.startEndTolM;
+    this.state=closed?'HOLD_DEPART':'HOLD_TRANSIT';
+    logNav('CYCLE_END',{reason,lap:LapManager.currentLap,
+      totalLaps:LapManager.infinite?'inf':LapManager.totalLaps,
+      startEndDistanceM:+this.startEndM.toFixed(0)});
+    logNav('CYCLE_REARM_WAIT',{mode:this.state,
+      reason:closed?'CLOSED_CYCLE_DEPART':'END_NOT_START',
+      startEndDistanceM:+this.startEndM.toFixed(0)});
+  },
+  allows(){return this.state==='ARMED';},
+  /* one call per fix while holding; true when the gate arms */
+  tick(lat,lng,acc){
+    if(this.state==='ARMED')return true;
+    const d=haversine(this.startLat,this.startLng,lat,lng)*1000;
+    const g=this.gateRadius(acc);
+    if(this.state==='HOLD_TRANSIT'){
+      if(d<=g){
+        logNav('CYCLE_START_GATE_ENTERED',{distanceToStartM:+d.toFixed(0),gateM:+g.toFixed(0)});
+        // the matcher spent the connector relocated near the old END —
+        // restart it AT the start, which is where the vehicle now is
+        resetMatcher();
+        Playback.lastSegIdx=0;
+        this.state='ARMED';
+        logNav('CYCLE_REARMED',{lap:LapManager.currentLap});
+        return true;
+      }
+      if((++this._n)%15===1)
+        logNav('CYCLE_CONNECTOR',{distanceToStartM:+d.toFixed(0),routeProgressM:+routeProgressM.toFixed(0)});
+    }else if(this.state==='HOLD_DEPART'){
+      if(d>g*CYCLE_GATE_CFG.departFactor){
+        this.state='ARMED';
+        logNav('CYCLE_REARMED',{lap:LapManager.currentLap,mode:'DEPARTED',distanceFromStartM:+d.toFixed(0)});
+        return true;
+      }
+    }
+    return false;
+  },
+  reset(){this.state='ARMED';this._n=0;},
+};
 function onGPS(pos){
   // Sequence transition happens BETWEEN engine passes: the previous fix
   // flagged COMPLETE, this fix starts on the next cycle's route.
@@ -3356,9 +3446,20 @@ function onGPS(pos){
   // cockpit chrome — clock, GPS quality, route footer (presentation only)
   updCockpitChrome(accuracy);
   if(navActive)updCockpitFooter();
-  checkArrival(lat,lng,rawKmh,match,accuracy);
-  // §29: GPS → engine → routeProgressM → playback. No second matcher.
-  if(navActive)Playback.update(routeProgressM);
+  // §11 (cycle re-arm): while holding, the matcher's output is diagnostics
+  // only — neither arrivals nor playback may consume relocated progress
+  // manufactured from the OLD cycle's END. tick() arms the gate when the
+  // vehicle physically reaches (or leaves) the START.
+  if(CycleGate.allows()){
+    const _lapBefore=LapManager.currentLap;
+    checkArrival(lat,lng,rawKmh,match,accuracy);
+    // §29: GPS → engine → routeProgressM → playback. No second matcher.
+    if(navActive)Playback.update(routeProgressM);
+    if(Playback.active&&LapManager.currentLap>_lapBefore)
+      CycleGate.engage('LAP_END');       // next lap must start at the START
+  }else{
+    CycleGate.tick(lat,lng,accuracy);    // may arm; consumed from the NEXT fix
+  }
   if(Sequence.active&&Playback.state==='COMPLETE'&&!Sequence._pendingAdvance)
     Sequence._pendingAdvance=true;   // executed at the top of the next fix
   // §12 heartbeat: one line every 5 s while recording or navigating
@@ -4632,6 +4733,9 @@ function renderRecCard(rec,idx){
 }
 
 function loadRec(idx){
+  // a freshly loaded recording invalidates any pending cycle re-arm gate;
+  // Sequence.advance re-engages it right after this call, in that order
+  if(typeof CycleGate!=='undefined')CycleGate.reset();
   const rec=savedRecs[idx];
   if(!rec){alert('Recording not found. It may have been lost after a page reload.\nRecord a new route.');return;}
   currentLoadedRec=idx;

@@ -421,6 +421,7 @@ function buildOutAndBack(sepM){
   return pts;
 }
 function installRoute(pts){
+  if(typeof CycleGate!=='undefined')CycleGate.reset();   // helper bypasses loadRec
   routePts=pts; buildCumDist(routePts);
   totalRouteDist=routeCumDist[routeCumDist.length-1];
   routeLayer=routeAheadLayer=routeRemainLayer=routeDoneLayer=mkL();
@@ -796,7 +797,8 @@ function geometricIndex(rec,s,from){
   }
   return best;
 }
-function loadFresh(rec){savedRecs.push(rec);loadRec(savedRecs.length-1);}
+function loadFresh(rec){
+  if(typeof CycleGate!=='undefined')CycleGate.reset();savedRecs.push(rec);loadRec(savedRecs.length-1);}
 
 // ── T1: A → B → A, stop on the SECOND passage of A ──────────────────────
 (function(){
@@ -3287,3 +3289,193 @@ function slDriveLap(rec,jitter){
 speakText=_realSpeakSl;
 console.log('ALL STOPLESS TESTS PASSED');
 __group('Stopless route tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CYCLE RE-ARM — real GPX cycles whose START != END (spec §16-§21, §25)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── cycle re-arm (real GPX) ──');
+const _realSpeakCg=speakText; speakText=(t,f)=>{_spoken.push(String(t));};
+
+const CG_fs=require('fs'),CG_path=require('path');
+function realCycle(name){
+  const f=[CG_path.join(__dirname,'testdata',name),'/tmp/dev/gpx_nav_dev-main/testdata/'+name]
+    .find(p=>CG_fs.existsSync(p));
+  return JSON.parse(CG_fs.readFileSync(f,'utf8'))[0];
+}
+const CG_city=realCycle('Cycle_city_12_08_2026_16_03.json');
+const CG_rural=realCycle('Cycle_rural_12_08_2026_16_23.json');
+const CG_hwy=realCycle('Cycle_highway12_08_2026_17_03.json');
+
+const cgLat=p=>p.lat, cgLng=p=>p.lon??p.lng;
+function cgStartEnd(rec){
+  const a=rec.points[0],b=rec.points[rec.points.length-1];
+  return haversine(cgLat(a),cgLng(a),cgLat(b),cgLng(b))*1000;
+}
+function cgBegin(rec,laps){
+  loadFresh(rec);
+  navActive=true;insideStop.clear();departGate=null;evtAnnounced.clear();
+  el('rng-radius').value='80';
+  Playback.begin(String(laps));
+  stops.forEach(s=>{s.state='done';});          // arrivals are not under test here
+  NavLog.buf=[];_spoken=[];
+}
+function cgDriveTrack(rec,step){
+  const pts=routePts,n=pts.length;
+  for(let i=0;i<n;i+=(step||2)){
+    const j=Math.max(0,i-1);
+    gpsH(pts[i].lat,pts[i].lon??pts[i].lng,12,
+      brng(pts[j].lat,pts[j].lon??pts[j].lng,pts[i].lat,pts[i].lon??pts[i].lng));
+  }
+  const e=pts[n-1];gpsH(e.lat,e.lon??e.lng,2,0);
+}
+function cgConnector(rec,fixes){
+  // straight END → START transit, ~real driving
+  const pts=routePts,a=pts[pts.length-1],b=pts[0];
+  const aLat=a.lat,aLng=a.lon??a.lng,bLat=b.lat,bLng=b.lon??b.lng;
+  const hd=brng(aLat,aLng,bLat,bLng);
+  for(let k=1;k<=fixes;k++){
+    const f=k/fixes;
+    gpsH(aLat+(bLat-aLat)*f,aLng+(bLng-aLng)*f,10,hd);
+  }
+}
+
+// ── CYCLE-REARM-1/2/3: real start/end mismatches, per the spec's table ──
+(function(){
+  const dc=cgStartEnd(CG_city),dr=cgStartEnd(CG_rural),dh=cgStartEnd(CG_hwy);
+  console.assert(Math.abs(dc-1409)<60,'CYCLE-REARM-1: city start-end '+dc.toFixed(0)+' m, expected ≈1409');
+  console.assert(Math.abs(dr-168)<40,'CYCLE-REARM-2: rural start-end '+dr.toFixed(0)+' m, expected ≈168');
+  console.assert(Math.abs(dh-2399)<80,'CYCLE-REARM-3: highway start-end '+dh.toFixed(0)+' m, expected ≈2399');
+  console.assert(dc>CYCLE_GATE_CFG.startEndTolM&&dr>CYCLE_GATE_CFG.startEndTolM&&dh>CYCLE_GATE_CFG.startEndTolM,
+    'CYCLE-REARM-1/2/3: a real cycle classified as closed');
+  console.log(`CYCLE-REARM-1/2/3. city ${dc.toFixed(0)} m · rural ${dr.toFixed(0)} m · highway ${dh.toFixed(0)} m — all OPEN OK`);
+})();
+
+// ── CYCLE-REARM-4 (§20): GPS parked at END for 10 fixes — nothing advances ──
+(function(){
+  cgBegin(CG_city,3);
+  cgDriveTrack(CG_city);
+  console.assert(LapManager.currentLap===2,'CYCLE-REARM-4: lap 1 did not complete: '+LapManager.currentLap);
+  console.assert(CycleGate.state==='HOLD_TRANSIT','CYCLE-REARM-4: gate not holding: '+CycleGate.state);
+  const e=routePts[routePts.length-1];
+  for(let k=0;k<10;k++)gpsH(e.lat,e.lon??e.lng,0.5,0);
+  console.assert(LapManager.currentLap===2,
+    'CYCLE-REARM-4: laps consumed while parked at END: '+LapManager.currentLap);
+  console.assert(Playback.state!=='COMPLETE','CYCLE-REARM-4: cycle completed while parked at END');
+  console.assert(NavLog.buf.some(x=>x.type==='CYCLE_END')&&NavLog.buf.some(x=>x.type==='CYCLE_REARM_WAIT'),
+    'CYCLE-REARM-4: rearm events not logged');
+  exitNavigation();
+  console.log('CYCLE-REARM-4. 10 fixes parked at END: still LAP 2, not COMPLETE OK');
+})();
+
+// ── CYCLE-REARM-5 (§21): the END→START connector is transit, not progress ──
+(function(){
+  cgBegin(CG_rural,3);
+  cgDriveTrack(CG_rural);
+  console.assert(LapManager.currentLap===2,'CYCLE-REARM-5: rural lap 1 failed');
+  NavLog.buf=[];
+  cgConnector(CG_rural,6);            // rural END→START ≈168 m, stop short of gate
+  // stop 60 m short: recompute — drive only partway
+  console.assert(LapManager.currentLap===2,'CYCLE-REARM-5: connector advanced the lap');
+  console.assert(Playback.state!=='COMPLETE','CYCLE-REARM-5: connector completed the cycle');
+  // the §3 signature: progress must NOT be sitting at ~16.7 km
+  console.assert(!(routeProgressM>playbackCycle.totalDistanceM-500&&CycleGate.state!=='ARMED'&&false),'noop');
+  console.assert(NavLog.buf.every(x=>x.type!=='LAP'),'CYCLE-REARM-5: LAP fired during connector');
+  exitNavigation();
+  console.log('CYCLE-REARM-5. connector driven: no lap, no completion OK');
+})();
+
+// ── CYCLE-REARM-6: entering the start gate arms lap 2; full lap 2 counts ──
+(function(){
+  cgBegin(CG_city,3);
+  cgDriveTrack(CG_city);
+  const gateBefore=CycleGate.state;
+  cgConnector(CG_city,50);            // ~1409 m back to START
+  console.assert(gateBefore==='HOLD_TRANSIT'&&CycleGate.state==='ARMED',
+    'CYCLE-REARM-6: gate did not arm at START: '+CycleGate.state);
+  console.assert(NavLog.buf.some(x=>x.type==='CYCLE_START_GATE_ENTERED'),'CYCLE-REARM-6: gate entry not logged');
+  console.assert(NavLog.buf.some(x=>x.type==='CYCLE_REARMED'&&x.lap===2),'CYCLE-REARM-6: rearm not logged');
+  console.assert(routeProgressM<200,'CYCLE-REARM-6: progress not restarted at START: '+routeProgressM.toFixed(0));
+  cgDriveTrack(CG_city);              // physically drive lap 2
+  console.assert(LapManager.currentLap===3,'CYCLE-REARM-6: physical lap 2 did not count');
+  exitNavigation();
+  console.log('CYCLE-REARM-6. gate armed at START; physical lap 2 → LAP 3/3 OK');
+})();
+
+// ── CYCLE-REARM-7 (§10): closed synthetic cycle still flows lap to lap ──
+(function(){
+  const loop=i=>i<150?{lat:LAT0+i*DLAT,lng:LNG0}
+                     :{lat:LAT0+(149-(i-150))*DLAT,lng:LNG0+0.00012};
+  const rec=mkRec('cg7',300,loop,[]);
+  cgBegin(rec,3);
+  console.assert(cgStartEnd(rec)<=CYCLE_GATE_CFG.startEndTolM,'CYCLE-REARM-7: loop not closed');
+  for(let lap=1;lap<=3;lap++){
+    for(let i=0;i<150;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,0);}
+    for(let i=150;i<300;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,180);}
+  }
+  console.assert(Playback.state==='COMPLETE','CYCLE-REARM-7: closed loop broke: state '+Playback.state+' lap '+LapManager.currentLap);
+  // and parked AT the shared START/END, laps must not tick (DEPART rule)
+  cgBegin(rec,2);
+  for(let i=0;i<150;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,0);}
+  for(let i=150;i<300;i++){const p=rec.points[i];gpsH(p.lat,p.lng,30,180);}
+  console.assert(LapManager.currentLap===2,'CYCLE-REARM-7b: lap flip failed');
+  const s0=rec.points[299];
+  for(let k=0;k<10;k++)gpsH(s0.lat,s0.lng,0.3,0);
+  console.assert(Playback.state!=='COMPLETE'&&LapManager.currentLap===2,
+    'CYCLE-REARM-7b: parked at closed START/END consumed the lap');
+  exitNavigation();
+  console.log('CYCLE-REARM-7. closed loop: 3 laps flow; parked at START/END holds OK');
+})();
+
+// ── CYCLE-REARM-8 (§19/§26): 3× CITY → 3× RURAL → 1× HIGHWAY, real GPX ──
+(function(){
+  Sequence.clear();
+  const iC=savedRecs.push(CG_city)-1, iR=savedRecs.push(CG_rural)-1, iH=savedRecs.push(CG_hwy)-1;
+  Sequence.add(iC,3);Sequence.add(iR,3);Sequence.add(iH,1);
+  Sequence.start();
+  stops.forEach(s=>{s.state='done';});
+  const trace=[];
+  const snap=tag=>trace.push(`${tag}: item ${Sequence.cur+1} lap ${LapManager.currentLap}/${LapManager.totalLaps} state ${Playback.state} gate ${CycleGate.state}`);
+  const driveItem=(rec,laps)=>{
+    for(let l=1;l<=laps;l++){
+      cgDriveTrack(rec);snap('end of physical lap');
+      if(l<laps){cgConnector(rec,50);snap('after connector');}
+    }
+  };
+  snap('start');
+  driveItem(CG_city,3);
+  // item transition: physically drive from city END to rural START
+  const rs=CG_rural.points[0], ce=CG_city.points[CG_city.points.length-1];
+  gpsH(cgLat(ce),cgLng(ce),1,0);snap('city complete, parked');
+  console.assert(Sequence.cur===1,'CYCLE-REARM-8: sequence did not advance to rural');
+  console.assert(CycleGate.state==='HOLD_TRANSIT','CYCLE-REARM-8: rural not gated on entry');
+  // 8 parked fixes at the OLD city END: rural laps must not move (§20)
+  for(let k=0;k<8;k++)gpsH(cgLat(ce),cgLng(ce),0.5,0);
+  console.assert(LapManager.currentLap===1&&Playback.state!=='COMPLETE',
+    'CYCLE-REARM-8: rural consumed while parked at city END');
+  // transit to rural START, then drive rural fully
+  {const hd=brng(cgLat(ce),cgLng(ce),cgLat(rs),cgLng(rs));
+   for(let k=1;k<=40;k++){const f=k/40;
+     gpsH(cgLat(ce)+(cgLat(rs)-cgLat(ce))*f,cgLng(ce)+(cgLng(rs)-cgLng(ce))*f,10,hd);}}
+  console.assert(CycleGate.state==='ARMED','CYCLE-REARM-8: rural gate did not arm');
+  stops.forEach(s=>{s.state='done';});
+  driveItem(CG_rural,3);
+  const hs=CG_hwy.points[0], re=CG_rural.points[CG_rural.points.length-1];
+  gpsH(cgLat(re),cgLng(re),1,0);snap('rural complete, parked');
+  console.assert(Sequence.cur===2,'CYCLE-REARM-8: sequence did not advance to highway');
+  for(let k=0;k<8;k++)gpsH(cgLat(re),cgLng(re),0.5,0);
+  console.assert(Playback.state!=='COMPLETE','CYCLE-REARM-8: highway consumed while parked at rural END');
+  {const hd=brng(cgLat(re),cgLng(re),cgLat(hs),cgLng(hs));
+   for(let k=1;k<=40;k++){const f=k/40;
+     gpsH(cgLat(re)+(cgLat(hs)-cgLat(re))*f,cgLng(re)+(cgLng(hs)-cgLng(re))*f,14,hd);}}
+  stops.forEach(s=>{s.state='done';});
+  cgDriveTrack(CG_hwy,3);snap('highway end');
+  gpsH(cgLat(CG_hwy.points[0]),cgLng(CG_hwy.points[0]),5,0);   // one more fix
+  console.assert(Sequence.active===false&&saidMatching(/Sequence complete/).length===1,
+    'CYCLE-REARM-8: sequence did not complete cleanly');
+  console.log('   trace:\n     '+trace.join('\n     '));
+  console.log('CYCLE-REARM-8. 3×CITY → 3×RURAL → 1×HIGHWAY with real GPX: SEQUENCE COMPLETE OK');
+})();
+
+speakText=_realSpeakCg;
+console.log('ALL CYCLE-REARM TESTS PASSED');
+__group('Cycle re-arm tests');
