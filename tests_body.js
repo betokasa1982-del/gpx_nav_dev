@@ -75,7 +75,11 @@ stopRec();
 console.assert(savedRecs.filter(Boolean).length>=1,'stopRec save FAIL');
 console.assert(routePts.length===50,'AUTO-LOAD FAIL — route not loaded after rec: '+routePts.length);
 console.assert(stops.length===1&&stops[0].events.includes('openDoor'),'auto-load stops/events FAIL');
-console.assert(el('btn-nav').disabled===false,'Nav button not armed after auto-load');
+// CLEANUP (22 Sep): the topbar ▶ Nav button was one of four ways to start
+// navigation and was removed. The surviving single control is the action
+// bar's START, so that is what must be armed after an auto-load.
+console.assert(!el('big-start').classList.contains('disabled'),
+  'START not armed after auto-load');
 console.log('6. stopRec auto-load OK — route, stops, events, Nav ready');
 
 console.log('ALL TESTS PASSED');
@@ -3658,3 +3662,97 @@ console.log('\n── shell v7 (rail) ──');
 })();
 console.log('ALL SHELL-V7 TESTS PASSED');
 __group('Shell v7 tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  CONTROL SURFACE — one control per action (audit 22 Sep)
+//  The app had four ways to start navigation, four to stop and two GPX file
+//  inputs, all live and all kept in sync by hand. These lock the cleanup.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── control surface ──');
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const body=html.slice(html.indexOf('<body>'),html.indexOf('<script src='));
+
+  // CS-1: exactly one control starts navigation, and it is the action bar's
+  const starters=(body.match(/onclick="startNav\(\)"/g)||[]).length;
+  console.assert(starters===0,'CS-1: '+starters+' legacy button(s) still call startNav() directly');
+  console.assert(/id="big-start"[^>]*onclick="bigStartTap/.test(body),'CS-1: START is not the entry point');
+  console.log('CS-1. one start: the action bar OK');
+
+  // CS-2: exactly one control stops navigation from the driving view
+  const stoppers=(body.match(/onclick="stopNav\(\)"/g)||[]).length;
+  console.assert(stoppers===0,'CS-2: '+stoppers+' legacy button(s) still call stopNav() directly');
+  console.assert(/id="cockpit-exit"[^>]*onclick="exitNavigation\(\)"/.test(body),
+    'CS-2: the cockpit exit is not the stop control');
+  console.log('CS-2. one stop: the cockpit exit (which also kills the simulator) OK');
+
+  // CS-3: the five removed ids stay removed, in markup AND in code
+  ['btn-nav','btn-nav2','btn-nav3','btn-stop','btn-stop3'].forEach(id=>
+    console.assert(!html.includes("'"+id+"'")&&!html.includes('id="'+id+'"'),
+      'CS-3: '+id+' came back'));
+  console.log('CS-3. the five legacy nav buttons stay gone OK');
+
+  // CS-4: one file input per import kind
+  const gpxIn=(body.match(/onchange="loadGPX\(this\)"/g)||[]).length;
+  const jsonIn=(body.match(/onchange="importRecsJSON\(this\)"/g)||[]).length;
+  console.assert(gpxIn===1,'CS-4: '+gpxIn+' GPX file inputs (must be 1)');
+  console.assert(jsonIn===1,'CS-4: '+jsonIn+' JSON file inputs (must be 1)');
+  console.log('CS-4. one GPX input, one JSON input OK');
+
+  // CS-5: START alone carries the start/stop/empty state, so nothing has to
+  // be kept in sync by hand any more
+  const rec=mkRec('cs5',120,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[60]);
+  navActive=false; routePts=[]; updBigStart();
+  console.assert(/LOAD ROUTE/.test(el('big-start').textContent),'CS-5: empty state lost');
+  loadFresh(rec); updBigStart();
+  console.assert(/START/.test(el('big-start').textContent)&&
+    !el('big-start').classList.contains('disabled'),'CS-5: armed state lost');
+  navActive=true; updBigStart();
+  console.assert(/STOP/.test(el('big-start').textContent),'CS-5: running state lost');
+  navActive=false; updBigStart();
+  console.log('CS-5. START carries all three states alone OK');
+})();
+// ── CS-6: no copy points at a control that no longer exists ──
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  // the cleanup removed "▶ Nav"; two strings still told the driver to tap it
+  ['▶ Nav','Start GPS','Navigate'].forEach(s=>
+    console.assert(!html.includes('tap '+s)&&!html.includes('press '+s),
+      'CS-6: copy still points at the removed "'+s+'" button'));
+  console.assert(/tap START/.test(html),'CS-6: the footer no longer names the real control');
+  // the repetitions setting must exist exactly once as a live value
+  const sel=(html.match(/id="lap-select"/g)||[]).length;
+  console.assert(sel===1,'CS-6: '+sel+' lap-select elements — the value would fork');
+  console.assert(/id="lap-chip-val"/.test(html),'CS-6: the stepper lost its readout');
+  console.log('CS-6. copy names living controls; one repetitions value OK');
+})();
+
+// ── CS-7: a recording fills the ROUTE panel, not just the top bar ──
+(function(){
+  // Before the 22 Sep audit only parseGPX wrote these fields, so loading a
+  // saved recording left the whole ROUTE panel reading "—" while the top bar
+  // showed the real distance.
+  const rec=mkRec('cs7',180,i=>({lat:LAT0+i*DLAT,lng:LNG0}),[60,120]);
+  rec.name='CS7 cycle';
+  loadFresh(rec);
+  if(typeof renderRouteStats==='function')renderRouteStats();
+  const v=id=>String(el(id).textContent||'').trim();
+  ['ri-dist','ri-pts','ri-wpts','ri-tprog'].forEach(id=>
+    console.assert(v(id)&&v(id)!=='—','CS-7: ROUTE panel field '+id+' still empty: "'+v(id)+'"'));
+  console.assert(/km|m$/.test(v('ri-dist')),'CS-7: distance has no unit: '+v('ri-dist'));
+  console.assert(v('ri-wpts')==='2','CS-7: stop count wrong: '+v('ri-wpts'));
+  console.assert(v('h-stops')==='0/2','CS-7: top bar stop counter wrong: '+v('h-stops'));
+  console.assert(v('stops-badge')==='2','CS-7: rail badge should be a bare count: "'+v('stops-badge')+'"');
+  // the stats used to render before buildManeuvers ran, so these read 0
+  console.assert(+v('ri-maneuvers')>0,'CS-7: MANEUVERS still 0 — stats rendered before the maneuvers existed');
+  console.log('CS-7. ROUTE panel filled from a recording ('+v('ri-dist')+', '+v('ri-wpts')+' stops) OK');
+})();
+
+console.log('ALL CONTROL-SURFACE TESTS PASSED');
+__group('Control surface tests');

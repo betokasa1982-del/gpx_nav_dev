@@ -1082,8 +1082,6 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
       style="background:var(--panel);border:1px solid var(--border);border-radius:6px;
              padding:7px 10px;font-size:16px;cursor:pointer;min-height:38px;
              color:var(--text);transition:all .15s;user-select:none">🌙</button>
-    <button class="btn go"       id="btn-nav"  onclick="startNav()" disabled>▶ Nav</button>
-    <button class="btn stop-nav" id="btn-stop" onclick="stopNav()"  style="display:none">■ Stop</button>
   </div>
 </div>
 
@@ -1312,7 +1310,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
     <!-- ROTA PANE -->
     <div class="pane active" id="pane-rota" style="overflow-y:auto">
       <div class="upload-zone" id="upload-zone">
-        <input type="file" accept=".gpx,.json" onchange="loadGPX(this)">
+        
         <div class="icon">📂</div>
         <strong>Load GPX</strong>
         <p>.gpx or .json · recorded cycles &amp; converter output</p>
@@ -1330,7 +1328,6 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         </div>
         <div style="padding:0 14px 14px;display:flex;gap:8px">
           <button class="btn" style="flex:1" onclick="el('gpx-file').click()">↺ Change file</button>
-          <button class="btn go" style="flex:1" id="btn-nav2" onclick="startNav()" disabled>▶ Navigate</button>
         </div>
       </div>
       <div class="empty" id="no-route">
@@ -1375,7 +1372,10 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         <div class="nav-field">
           <button class="btn" style="width:100%;font-size:12px" onclick="dumpNavLog()">📋 DUMP NAV LOG (field diagnosis)</button>
         </div>
-        <div class="nav-field"><label>Repetitions (laps)</label>
+        <!-- Same value as the action bar's −/＋ stepper, which writes through
+             this select. Kept in the DOM as the single source of truth,
+             hidden so the driver is not offered the same setting twice. -->
+        <div class="nav-field" style="display:none"><label>Repetitions (laps)</label>
           <select id="lap-select" class="lap-select">
             <option value="1">1×</option>
             <option value="2">2×</option>
@@ -1404,8 +1404,6 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
           <input type="range" min="0" max="1" value="0" id="rng-navdbg" oninput="toggleNavDebug(+this.value===1)">
           <span class="val" id="val-navdbg">Off</span></div>
         <div style="display:flex;gap:8px;padding-top:4px">
-          <button class="btn go"       id="btn-nav3"  style="flex:1" onclick="startNav()">▶ Start GPS</button>
-          <button class="btn stop-nav" id="btn-stop3" style="flex:1;display:none" onclick="stopNav()">■ Stop</button>
         </div>
       </div>
     </div>
@@ -1700,7 +1698,7 @@ function checkInflightRecovery(){
       score:calcGTAScore(d.points,d.stops||[]),elev:calcElevGain(d.points),
       time_s:Math.round((d.points[d.points.length-1].t-d.points[0].t)/1000)};
     savedRecs.push(rec);renderRecCard(rec,savedRecs.length-1);
-    el('rec-badge').textContent=` (${savedRecs.filter(Boolean).length})`;
+    el('rec-badge').textContent=String(savedRecs.filter(Boolean).length||'');
     el('rec-empty').style.display='none';
     saveRecordings();
   }catch(e){console.warn('Recovery failed:',e.message);}
@@ -1718,7 +1716,7 @@ function loadStoredRecordings(){
     });
     Sequence.restore();
     if(savedRecs.length){
-      el('rec-badge').textContent=` (${savedRecs.length})`;
+      el('rec-badge').textContent=String(savedRecs.length||'');
       el('rec-empty').style.display='none';
     }
   }catch(e){console.warn('Recordings not loaded:',e.message);}
@@ -2332,6 +2330,32 @@ function clearMapLayers(){
   extraMarkers=[];
 }
 
+/* Fills the ROUTE panel, the top bar and the stops badge from whatever is
+   currently loaded. This used to live inside parseGPX, so a route opened
+   from a RECORDING left the ROUTE panel showing "—" for everything while
+   the top bar showed real numbers (field audit, 22 Sep). */
+function renderRouteStats(ptCount){
+  const totalProg=stops.reduce((a,s)=>a+(s.dur_s||0),0);
+  const n=ptCount!=null?ptCount:routePts.length;
+  const set=(id,v)=>{const e=el(id);if(e)e.textContent=v;};
+  set('ri-dist',totalRouteDist>=1?totalRouteDist.toFixed(2)+' km':(totalRouteDist*1000).toFixed(0)+' m');
+  set('ri-pts',n);
+  set('ri-wpts',stops.length);
+  set('ri-tprog',fmtTime(totalProg));
+  set('ri-turns',maneuvers.filter(m=>m.type!=='straight'&&m.type!=='arrive').length);
+  set('ri-maneuvers',maneuvers.length);
+  set('h-dist',totalRouteDist>=1?totalRouteDist.toFixed(1)+'km':(totalRouteDist*1000).toFixed(0)+'m');
+  set('h-prog',totalProg?fmtTime(totalProg):'—');
+  set('h-real','00:00:00');
+  set('h-stops',`0/${stops.length}`);
+  set('stops-badge',stops.length?String(stops.length):'');
+  if(el('no-route'))el('no-route').style.display='none';
+  if(el('route-details'))el('route-details').style.display='flex';
+  if(el('upload-zone'))el('upload-zone').style.display='none';
+  if(el('stops-empty'))el('stops-empty').style.display=stops.length?'none':'';
+  try{updBigStart()}catch(e){}
+}
+
 function parseGPX(xml,filename){
   const doc=new DOMParser().parseFromString(xml,'application/xml');
   const trkpts=doc.querySelectorAll('trkpt');
@@ -2405,22 +2429,8 @@ function parseGPX(xml,filename){
   CycleGate.reset();
   clearGuidanceArrow();
 
-  // Stats
-  const totalProg=stops.reduce((a,s)=>a+s.dur_s,0);
-  el('ri-dist').textContent=totalRouteDist>=1?totalRouteDist.toFixed(2)+' km':(totalRouteDist*1000).toFixed(0)+' m';
-  el('ri-pts').textContent=pts.length;
-  el('ri-wpts').textContent=stops.length;
-  el('ri-tprog').textContent=fmtTime(totalProg);
-  el('ri-turns').textContent=maneuvers.filter(m=>m.type!=='straight'&&m.type!=='arrive').length;
-  el('ri-maneuvers').textContent=maneuvers.length;
-  el('h-dist').textContent=totalRouteDist>=1?totalRouteDist.toFixed(1)+'km':(totalRouteDist*1000).toFixed(0)+'m';
-  el('h-prog').textContent=totalProg?fmtTime(totalProg):'—';el('h-real').textContent='00:00:00';
-  el('h-stops').textContent=`0/${stops.length}`;
-  el('stops-badge').textContent=stops.length?` (${stops.length})`:'';
-  el('no-route').style.display='none';el('route-details').style.display='flex';
-  if(el('upload-zone'))el('upload-zone').style.display='none';
-  if(el('stops-empty'))el('stops-empty').style.display=stops.length?'none':'';
-  el('btn-nav').disabled=false;try{updBigStart()}catch(e){};el('btn-nav2').disabled=false;
+  // Stats — shared with loadRec so a recording fills the ROUTE panel too
+  renderRouteStats(pts.length);
   el('peek-icon').textContent='🗺️';el('peek-name').textContent=filename;
   el('peek-sub').textContent=`${stops.length} stops · ${maneuvers.filter(m=>m.type!=='arrive').length} maneuvers`;
   updSummaryBar();switchTab('rota');shState='peek';applySheet();
@@ -2832,8 +2842,10 @@ function startNav(){
   live={dist:0,moving:0,idle:0,stops:0,last:null,lastT:null};
   if(el('lcm')){el('lcm').style.display='none';
     ['lcm-spk','lcm-drv','lcm-avg','lcm-extra'].forEach(id=>el(id).textContent='—');}
-  el('btn-nav').style.display='none';el('btn-nav2').style.display='none';
-  el('btn-stop').style.display='';el('btn-nav3').style.display='none';el('btn-stop3').style.display='';
+  // One start and one stop: the action bar's START becomes STOP, and the
+  // cockpit ✕ is the full exit. The three legacy pairs that used to be kept
+  // in sync here were removed 22 Sep (field audit: four ways to start).
+  try{updBigStart()}catch(e){}
   el('nav-hud').classList.add('on');el('hud-toggle').classList.add('on');
   el('sum-bar').classList.add('on');
   shState='hidden';applySheet();
@@ -2858,8 +2870,7 @@ function stopNav(){
   if(Sequence.active)Sequence.stop();
   Playback.stop();
   CycleGate.reset();
-  el('btn-nav').style.display='';el('btn-nav2').style.display='';
-  el('btn-stop').style.display='none';el('btn-nav3').style.display='';el('btn-stop3').style.display='none';
+  try{updBigStart()}catch(e){}
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   el('hud-sp').classList.remove('on');hudPanelOpen=false;document.body.classList.remove('stops-open');
@@ -4791,9 +4802,7 @@ function startRec(){
   shState='hidden';applySheet();
   el('rec-ind').classList.add('on');
   el('btn-rec').className='btn rec-on';el('btn-rec').textContent='⏹ Recording';
-  el('btn-nav').disabled=true;
-  if(el('btn-nav2'))el('btn-nav2').disabled=true;
-  if(el('btn-nav3'))el('btn-nav3').disabled=true;
+  try{updBigStart()}catch(e){}
 
   if(watchId===null){
     watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
@@ -4812,9 +4821,7 @@ function stopRec(){
   el('rec-ind').classList.remove('on');
   el('btn-rec').className='btn rec';el('btn-rec').textContent='⏺ Rec';
   const hasRoute=routePts.length>1; // startRec clears the route — Nav needs one
-  el('btn-nav').disabled=!hasRoute;
-  if(el('btn-nav2'))el('btn-nav2').disabled=!hasRoute;
-  if(el('btn-nav3'))el('btn-nav3').disabled=false;
+  try{updBigStart()}catch(e){}
   if(!navActive){releaseWakeLock();setMapBearing(0);_lastBearing=0;}
 
   if(!navActive&&watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
@@ -4832,14 +4839,14 @@ function stopRec(){
   savedRecs.push(rec);
   const idx=savedRecs.length-1;
   renderRecCard(rec,idx);
-  el('rec-badge').textContent=` (${savedRecs.length})`;
+  el('rec-badge').textContent=String(savedRecs.length||'');
   el('rec-empty').style.display='none';
   try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){} // clean shutdown
   saveRecordings(); // persist to localStorage
   // Auto-load the recording just saved: route + stops appear on the map
   // and ▶ Nav is ready — no need to hunt for the Load button.
   loadRec(idx);
-  showAlert('arrived',`✓ ${name} · GTA ${score.cls}${score.matched!=null?' '+score.matched+'/5':''}${elev!=null?' · +'+elev+' m':''} · tap ▶ Nav`);
+  showAlert('arrived',`✓ ${name} · GTA ${score.cls}${score.matched!=null?' '+score.matched+'/5':''}${elev!=null?' · +'+elev+' m':''} · tap START`);
   if(score.matched!=null)speakText(`Cycle saved. Class ${score.cls}, ${score.matched} of 5 criteria.`,true);
 }
 
@@ -4983,7 +4990,6 @@ function loadRec(idx){
     setT('h-stops',`0/${stops.length}`);
     setT('h-prog',totalProg?fmtTime(totalProg):'—');
     setT('h-real','00:00:00');
-    setT('stops-badge',stops.length?` (${stops.length})`:'');
     setS('stops-empty',stops.length?'none':'');
 
     // Route caches, matcher reset, and stop anchoring must happen BEFORE
@@ -4992,6 +4998,8 @@ function loadRec(idx){
     resetMatcher();
     anchorStopsToRoute(rec.points);
     maneuvers=buildManeuvers(routePts);
+    // stats only after the maneuvers exist, or TURNS/MANEUVERS read 0
+    renderRouteStats();
     // §18/§26: compile ONCE at load — never per GPS fix. Old recordings have
     // no playlist; compileCycle derives one without touching the JSON (§2).
     loadedCycleMeta={name:rec.name||'cycle',date:rec.date||''};
@@ -5001,11 +5009,10 @@ function loadRec(idx){
       const b=routeLayer.getBounds();
       if(!fitRouteBounds(b)) map.setView([pts[0].lat,pts[0].lon],15);
     }catch(fe){map.setView([pts[0].lat,pts[0].lon],15);}
-    el('btn-nav').disabled=false;try{updBigStart()}catch(e){};
-    try{if(el('btn-nav2'))el('btn-nav2').disabled=false;}catch(e){}
+    try{updBigStart()}catch(e){}
     el('peek-icon').textContent='🛤️';
     el('peek-name').textContent=rec.name;
-    el('peek-sub').textContent=`${(rec.dist||0).toFixed(2)} km · ${stops.length} stops · tap ▶ Nav to start`;
+    el('peek-sub').textContent=`${(rec.dist||0).toFixed(2)} km · ${stops.length} stops · tap START to begin`;
     el('no-route') && (el('no-route').style.display='none');
     el('route-details') && (el('route-details').style.display='flex');
     if(el('upload-zone'))el('upload-zone').style.display='none';
@@ -5117,7 +5124,7 @@ function importRecsJSON(input){
         savedRecs.push(rec);renderRecCard(rec,savedRecs.length-1);n++;
       });
       if(n){
-        el('rec-badge').textContent=` (${savedRecs.filter(Boolean).length})`;
+        el('rec-badge').textContent=String(savedRecs.filter(Boolean).length||'');
         el('rec-empty').style.display='none';
         saveRecordings();switchTab('gravadas');
         alert(`${n} recording${n>1?'s':''} imported.`);
