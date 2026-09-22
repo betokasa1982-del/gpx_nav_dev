@@ -4092,3 +4092,185 @@ function ngSetup(){
 })();
 console.log('ALL NAV-GUIDANCE TESTS PASSED');
 __group('Nav guidance tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  GPS SOURCE — exactly one feed, ever
+//  Field, 22 Sep: during a simulation of a Spanish cycle the card read
+//  "2670.2 km off route" — the driver's real position in Sweden. startNav
+//  assigned watchId unconditionally, so a second watchPosition orphaned the
+//  first, which kept delivering real fixes with no id left to clear it.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── gps source ──');
+
+// ── GPS-1: the watch cannot be created twice or leaked ──
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const calls=(html.match(/navigator\.geolocation\.watchPosition/g)||[]).length;
+  console.assert(calls===1,'GPS-1: '+calls+' watchPosition call sites — a second one can orphan the first');
+  console.assert(/function startWatch\(\)\{\s*if\(watchId!==null\)return watchId;/.test(html),
+    'GPS-1: startWatch does not refuse to create a second watch');
+  const clears=(html.match(/navigator\.geolocation\.clearWatch/g)||[]).length;
+  console.assert(clears===1,'GPS-1: '+clears+' clearWatch sites — ownership is split again');
+  console.log('GPS-1. one create site, one clear site, guarded OK');
+})();
+
+// ── GPS-2: calling startWatch twice yields one watch ──
+(function(){
+  const realGeo=navigator.geolocation;
+  let created=0,cleared=0;
+  navigator.geolocation={watchPosition(){created++;return 100+created;},
+                         clearWatch(){cleared++;}};
+  watchId=null;
+  const a=startWatch(), b=startWatch(), c=startWatch();
+  console.assert(created===1,'GPS-2: '+created+' watches created by three calls');
+  console.assert(a===b&&b===c,'GPS-2: the id changed between calls — the first is orphaned');
+  stopWatch();
+  console.assert(cleared===1&&watchId===null,'GPS-2: the watch was not released');
+  stopWatch();
+  console.assert(cleared===1,'GPS-2: clearing twice cleared twice');
+  navigator.geolocation=realGeo;
+  console.log('GPS-2. three starts → one watch; double stop is safe OK');
+})();
+
+// ── GPS-3: a real fix during a simulation is ignored ──
+(function(){
+  // the exact field scenario: a cycle in Spain, a fix from Sweden
+  const spain=mkRec('sim-es',200,i=>({lat:37.18+i*0.00009,lng:-3.60}),[100]);
+  loadFresh(spain);
+  navActive=true; Playback.begin('1'); resetOffRoute();
+  const pts=routePts;
+  // drive a few real (simulated-source) fixes into the cycle
+  simRec=spain; _simFix=true;
+  for(let k=10;k<20;k++)
+    onGPS({coords:{latitude:pts[k].lat,longitude:pts[k].lon??pts[k].lng,accuracy:5,
+      altitude:1,speed:8,heading:0},timestamp:Date.now()+k*1000});
+  _simFix=false;
+  const progBefore=routeProgressM, posBefore=currentPos&&currentPos.lat;
+
+  // now the orphaned watch delivers Gothenburg
+  onGPS({coords:{latitude:57.7089,longitude:11.9746,accuracy:8,altitude:1,
+    speed:0,heading:0},timestamp:Date.now()+60000});
+  console.assert(routeProgressM===progBefore,
+    'GPS-3: a real fix moved route progress during a simulation');
+  console.assert(!currentPos||currentPos.lat===posBefore,
+    'GPS-3: the vehicle jumped to the real position during a simulation');
+  simRec=null;
+  // with no simulation running the same fix IS processed
+  onGPS({coords:{latitude:pts[30].lat,longitude:pts[30].lon??pts[30].lng,accuracy:5,
+    altitude:1,speed:8,heading:0},timestamp:Date.now()+70000});
+  console.assert(currentPos&&Math.abs(currentPos.lat-pts[30].lat)<1e-6,
+    'GPS-3: real fixes are still ignored after the simulation ended');
+  console.log('GPS-3. Sweden fix dropped mid-simulation, accepted after it OK');
+})();
+
+// ── GPS-4: a continent away is a wrong route, not a deviation ──
+(function(){
+  const spain=mkRec('gps4',200,i=>({lat:37.18+i*0.00009,lng:-3.60}),[]);
+  loadFresh(spain); navActive=true; Playback.begin('1'); resetOffRoute();
+  routeProgressM=100;
+  matchState={crossTrackM:2670239,confidence:'LOW'};
+  navGuidance(8); const g=navGuidance(8);
+  console.assert(g.mode==='OFF_ROUTE','GPS-4: a 2670 km error was not flagged at all');
+  console.assert(g.action==='WRONG ROUTE',
+    'GPS-4: it still tells the driver to "return to the route" from 2670 km: '+g.action);
+  console.assert(!/\d+ m off/.test(g.detail),'GPS-4: it prints a drivable-looking distance');
+  console.assert(g.far===true,'GPS-4: the card is not flagged as a wrong-route case');
+  // a genuine deviation still reads as one
+  resetOffRoute();
+  matchState={crossTrackM:120,confidence:'HIGH'};
+  navGuidance(8); const g2=navGuidance(8);
+  console.assert(g2.action==='OFF ROUTE','GPS-4: a real 120 m deviation was misreported as wrong route');
+  console.log('GPS-4. 2670 km reads "WRONG ROUTE"; 120 m still reads "OFF ROUTE" OK');
+})();
+// ── GPS-5: a wrong-route state invents no distance anywhere ──
+(function(){
+  const spain=mkRec('gps5',200,i=>({lat:37.18+i*0.00009,lng:-3.60}),[80,160]);
+  loadFresh(spain); navActive=true; Playback.begin('1'); resetOffRoute();
+  routeProgressM=100;
+  matchState={crossTrackM:2670239,confidence:'LOW'};
+  navGuidance(8); navGuidance(8);
+  // the stop card must not offer a 2555 km "next stop" either
+  updNextStopCard(57.7089,11.9746);
+  const d=String(el('nsc-dist').textContent||'');
+  console.assert(d==='—','GPS-5: the stop card still shows a distance: "'+d+'"');
+  // and a normal state restores real distances
+  resetOffRoute();
+  matchState={crossTrackM:5,confidence:'HIGH'};
+  navGuidance(8); navGuidance(8);
+  const p=routePts[10];
+  updNextStopCard(p.lat,p.lon??p.lng);
+  const d2=String(el('nsc-dist').textContent||'');
+  console.assert(d2!=='—'&&d2.length>0,'GPS-5: the stop distance never comes back: "'+d2+'"');
+  console.log('GPS-5. no invented distance while off-continent; restored after OK');
+})();
+
+console.log('ALL GPS-SOURCE TESTS PASSED');
+__group('GPS source tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BOOT MAP VIEW — the app must not claim to know where it is
+//  Field, 22 Sep: the map opened hard-coded on central Brazil and a driver
+//  read it literally — "ele acha que esta no Brasil agora".
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── boot map view ──');
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const code=html.replace(/\/\*[\s\S]*?\*\//g,'');   // comments may quote the old value
+
+  // BOOT-1: no hard-coded populated place as the opening view
+  const init=/L\.map\('map',\{center:\[([^\]]+)\],zoom:([^,]+)/.exec(code);
+  console.assert(init,'BOOT-1: could not find the map initialisation');
+  const centre=init?init[1]:'';
+  console.assert(!/-15\s*,\s*-50/.test(centre),'BOOT-1: the Brazil centre is back');
+  // a literal lat/lng pair here is a claim about where the driver is
+  console.assert(!/^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(centre),
+    'BOOT-1: the opening centre is a hard-coded place: ['+centre+']');
+  console.assert(/_boot\.lat/.test(centre),'BOOT-1: the centre is not the resolved boot view');
+  console.log('BOOT-1. no hard-coded country centre OK');
+
+  // BOOT-2: the neutral fallback is a world view over water, naming nothing
+  const nv=/NEUTRAL_VIEW=\{lat:([-\d.]+),lng:([-\d.]+),zoom:(\d+)\}/.exec(code);
+  console.assert(nv,'BOOT-2: no neutral fallback defined');
+  console.assert(+nv[3]<=3,'BOOT-2: the fallback zoom '+nv[3]+' is close enough to name a place');
+  console.assert(+nv[2]===0&&Math.abs(+nv[1])<=25,
+    'BOOT-2: the fallback centre sits on a country instead of open ocean');
+  console.log('BOOT-2. neutral fallback: world view at zoom '+nv[3]+' OK');
+
+  // BOOT-3: last REAL position is remembered, and a route never poses as one
+  console.assert(/function rememberView/.test(code),'BOOT-3: the last position is not remembered');
+  console.assert(/if\(!simRec\)rememberView/.test(code),
+    'BOOT-3: a simulated position would be remembered as where the driver was');
+  const fit=/function fitRouteBounds/.test(code);
+  console.assert(!fit||!/fitRouteBounds[\s\S]{0,400}rememberView/.test(code),
+    'BOOT-3: fitting a route writes the remembered view — "where I was" becomes "where the cycle is"');
+  console.log('BOOT-3. only real, non-simulated positions are remembered OK');
+
+  // BOOT-4: a stored view round-trips, and rubbish is rejected
+  localStorage.setItem('gpx-last-view',JSON.stringify({lat:57.7089,lng:11.9746,zoom:14}));
+  let v=readLastView();
+  console.assert(v&&Math.abs(v.lat-57.7089)<1e-6,'BOOT-4: a stored view did not come back');
+  localStorage.setItem('gpx-last-view',JSON.stringify({lat:999,lng:11}));
+  console.assert(readLastView()===null,'BOOT-4: an impossible latitude was accepted');
+  localStorage.setItem('gpx-last-view','not json');
+  console.assert(readLastView()===null,'BOOT-4: corrupt storage was not rejected');
+  localStorage.removeItem('gpx-last-view');
+  console.assert(readLastView()===null,'BOOT-4: empty storage did not read as empty');
+  console.log('BOOT-4. stored view round-trips; bad data rejected OK');
+
+  // BOOT-5: opening the app never asks for location by itself
+  const askIdx=code.indexOf('getCurrentPosition');
+  if(askIdx>=0){
+    const around=code.slice(Math.max(0,askIdx-500),askIdx);
+    console.assert(/state!=='granted'/.test(around),
+      'BOOT-5: the app can prompt for location just by opening');
+  }
+  console.log('BOOT-5. no permission prompt on launch OK');
+})();
+console.log('ALL BOOT-VIEW TESTS PASSED');
+__group('Boot map view tests');

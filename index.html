@@ -1892,6 +1892,28 @@ function calcSegments(points,stops){
 let routePts=[];          // [{lat,lon}] full route
 let totalRouteDist=0;
 let maneuvers=[];         // computed turn-by-turn instructions
+/* ══ GPS WATCH OWNERSHIP ══════════════════════════════════════════════════
+   startNav used to assign watchId unconditionally. Called while a watch was
+   already running (after startRec, or a second startNav), it overwrote the
+   id and ORPHANED the previous watch: that watch kept delivering real fixes
+   for the rest of the session and nothing could clear it, because its id was
+   gone. During a simulation the orphan fed the driver's real position
+   (Sweden) into a route recorded in Spain — 2670 km "off route".
+   One watch, created and destroyed in one place. */
+let _simFix=false;   // set only while stepSim dispatches its own fix
+function startWatch(){
+  if(watchId!==null)return watchId;            // never leak a second one
+  if(!navigator.geolocation)return null;
+  watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
+    {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  return watchId;
+}
+function stopWatch(){
+  if(watchId===null)return;
+  try{navigator.geolocation.clearWatch(watchId);}catch(e){}
+  watchId=null;
+}
+
 let navActive=false, watchId=null, currentPos=null, currentHeading=null;
 let arrivingTmr=null;
 const insideStop=new Set();
@@ -2300,7 +2322,53 @@ function calcSpeedFromPoints(lat,lng){
 }
 
 // ── MAP ────────────────────────────────────────────────
-map=L.map('map',{center:[-15,-50],zoom:5,zoomControl:false,tap:true,rotate:true,rotateControl:false,touchRotate:false,shiftKeyRotate:false});
+/* ══ WHERE THE MAP OPENS ══════════════════════════════════════════════════
+   It used to open hard-coded on central Brazil (center:[-15,-50], zoom 5).
+   A map centred on a country is a claim about where you are, and a driver
+   read it exactly that way: "ele acha que esta no Brasil agora" (field,
+   22 Sep). The app does not know where it is at boot, so it must not claim.
+
+   Order of precedence:
+     1. the position the driver was last at   (remembered across sessions)
+     2. a real fix, if location permission is ALREADY granted — asked for
+        silently, never a permission prompt just for opening the app
+     3. a neutral world view that names no country
+   A loaded route overrides all three by fitting its own bounds.           */
+const MAP_VIEW_KEY='gpx-last-view';
+const NEUTRAL_VIEW={lat:20,lng:0,zoom:2};   // ocean-centred: claims nothing
+function readLastView(){
+  try{
+    const v=JSON.parse(localStorage.getItem(MAP_VIEW_KEY)||'null');
+    if(v&&isFinite(v.lat)&&isFinite(v.lng)&&Math.abs(v.lat)<=90&&Math.abs(v.lng)<=180)
+      return {lat:v.lat,lng:v.lng,zoom:isFinite(v.zoom)?v.zoom:14};
+  }catch(e){}
+  return null;
+}
+let _lastViewT=0;
+function rememberView(lat,lng){
+  // only a REAL position is remembered — never a route's bounds, so "where
+  // I was" never becomes "where the last cycle was recorded"
+  const now=Date.now(); if(now-_lastViewT<15000)return; _lastViewT=now;
+  try{localStorage.setItem(MAP_VIEW_KEY,JSON.stringify(
+    {lat:+lat.toFixed(5),lng:+lng.toFixed(5),zoom:14}));}catch(e){}
+}
+const _boot=readLastView()||NEUTRAL_VIEW;
+map=L.map('map',{center:[_boot.lat,_boot.lng],zoom:_boot.zoom,zoomControl:false,tap:true,rotate:true,rotateControl:false,touchRotate:false,shiftKeyRotate:false});
+if(!readLastView()){
+  // no history: if location is already permitted, use it — but never prompt
+  try{
+    if(navigator.permissions&&navigator.permissions.query){
+      navigator.permissions.query({name:'geolocation'}).then(st=>{
+        if(st.state!=='granted'||routePts.length)return;
+        navigator.geolocation.getCurrentPosition(pos=>{
+          if(routePts.length)return;   // a route was loaded meanwhile
+          map.setView([pos.coords.latitude,pos.coords.longitude],14);
+          rememberView(pos.coords.latitude,pos.coords.longitude);
+        },()=>{},{maximumAge:600000,timeout:8000});
+      }).catch(()=>{});
+    }
+  }catch(e){}
+}
 loadStoredRecordings();
 try{refreshEventButtons();}catch(e){} // paint the event glyphs once
 checkInflightRecovery();
@@ -3143,7 +3211,7 @@ function startNav(){
   requestWakeLock();
   el('hud-voice').style.display='flex';el('hud-voice').textContent='🔊';voiceOn=true;
   setGPS('wait','Waiting for GPS...');
-  watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  startWatch();
 }
 /* The cockpit ✕ is the driver's only exit while everything else is hidden,
    so it must end whatever is running: a live simulation kept feeding fixes
@@ -3153,7 +3221,7 @@ function exitNavigation(){
   stopNav();
 }
 function stopNav(){
-  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+  stopWatch();
   navActive=false;
   document.body.classList.remove('driver-mode');
   document.body.classList.remove('cockpit');
@@ -3594,6 +3662,7 @@ const NAV_GUIDE_CFG={
   offRouteAccF : 2.5,  // ...scaled by the fix's own accuracy
   offConfirm   : 2,    // consecutive fixes before declaring OFF ROUTE
   backConfirm  : 2,    // ...and before clearing it
+  wrongRouteM  : 5000, // beyond this it is the wrong cycle, not a deviation
 };
 let _offRouteN=0,_onRouteN=0,_offRoute=false;
 
@@ -3636,6 +3705,7 @@ function offRouteGlyph(size){
   </svg>`;
 }
 
+let _navFar=false;   // position is nowhere near the loaded cycle
 function navGuidance(accuracyM){
   const total=routeCumM.length?routeCumM[routeCumM.length-1]:0;
   const here=routeProgressM;
@@ -3643,10 +3713,22 @@ function navGuidance(accuracyM){
   // 1 — off the recorded line
   if(_updOffRoute(accuracyM)){
     const xt=Math.round(Math.abs(matchState.crossTrackM));
+    // Beyond a few km this is not a driver drifting off the line — it is the
+    // wrong route loaded, or a fix from somewhere else entirely (a leaked GPS
+    // watch once put the driver's real position 2670 km from the cycle).
+    // Saying "2670.2 km off" invites the driver to try to drive back.
+    if(xt>NAV_GUIDE_CFG.wrongRouteM){
+      _navFar=true;
+      return {mode:'OFF_ROUTE',kind:'OFF',dir:null,distM:xt,far:true,
+        action:'WRONG ROUTE',
+        detail:'position is nowhere near this cycle — check the loaded route'};
+    }
+    _navFar=false;
     return {mode:'OFF_ROUTE',kind:'OFF',dir:null,distM:xt,
       action:'OFF ROUTE',detail:`${xt} m off — return to the route`};
   }
 
+  _navFar=false;
   // 2 — the next real decision, at its real distance
   const next=(maneuvers||[]).find(m=>m.type!=='straight'&&m.type!=='arrive'
                                   &&(m.distFromStart*1000)>here+5);
@@ -3895,6 +3977,12 @@ const CycleGate={
   reset(){this.state='ARMED';this._n=0;},
 };
 function onGPS(pos){
+  /* A simulation replays a recorded cycle; a real fix arriving mid-replay
+     belongs to a different place entirely. Only the simulator may feed the
+     engine while one is running — this holds even if a watch leaks again. */
+  if(simRec&&!_simFix)return;
+  // remember where the driver actually was, so the next launch opens there
+  try{if(!simRec)rememberView(pos.coords.latitude,pos.coords.longitude);}catch(e){}
   // Sequence transition happens BETWEEN engine passes: the previous fix
   // flagged COMPLETE, this fix starts on the next cycle's route.
   if(Sequence._pendingAdvance){Sequence._pendingAdvance=false;Sequence.advance();}
@@ -4193,7 +4281,7 @@ function startSim(idx){
   if(!navActive)startNav();
   simRec=rec;simIdx=0;simStartIdx=0;
   // Real GPS off while simulating — the two must never interleave
-  if(watchId!=null){try{navigator.geolocation.clearWatch(watchId)}catch(e){}watchId=null;}
+  stopWatch();
   el('btn-simstop').style.display='';
   showAlert('arrived',`▶ SIM ${rec.name} · ${+el('rng-sim').value}x`);
   stepSim();
@@ -4213,8 +4301,11 @@ function stepSim(){
     if(dt>0)speed=haversine(prev.lat,prev.lng,p.lat,p.lng)*1000/dt; // m/s
     heading=brng(prev.lat,prev.lng,p.lat,p.lng);
   }
-  onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
-    altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t});
+  _simFix=true;
+  try{
+    onGPS({coords:{latitude:+p.lat,longitude:+p.lng,accuracy:5,
+      altitude:p.alt!=null?+p.alt:null,speed,heading},timestamp:p.t});
+  }finally{_simFix=false;}
   setGPS('ok',`SIM ${+el('rng-sim').value}x · ${simIdx+1}/${pts.length}`);
   simIdx++;
   const next=pts[simIdx];
@@ -4232,10 +4323,7 @@ function stopSim(silent){
   if(was&&!silent){
     setGPS('wait','SIM stopped');
     // Resume real GPS if navigation is still active
-    if(navActive&&watchId==null&&navigator.geolocation){
-      watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,
-        {enableHighAccuracy:true,maximumAge:1000,timeout:20000});
-    }
+    if(navActive)startWatch();
   }
 }
 
@@ -4259,6 +4347,7 @@ function updNextStopCard(lat,lng){
     c.classList.remove('atstop');
     el('nsc-title').textContent='NEXT STOP';
     const dM=haversine(lat,lng,next.lat,next.lng)*1000;
+    if(_navFar){el('nsc-dist').textContent='—';}else
     el('nsc-dist').textContent=dM>=1000?(dM/1000).toFixed(1)+' km':Math.round(dM)+' m';
     updStopEta(dM);          // cockpit: arrival clock beside the planned time
   }
@@ -4936,7 +5025,12 @@ function updInstruction(nearIdx,distFromStart){
     el('hud-icon-lbl').textContent='';
 
     const distEl=el('hud-dist');
-    if(g.mode==='OFF_ROUTE'){
+    if(g.far){
+      // no drivable-looking number: 2670 km is not a distance to cover, and
+      // printing it invites the driver to try
+      distEl.textContent='—';
+      distEl.className='hud-instr-dist close';
+    }else if(g.mode==='OFF_ROUTE'){
       // the deviation IS the headline — a turn instruction while off the line
       // is worse than no instruction
       distEl.textContent=fmtDist(g.distM);
@@ -4975,7 +5069,7 @@ function updInstruction(nearIdx,distFromStart){
       ? offRouteGlyph(30) : guidanceArrowSvg(g.kind,g.dir,34);
     el('peek-name').textContent=g.action;
     el('peek-sub').textContent=g.detail;
-    el('peek-dist').textContent=fmtDist(g.distM);
+    el('peek-dist').textContent=g.far?'—':fmtDist(g.distM);
     return;
   }
 
@@ -5231,9 +5325,7 @@ function startRec(){
   el('btn-rec').className='btn rec-on';el('btn-rec').textContent='⏹ Recording';
   try{updBigStart()}catch(e){}
 
-  if(watchId===null){
-    watchId=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
-  }
+  startWatch();
   requestWakeLock();
   setGPS('active','Recording route...');
 }
@@ -5252,7 +5344,7 @@ function stopRec(){
   try{updBigStart()}catch(e){}
   if(!navActive){releaseWakeLock();setMapBearing(0);_lastBearing=0;}
 
-  if(!navActive&&watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+  if(!navActive)stopWatch();
 
   if(recPoints.length<2){alert('Route too short to save.');return}
   const dist=calcDistRaw(recPoints);
