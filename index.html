@@ -802,6 +802,20 @@ body.cockpit .lap-badge{top:14px;left:50%;transform:translateX(-50%);z-index:120
 body.cockpit.tunnel #map .leaflet-tile-pane{filter:brightness(.45) saturate(.5)}
 body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)}
 
+/* ── night basemap ────────────────────────────────────────────────────────
+   The dark map is produced from the standard OpenStreetMap tiles instead of
+   a second (keyed) provider: invert + hue-rotate turns the paper basemap into
+   a dark one while keeping parks green and water blue. The filter is scoped
+   to the tile pane, so the route, markers and HUD keep their real colours.
+   Higher specificity than the driver-mode / tunnel rules above, so the night
+   style holds in every mode.                                              */
+body #map.tiles-dark .leaflet-tile-pane{
+  filter:invert(1) hue-rotate(180deg) brightness(.86) contrast(1.06) saturate(.78);
+}
+body.cockpit.tunnel #map.tiles-dark .leaflet-tile-pane{
+  filter:invert(1) hue-rotate(180deg) brightness(.52) contrast(1.02) saturate(.45);
+}
+
 /* ── narrow tablets in portrait ───────────────────────────────────────── */
 @media (max-width:820px){
   body.cockpit .hud-instr{width:min(74vw,290px);top:56px;left:10px;padding:14px 16px 12px}
@@ -2396,16 +2410,21 @@ function setMapBearing(deg){
   c.classList.toggle('rotated',d%360!==0);
   _lastBearing=d;
 }
-// Map tile layers — Voyager default (readable), Dark for night
+// ── Map tile layers ──────────────────────────────────────────────────────
+// Key-free basemap. CARTO's basemaps.cartocdn.com endpoints moved to a keyed
+// plan and now stamp "API KEY REQUIRED" across every tile, so the day and the
+// night style are both served from the standard OpenStreetMap tiles; night is
+// produced locally by a CSS filter on the tile pane (see #map.tiles-dark),
+// which keeps a dark map available at navigation zoom levels (17-19) without
+// depending on a second provider or an account.
+const TILE_URL='https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTR='&copy; OpenStreetMap contributors';
+// No crossOrigin: the app never reads tile pixels back from a canvas, and
+// requesting CORS makes every tile fail if the header is ever missing.
+const TILE_OPTS={attribution:TILE_ATTR,maxZoom:20,maxNativeZoom:19};
 const TILES={
-  day: {
-    url:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    label:'☀️'
-  },
-  night: {
-    url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    label:'🌙'
-  }
+  day:   {url:TILE_URL,label:'☀️',dark:false},
+  night: {url:TILE_URL,label:'🌙',dark:true}
 };
 // Fit bounds compensating the 2x oversized container: fitBounds fills the
 // whole (invisible) container, so zoom out 1 level to fit the visible quarter.
@@ -2419,21 +2438,24 @@ function fitRouteBounds(b){
 }
 
 let currentTile='day';
-let tileLayer=L.tileLayer(TILES.day.url,{
-  attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-}).addTo(map);
+let tileLayer=L.tileLayer(TILE_URL,TILE_OPTS).addTo(map);
+
+// Day/night share one tile source, so the layer is never torn down and
+// rebuilt: only the pane filter changes. Nothing is re-downloaded and the
+// route/marker stacking order cannot be disturbed.
+function applyTileStyle(){
+  const m=el('map');
+  if(m)m.classList.toggle('tiles-dark',!!TILES[currentTile].dark);
+  const btn=el('map-style-btn');
+  if(btn) btn.textContent=TILES[currentTile==='day'?'night':'day'].label;
+}
 
 function toggleMapStyle(){
   currentTile=currentTile==='day'?'night':'day';
-  map.removeLayer(tileLayer);
-  tileLayer=L.tileLayer(TILES[currentTile].url,{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-  }).addTo(map);
-  // TileLayer goes under other layers — bring route/markers to front
+  applyTileStyle();
+  // Layers keep their z-order, but re-assert it for any external caller.
   [routeLayer,routeRemainLayer,routeDoneLayer,routeAheadLayer,recLayer].forEach(l=>l?.bringToFront());
   Object.values(stopMarkers).forEach(m=>m?.bringToFront?.());
-  const btn=el('map-style-btn');
-  if(btn) btn.textContent=TILES[currentTile==='day'?'night':'day'].label;
 }
 
 // ── SHEET ──────────────────────────────────────────────

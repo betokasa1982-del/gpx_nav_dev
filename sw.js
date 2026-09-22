@@ -1,6 +1,6 @@
 // GPX Navigator Pro — Service Worker
 // Versão do cache: incrementar ao atualizar os arquivos
-const CACHE = "gpx-nav-v58-boot-view";
+const CACHE = "gpx-nav-v59-keyless-tiles";
 const ASSETS = [
   "./",
   "./index.html",
@@ -39,9 +39,12 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET" || !e.request.url.startsWith("http")) return;
   const url = e.request.url;
 
-  // Tiles do mapa: sempre tenta rede, fallback para cache
-  // (basemaps.cartocdn.com — o match antigo "carto.com" nunca casava)
-  if (url.includes("cartocdn") || url.includes("carto.com") || url.includes("openstreetmap")) {
+  // Tiles do mapa: sempre tenta rede, fallback para cache.
+  // Fonte única e sem chave: tile.openstreetmap.org. Os antigos endpoints
+  // CARTO (basemaps.cartocdn.com) passaram a exigir API key e carimbavam
+  // "API KEY REQUIRED" em cada tile — o bump do CACHE apaga os tiles
+  // carimbados que ficaram gravados na versão anterior.
+  if (url.includes("openstreetmap")) {
     e.respondWith(
       fetch(e.request)
         .then(res => {

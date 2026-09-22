@@ -4274,3 +4274,111 @@ console.log('\n── boot map view ──');
 })();
 console.log('ALL BOOT-VIEW TESTS PASSED');
 __group('Boot map view tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BASEMAP TILES — no provider that demands an API key
+//  Field report: the map rendered under repeated "API KEY REQUIRED ·
+//  carto.com/basemaps/apikey" watermarks. CARTO moved basemaps.cartocdn.com
+//  to a keyed plan, so any tile URL that needs an account is a live outage
+//  for the driver, not a styling preference.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── basemap tiles ──');
+(function(){
+  const fs=require('fs'),path=require('path');
+  const dir=[__dirname,'/tmp/dev/gpx_nav_dev-main']
+    .find(p=>fs.existsSync(path.join(p,'index.html')));
+  const html=fs.readFileSync(path.join(dir,'index.html'),'utf8');
+  const sw=fs.existsSync(path.join(dir,'sw.js'))
+    ? fs.readFileSync(path.join(dir,'sw.js'),'utf8') : '';
+  // comments legitimately name the retired provider while explaining the fix
+  const code=html.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+  const swCode=sw.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+
+  // every tile-ish URL the running app can request
+  const urls=(code.match(/https?:\/\/[^'"`\s)]+\{z\}[^'"`\s)]*/g)||[]);
+
+  // TILE-1: at least one tile source is configured at all
+  console.assert(urls.length>0,'TILE-1: no tile URL template found in the app');
+  console.log('TILE-1. tile source present ('+urls.length+' template(s)) OK');
+
+  // TILE-2: none of them is a keyed endpoint
+  const keyed=urls.filter(u=>/cartocdn|carto\.com|api[_-]?key|apikey|access[_-]?token|\{key\}|mapbox|thunderforest|stadiamaps|maptiler/i.test(u));
+  console.assert(keyed.length===0,
+    'TILE-2: a tile source still needs an API key: '+keyed.join(' , '));
+  console.log('TILE-2. no keyed tile provider OK');
+
+  // TILE-3: the retired CARTO host is gone from the executable app and the SW
+  console.assert(!/cartocdn/.test(code),'TILE-3: cartocdn is still referenced in index.html');
+  console.assert(!/cartocdn/.test(swCode),'TILE-3: cartocdn is still routed by sw.js');
+  console.log('TILE-3. CARTO endpoints removed from app and service worker OK');
+
+  // TILE-4: attribution names the source actually being used, and only that
+  const attr=/TILE_ATTR\s*=\s*'([^']+)'/.exec(code);
+  console.assert(attr,'TILE-4: no attribution constant');
+  console.assert(attr&&/OpenStreetMap/.test(attr[1]),'TILE-4: OSM is not credited');
+  console.assert(attr&&!/CARTO/i.test(attr[1]),
+    'TILE-4: the attribution still credits a provider the app no longer uses');
+  console.log('TILE-4. attribution matches the live source OK');
+
+  // TILE-5: day and night both resolve to a keyless source
+  console.assert(/day:\s*\{url:TILE_URL/.test(code)&&/night:\s*\{url:TILE_URL/.test(code),
+    'TILE-5: a style does not use the shared keyless tile URL');
+  console.assert(/night:\s*\{url:TILE_URL,label:'[^']+',dark:true/.test(code),
+    'TILE-5: the night style is not flagged dark');
+  console.log('TILE-5. day and night share the keyless source OK');
+
+  // TILE-6: the night map is a real visual change, not a relabelled button
+  const css=html.slice(html.indexOf('<style'),html.indexOf('</style>'));
+  const darkRule=/#map\.tiles-dark\s+\.leaflet-tile-pane\s*\{([^}]+)\}/.exec(css);
+  console.assert(darkRule,'TILE-6: no dark rule for the tile pane');
+  console.assert(darkRule&&/invert\(1\)/.test(darkRule[1]),
+    'TILE-6: the night style does not darken the tiles');
+  console.log('TILE-6. night style darkens the basemap OK');
+
+  // TILE-7: the dark rule must outrank the driver-mode / tunnel tile filters,
+  //         otherwise the night map silently reverts while driving
+  const iDark=css.indexOf('#map.tiles-dark .leaflet-tile-pane');
+  const iDrv =css.indexOf('body.driver-mode #map .leaflet-tile-pane');
+  const iTun =css.indexOf('body.cockpit.tunnel #map .leaflet-tile-pane');
+  console.assert(iDark>iDrv&&iDark>iTun,
+    'TILE-7: the night rule is declared before the mode filters and loses the cascade');
+  console.assert(/body\s+#map\.tiles-dark/.test(css),
+    'TILE-7: the night rule does not carry the extra specificity');
+  console.log('TILE-7. night style wins over the driver/tunnel filters OK');
+
+  // TILE-8: toggling must not tear the layer down (that re-downloads every
+  //         tile mid-drive); it only flips the pane class
+  console.assert(/function applyTileStyle\(\)/.test(code),'TILE-8: applyTileStyle missing');
+  console.assert(/classList\.toggle\('tiles-dark'/.test(code),
+    'TILE-8: the toggle does not switch the tile-pane class');
+  const tog=/function toggleMapStyle\(\)\{[\s\S]*?\n\}/.exec(code);
+  console.assert(tog,'TILE-8: toggleMapStyle missing');
+  console.assert(tog&&!/removeLayer\(tileLayer\)/.test(tog[0]),
+    'TILE-8: the toggle still rebuilds the tile layer');
+  console.log('TILE-8. day/night toggle keeps the tile layer alive OK');
+
+  // TILE-9: zoom 20 must still draw (over-zoom) rather than 404 on OSM
+  console.assert(/maxNativeZoom:\s*19/.test(code),
+    'TILE-9: no maxNativeZoom — the deepest zoom will request tiles OSM does not serve');
+  console.log('TILE-9. deep zoom over-zooms instead of failing OK');
+
+  // TILE-11: tiles must not be requested with CORS. The app never reads tile
+  //          pixels back from a canvas, and crossOrigin makes every tile fail
+  //          (naturalWidth 0, nothing painted) the moment the header is absent.
+  console.assert(!/crossOrigin\s*:\s*(true|'anonymous')/.test(code),
+    'TILE-11: tiles are requested with CORS for no reason');
+  console.log('TILE-11. tiles requested without CORS OK');
+
+  // TILE-10: the service worker still treats tiles as network-first, and the
+  //          cache version was bumped so the watermarked tiles are evicted
+  if(swCode){
+    console.assert(/url\.includes\("openstreetmap"\)/.test(swCode),
+      'TILE-10: sw.js no longer recognises the tile host');
+    const cv=/const CACHE\s*=\s*"([^"]+)"/.exec(swCode);
+    console.assert(cv&&!/v58-boot-view/.test(cv[1]),
+      'TILE-10: the cache version was not bumped — old watermarked tiles survive');
+    console.log('TILE-10. sw.js routes the new host; cache bumped to '+(cv?cv[1]:'?')+' OK');
+  }
+})();
+console.log('ALL BASEMAP TILE TESTS PASSED');
+__group('Basemap tile tests');
