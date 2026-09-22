@@ -3756,3 +3756,151 @@ console.log('\n── control surface ──');
 
 console.log('ALL CONTROL-SURFACE TESTS PASSED');
 __group('Control surface tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  GTA TARGET — the app's stated purpose: record a cycle that meets the
+//  GTA/VBC criteria, and repeat it. The target is set before the run and
+//  scored while there is still time to act on it.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── gta target ──');
+
+/* build a synthetic run with a chosen speed profile, at 1 Hz */
+function gtaRun(kmh,seconds,stopEvery,stopDur){
+  const pts=[];let t=1700000000000,lat=LAT0,lng=LNG0,since=0;
+  for(let s=0;s<seconds;s++){
+    let v=kmh;
+    if(stopEvery&&since>=stopEvery&&since<stopEvery+(stopDur||0))v=0;
+    if(stopEvery&&since>=stopEvery+(stopDur||0))since=0;
+    lat+=(v/3.6)/111320;
+    pts.push({lat,lng,t:t+s*1000});since++;
+  }
+  return pts;
+}
+
+// ── GTA-1: the five criteria are judged against the target's ranges ──
+(function(){
+  GTATarget.setClass('Ci2');
+  console.assert(GTATarget.active()&&GTATarget.classId==='Ci2','GTA-1: class not set');
+  const c=GTATarget.cls();
+  console.assert(c.spd[0]===15&&c.spd[1]===23,'GTA-1: Ci2 ranges changed unexpectedly');
+  // 18 km/h steady, no stops → avg and drive inside Ci2, idle out (0%)
+  const ev=GTATarget.evaluate(gtaRun(18,600),0);
+  console.assert(ev.ready,'GTA-1: not enough data to score 10 minutes of driving');
+  const by=k=>ev.rows.find(r=>r.key===k);
+  console.assert(by('spd').ok===true,'GTA-1: 18 km/h should sit inside Ci2 avg: '+by('spd').val);
+  console.assert(by('idle').ok===false&&by('idle').dir==='low',
+    'GTA-1: 0% idle should read as below the Ci2 window');
+  console.assert(ev.rows.length===5&&ev.total===5,'GTA-1: not five criteria');
+  console.log('GTA-1. five criteria judged vs Ci2; idle flagged low OK');
+})();
+
+// ── GTA-2: the live score converges on the final score — one formula ──
+(function(){
+  // The whole feature rests on this: what the driver is shown mid-run must
+  // be the same number the finished cycle is graded with. A second scoring
+  // implementation would drift, so there must only ever be one.
+  const pts=gtaRun(20,900,120,30);
+  GTATarget.setClass('Ci2');
+  const live=GTATarget.evaluate(pts,3);
+  const final=calcGTAScore(pts,[{},{},{}]);
+  console.assert(live.metrics.avg===final.metrics.avg&&
+                 live.metrics.drive===final.metrics.drive&&
+                 live.metrics.vmax===final.metrics.vmax&&
+                 live.metrics.idlePct===final.metrics.idlePct&&
+                 live.metrics.stopsKm===final.metrics.stopsKm,
+    'GTA-2: live metrics differ from the final score — two formulas exist');
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  console.assert((html.match(/function calcCycleMetrics/g)||[]).length===1,
+    'GTA-2: a second metrics implementation appeared');
+  console.assert((html.match(/VBC_CLASSES=\[/g)||[]).length===1,
+    'GTA-2: the VBC table was duplicated');
+  console.log('GTA-2. live and final scores come from the same formula OK');
+})();
+
+// ── GTA-3: a target taken from a saved cycle (repeatability) ──
+(function(){
+  const pts=gtaRun(19,900,150,40);
+  const rec={name:'Reference city run',points:pts,stops:[{},{},{}]};
+  savedRecs.push(rec);
+  const idx=savedRecs.length-1;
+  console.assert(GTATarget.setFromRecording(idx)===true,'GTA-3: could not target a saved cycle');
+  console.assert(GTATarget.refName==='Reference city run','GTA-3: reference name lost');
+  console.assert(GTATarget.refMetrics&&GTATarget.refMetrics.avg>0,'GTA-3: reference metrics lost');
+  const ev=GTATarget.evaluate(pts,3);
+  console.assert(ev.rows.every(r=>r.ref!=null),'GTA-3: rows carry no reference value to match');
+  console.assert(ev.rows.find(r=>r.key==='spd').ref===GTATarget.refMetrics.avg,
+    'GTA-3: reference avg not surfaced on the row');
+  console.log('GTA-3. target from a saved cycle carries its measured values OK');
+})();
+
+// ── GTA-4: no target is a valid state, and never blocks recording ──
+(function(){
+  GTATarget.clear();
+  console.assert(!GTATarget.active()&&GTATarget.cls()===null,'GTA-4: target not cleared');
+  const ev=GTATarget.evaluate(gtaRun(30,600),2);
+  console.assert(ev.ready,'GTA-4: metrics should still be computed without a target');
+  console.assert(ev.rows.every(r=>r.ok===null),'GTA-4: rows judged against a target that is not set');
+  console.assert(ev.matched===0,'GTA-4: matched count invented without a target');
+  console.log('GTA-4. untargeted recording still measured, nothing judged OK');
+})();
+
+// ── GTA-5: too little data is "warming up", never a wrong score ──
+(function(){
+  GTATarget.setClass('Ci1');
+  const ev=GTATarget.evaluate(gtaRun(15,20),0);   // 20 s — under the 30 s floor
+  console.assert(ev.ready===false,'GTA-5: scored a cycle that has barely started');
+  console.assert(ev.metrics===null&&ev.matched===0,'GTA-5: invented metrics from 20 s');
+  console.log('GTA-5. under 30 s reads as warming up, not as a score OK');
+})();
+
+// ── GTA-6: the target survives the app being closed ──
+(function(){
+  GTATarget.setClass('Co1');
+  GTATarget.classId=null;GTATarget.refMetrics=null;     // simulate a fresh load
+  GTATarget.restore();
+  console.assert(GTATarget.classId==='Co1','GTA-6: target lost across a reload: '+GTATarget.classId);
+  console.log('GTA-6. target persists across a restart OK');
+})();
+
+// ── GTA-7: the picker is a real step with real controls ──
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  ['gta-picker','gta-class-grid','gta-ref-select','gta-target-sum',
+   'gta-live','gta-live-head','gta-live-rows'].forEach(id=>
+    console.assert(html.includes('id="'+id+'"'),'GTA-7: '+id+' missing from the DOM'));
+  console.assert(/function toggleRec\(\)\{if\(!isRec\)openTargetPicker\(\)/.test(html),
+    'GTA-7: REC no longer asks for a target first');
+  const css=document.__cssText||'';
+  console.assert(/\.gta-cls\{[^}]*min-height:76px/.test(css),'GTA-7: class buttons below the touch floor');
+  console.assert(/\.gta-actions \.btn\{[^}]*min-height:52px/.test(css),'GTA-7: start button too small');
+  // the picker must render the full VBC table, not a hand-typed subset
+  console.assert(/VBC_CLASSES\.map/.test(html),'GTA-7: the class grid is not built from VBC_CLASSES');
+  console.log('GTA-7. target picker present, built from the VBC table OK');
+})();
+// ── GTA-8: the live panel belongs to recording, nothing else ──
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const body=s=>{const i=html.indexOf('function '+s+'(');const j=html.indexOf('{',i);
+    let d=0;for(let k=j;k<html.length;k++){if(html[k]==='{')d++;else if(html[k]==='}'){d--;if(!d)return html.slice(i,k+1);}}};
+  console.assert(/renderGTALive/.test(body('stopRec')),
+    'GTA-8: the panel is not cleared when recording ends');
+  console.assert(!/renderGTALive/.test(body('stopNav')),
+    'GTA-8: the recording panel is wired into navigation');
+  // and it refuses to paint when nothing is being recorded
+  isRec=false; renderGTALive(true);
+  console.assert(el('gta-live').style.display==='none','GTA-8: panel visible outside recording');
+  console.log('GTA-8. live panel scoped to recording only OK');
+})();
+
+GTATarget.clear();
+console.log('ALL GTA-TARGET TESTS PASSED');
+__group('GTA target tests');

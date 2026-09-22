@@ -362,8 +362,13 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 
 /* ── RECORDING INDICATOR ── */
 .rec-ind{
-  position:absolute;bottom:165px;left:12px;z-index:910;pointer-events:auto;
-  background:rgba(90,0,0,.95);border:1px solid var(--red);border-radius:8px;
+  /* Sits clear of the rail and the action bar. It used to be left:12px, which
+   put it under the rail once the shell changed — the GTA panel was being
+   read with its first column hidden. */
+  position:fixed;bottom:calc(var(--ab-h) + var(--safe-b) + 12px);
+  left:calc(var(--rail-w) + 12px);max-width:min(360px,calc(100vw - var(--rail-w) - 24px));
+  z-index:910;pointer-events:auto;
+  background:#1b1b1b;border:1px solid var(--red);border-radius:12px;
   padding:8px 12px;display:none;align-items:center;gap:8px;
 }
 .rec-ind.on{display:flex}
@@ -1056,6 +1061,58 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .rec-card-btns.rc-utils{margin-top:var(--s-xs)}
 .rc-utils .btn{flex:1 1 40%;min-height:42px;font-size:13px}
 .rc-utils .rc-del{flex:1 1 40%}
+
+/* ══ GTA TARGET ═══════════════════════════════════════════════════════════
+   The app's whole purpose is a cycle that meets the GTA/VBC criteria, so the
+   target is a deliberate step before recording and the five criteria are on
+   screen while there is still time to act on them. */
+.gta-picker{position:fixed;inset:0;z-index:4000;background:rgba(7,7,7,.92);
+  display:none;align-items:center;justify-content:center;padding:var(--s-lg)}
+.gta-picker.on{display:flex}
+.gta-card{width:min(560px,100%);max-height:88vh;overflow-y:auto;background:var(--panel);
+  border:1px solid var(--border);border-radius:12px;padding:var(--s-lg)}
+.gta-head{display:flex;align-items:center;justify-content:space-between;
+  font-size:14px;font-weight:600;letter-spacing:1.6px;color:var(--accent);margin-bottom:var(--s-sm)}
+.gta-hint{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:var(--s-md)}
+.gta-class-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:var(--s-sm)}
+.gta-cls{min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  color:var(--muted);font-family:var(--sans);cursor:pointer;padding:var(--s-sm) 4px}
+.gta-cls b{font-size:18px;color:var(--text);font-family:var(--display);letter-spacing:.5px}
+.gta-cls span{font-size:12px;line-height:1.25}
+.gta-cls.sel{border-color:var(--accent);background:var(--accent-dim);color:var(--accent-2)}
+.gta-cls.sel b{color:var(--accent)}
+.gta-ref-row{margin-top:var(--s-md);display:flex;flex-direction:column;gap:var(--s-xs)}
+.gta-ref-row label{font-size:13px;color:var(--muted)}
+.gta-ref-row select{min-height:44px;background:var(--panel2);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;padding:0 var(--s-sm);font-size:14px;
+  font-family:var(--sans)}
+.gta-target-sum{margin-top:var(--s-md);padding:var(--s-md);background:var(--panel2);
+  border-radius:8px;font-size:14px;line-height:1.5}
+.gta-ranges{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.gta-actions{display:flex;gap:var(--s-sm);margin-top:var(--s-lg)}
+.gta-actions .btn{flex:1;min-height:52px;font-size:14px}
+.gta-actions .gta-start{flex:2}
+
+/* live panel — five criteria, each with the value, the window and which way
+   to correct. "▲" means push it up, "▼" means ease off. */
+.gta-live{margin-top:var(--s-sm);border-top:1px solid var(--border);padding-top:var(--s-sm)}
+.gta-live-head{font-size:13px;font-weight:600;letter-spacing:.6px;color:var(--muted);
+  margin-bottom:4px}
+.gta-live-head b{color:var(--accent)}
+.gta-score{font-family:var(--display);font-size:16px;color:var(--warn);margin-left:4px}
+.gta-score.full{color:var(--green)}
+.gta-row{display:grid;grid-template-columns:1fr auto auto auto;gap:var(--s-sm);
+  align-items:baseline;font-size:13px;padding:3px 0}
+.gta-row .gta-lbl{color:var(--muted)}
+.gta-row .gta-val{font-family:var(--mono);font-weight:600;color:var(--text);min-width:58px;text-align:right}
+.gta-row .gta-want{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:62px;text-align:right}
+.gta-row .gta-ref{font-family:var(--mono);font-size:12px;color:var(--accent-2)}
+.gta-row .gta-mark{min-width:18px;text-align:center;font-weight:700}
+.gta-row.ok .gta-mark{color:var(--green)}
+.gta-row.off .gta-mark{color:var(--warn)}
+.gta-row.off .gta-val{color:var(--warn)}
+.gta-wait{color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
@@ -1213,6 +1270,28 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
   <input type="file" id="cam-input" accept="image/*" capture="environment"
          style="display:none" onchange="handleCameraPhoto(this)">
 
+  <!-- ═══ GTA TARGET PICKER — the step before the wheels turn ═══════════ -->
+  <div class="gta-picker" id="gta-picker">
+    <div class="gta-card">
+      <div class="gta-head">
+        <span>TARGET CYCLE</span>
+        <button class="drawer-close" onclick="closeTargetPicker()" aria-label="Cancel">✕</button>
+      </div>
+      <p class="gta-hint">Pick the VBC class this run must land in. You will see
+        all five criteria live while you drive.</p>
+      <div class="gta-class-grid" id="gta-class-grid"></div>
+      <div class="gta-ref-row">
+        <label for="gta-ref-select">Or match a cycle you already drove</label>
+        <select id="gta-ref-select" onchange="pickTargetRecording(this)"></select>
+      </div>
+      <div class="gta-target-sum" id="gta-target-sum"></div>
+      <div class="gta-actions">
+        <button class="btn" onclick="clearTarget()">No target</button>
+        <button class="btn go gta-start" onclick="startRecWithTarget()">● START RECORDING</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Recording indicator -->
   <div class="rec-ind" id="rec-ind">
     <div class="rec-dot"></div>
@@ -1220,6 +1299,10 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
       <div class="rec-label">Recording route</div>
       <div class="rec-stats"       id="rec-stats">0 pts · 0.0 km</div>
       <div class="rec-stops-count" id="rec-sc">0 stops detected</div>
+      <div class="gta-live" id="gta-live" style="display:none">
+        <div class="gta-live-head" id="gta-live-head"></div>
+        <div class="gta-live-rows" id="gta-live-rows"></div>
+      </div>
     </div>
     <button class="btn stop-nav" style="padding:5px 10px;font-size:11px;min-height:30px" onclick="toggleRec()">■ Stop</button>
   </div>
@@ -1566,6 +1649,115 @@ function calcCycleMetrics(points,nStops){
 }
 
 const VBC_CRIT_LABELS={spk:'stops/km',spd:'avg speed',dspd:'drive speed',vmax:'max speed',idle:'idle %'};
+/* ══ GTA TARGET ═══════════════════════════════════════════════════════════
+   The app exists to record cycles that meet the GTA/VBC criteria, and to let
+   a driver repeat one. Both need the same thing: a TARGET to aim at, and
+   feedback while there is still time to act on it.
+
+   A target is a VBC class (Ci1…LH2). It can be chosen directly, or taken
+   from a saved cycle — repeating a run means aiming at the class that run
+   achieved, with its measured values shown as the reference to match.
+
+   Scoring is NOT reimplemented here. calcCycleMetrics is the single source
+   of truth for the five criteria; this layer only compares its output to the
+   target's ranges. A second implementation would drift from the first.     */
+let _gtaLiveT=0;
+/* Re-scores what has been recorded so far and paints the live panel. The
+   five criteria are cumulative aggregates, so they are meaningful from the
+   first minute — that is what makes coaching during the run possible at
+   all. Throttled to 2 s: the numbers move slowly and the driver is
+   glancing, not reading. */
+function renderGTALive(force){
+  const panel=el('gta-live'); if(!panel)return;
+  if(!isRec){panel.style.display='none';return;}
+  const now=Date.now();
+  if(!force&&now-_gtaLiveT<2000)return;
+  _gtaLiveT=now;
+  panel.style.display='';
+  const ev=GTATarget.evaluate(recPoints,recStops.length);
+  const head=el('gta-live-head'), body=el('gta-live-rows');
+  if(!ev.ready){
+    if(head)head.textContent=GTATarget.active()
+      ? 'Target '+GTATarget.classId+' · warming up'
+      : 'No target · warming up';
+    if(body)body.innerHTML='<div class="gta-row gta-wait">Needs ~30 s of movement</div>';
+    return;
+  }
+  if(head){
+    head.innerHTML=GTATarget.active()
+      ? `Target <b>${GTATarget.classId}</b> <span class="gta-score${ev.matched===5?' full':''}">`+
+        `${ev.matched}/5</span>`
+      : 'No target · live metrics';
+  }
+  if(body){
+    body.innerHTML=ev.rows.map(r=>{
+      const mark=r.ok===null?'':r.ok?'✓':(r.dir==='low'?'▲':'▼');
+      const cls=r.ok===null?'':r.ok?'ok':'off';
+      const want=r.range?`${r.range[0]}–${r.range[1]}`:'';
+      const ref=r.ref!=null?`<span class="gta-ref">ref ${r.ref}</span>`:'';
+      return `<div class="gta-row ${cls}">
+        <span class="gta-lbl">${r.label}</span>
+        <span class="gta-val">${r.val}${r.unit}</span>
+        <span class="gta-want">${want}</span>${ref}
+        <span class="gta-mark">${mark}</span></div>`;
+    }).join('');
+  }
+}
+
+const GTA_TARGET_KEY='gpx-gta-target';
+const GTATarget={
+  classId:null,      // 'Ci2' … | null when the driver records untargeted
+  refName:null,      // saved cycle the target came from, if any
+  refMetrics:null,   // that cycle's measured values, to match rather than just fit
+
+  cls(){return VBC_CLASSES.find(c=>c.id===this.classId)||null;},
+  active(){return !!this.cls();},
+
+  setClass(id){
+    this.classId=VBC_CLASSES.some(c=>c.id===id)?id:null;
+    this.refName=null;this.refMetrics=null;this._save();
+  },
+  /* aim at what a saved cycle achieved — the repeatability case */
+  setFromRecording(idx){
+    const rec=savedRecs[idx]; if(!rec)return false;
+    const sc=calcGTAScore(rec.points||[],rec.stops||[]);
+    if(!sc||!sc.metrics)return false;
+    this.classId=sc.cls;this.refName=rec.name||('Recording '+idx);
+    this.refMetrics=sc.metrics;this._save();
+    return true;
+  },
+  clear(){this.classId=null;this.refName=null;this.refMetrics=null;this._save();},
+
+  /* live evaluation of whatever has been recorded so far */
+  evaluate(points,nStops){
+    const c=this.cls();
+    const m=calcCycleMetrics(points,nStops);
+    if(!m)return{ready:false,cls:c,metrics:null,rows:[],matched:0};
+    const rows=[
+      {key:'spk', label:'Stops / km', val:m.stopsKm,  range:c?c.spk:null,  ref:this.refMetrics?this.refMetrics.stopsKm:null, unit:''},
+      {key:'spd', label:'Avg speed',  val:m.avg,      range:c?c.spd:null,  ref:this.refMetrics?this.refMetrics.avg:null,     unit:' km/h'},
+      {key:'dspd',label:'Drive speed',val:m.drive,    range:c?c.dspd:null, ref:this.refMetrics?this.refMetrics.drive:null,   unit:' km/h'},
+      {key:'vmax',label:'Max speed',  val:m.vmax,     range:c?c.vmax:null, ref:this.refMetrics?this.refMetrics.vmax:null,    unit:' km/h'},
+      {key:'idle',label:'Idle',       val:m.idlePct,  range:c?c.idle:null, ref:this.refMetrics?this.refMetrics.idlePct:null, unit:'%'},
+    ];
+    rows.forEach(r=>{
+      r.ok = r.range ? (r.val>=r.range[0]&&r.val<=r.range[1]) : null;
+      // which way to correct, so the panel can say more than "wrong"
+      r.dir = !r.range ? '' : r.val<r.range[0] ? 'low' : r.val>r.range[1] ? 'high' : 'in';
+    });
+    return{ready:true,cls:c,metrics:m,rows,
+      matched:rows.filter(r=>r.ok).length,total:5};
+  },
+
+  _save(){try{localStorage.setItem(GTA_TARGET_KEY,JSON.stringify(
+    {classId:this.classId,refName:this.refName,refMetrics:this.refMetrics}));}catch(e){}},
+  restore(){
+    try{const s=JSON.parse(localStorage.getItem(GTA_TARGET_KEY)||'null');
+      if(s){this.classId=s.classId||null;this.refName=s.refName||null;
+            this.refMetrics=s.refMetrics||null;}}catch(e){}
+  },
+};
+
 function calcGTAScore(points,stopsArr){
   const m=calcCycleMetrics(points,(stopsArr||[]).length);
   if(!m)return{cls:'—',matched:null,total:5,metrics:null,detail:null};
@@ -3662,6 +3854,7 @@ function onGPS(pos){
 
     _recWin.push({lat,lng,t:fixT});
     if(_recWin.length>10)_recWin.shift();
+    renderGTALive();
 
     let effKmh;
     if(speed!=null) effKmh=speed*3.6;
@@ -3772,8 +3965,14 @@ function onGPS(pos){
     // moved >= 3 m, with a 10 s keep-alive point for time continuity.
     const lastRP=recPoints[recPoints.length-1];
     const movedM=lastRP?haversine(lastRP.lat,lastRP.lng,lat,lng)*1000:Infinity;
-    if(!lastRP||movedM>=3||Date.now()-lastRP.t>=10000){
-      recPoints.push({lat,lng,t:Date.now(),speed:speed,alt:altitude});
+    // Stamp points with the FIX's clock, not the wall clock. The stop FSM
+    // already uses pos.timestamp; using Date.now() here meant the two could
+    // disagree, and every downstream metric (speed, idle %, duration) is
+    // derived from these timestamps. On a live device the two are the same
+    // to the millisecond, so this changes nothing in the field — it makes
+    // the recording honest about which clock it came from.
+    if(!lastRP||movedM>=3||fixT-lastRP.t>=10000){
+      recPoints.push({lat,lng,t:fixT,speed:speed,alt:altitude});
       // Draw live track
       if(!recLayer){recLayer=L.polyline([[lat,lng]],{color:'#00b0ff',weight:3,opacity:.85}).addTo(map)}
       else recLayer.addLatLng([lat,lng]);
@@ -4787,7 +4986,51 @@ function showAlert(type,msg){
 }
 
 // ── RECORDING ──────────────────────────────────────────
-function toggleRec(){if(!isRec)startRec();else stopRec()}
+function toggleRec(){if(!isRec)openTargetPicker();else stopRec()}
+
+/* The target is chosen BEFORE the wheels turn — once the cycle is running
+   there is nothing useful to aim at. */
+function openTargetPicker(){
+  GTATarget.restore();
+  renderTargetPicker();
+  el('gta-picker').classList.add('on');
+}
+function closeTargetPicker(){el('gta-picker').classList.remove('on');}
+function pickTargetClass(id){GTATarget.setClass(id);renderTargetPicker();}
+function pickTargetRecording(sel){
+  const i=+sel.value;
+  if(i>=0&&GTATarget.setFromRecording(i))renderTargetPicker();
+}
+function clearTarget(){GTATarget.clear();renderTargetPicker();}
+function startRecWithTarget(){closeTargetPicker();startRec();}
+
+function renderTargetPicker(){
+  const box=el('gta-class-grid'); if(!box)return;
+  box.innerHTML=VBC_CLASSES.map(c=>
+    `<button class="gta-cls${GTATarget.classId===c.id?' sel':''}"
+       onclick="pickTargetClass('${c.id}')">
+       <b>${c.id}</b>
+       <span>${c.spd[0]}–${c.spd[1]} km/h</span>
+       <span>${c.spk[0]}–${c.spk[1]} st/km</span>
+     </button>`).join('');
+  const sel=el('gta-ref-select');
+  if(sel){
+    const opts=savedRecs.map((r,i)=>r?`<option value="${i}">${(r.name||'Recording '+i)
+      .replace(/</g,'&lt;')}</option>`:'').join('');
+    sel.innerHTML='<option value="-1">— pick a saved cycle —</option>'+opts;
+  }
+  const sum=el('gta-target-sum');
+  if(sum){
+    if(GTATarget.active()){
+      const c=GTATarget.cls();
+      sum.innerHTML=`Target <b>${c.id}</b>`+
+        (GTATarget.refName?` · matching <b>${GTATarget.refName.replace(/</g,'&lt;')}</b>`:'')+
+        `<br><span class="gta-ranges">avg ${c.spd[0]}–${c.spd[1]} · drive ${c.dspd[0]}–${c.dspd[1]}`+
+        ` · vmax ${c.vmax[0]}–${c.vmax[1]} · idle ${c.idle[0]}–${c.idle[1]}% · ${c.spk[0]}–${c.spk[1]} st/km</span>`;
+    } else sum.innerHTML='<span class="gta-ranges">No target — the cycle is still scored, '+
+      'but nothing is checked while you drive.</span>';
+  }
+}
 
 function startRec(){
   if(!navigator.geolocation){alert('Geolocation not available.');return}
@@ -4797,6 +5040,7 @@ function startRec(){
   routePts=[];maneuvers=[];totalRouteDist=0;
 
   isRec=true;recPoints=[];recStops=[];recStopCandidate=null;_recWin=[];
+  _gtaLiveT=0;renderGTALive(true);
   try{localStorage.removeItem(INFLIGHT_KEY);}catch(e){}
   _lastFlush=Date.now();
   shState='hidden';applySheet();
@@ -4813,6 +5057,7 @@ function startRec(){
 
 function stopRec(){
   isRec=false;
+  try{renderGTALive(true);}catch(e){}   // the live panel belongs to recording
   // Close open stop if any
   if(recStopCandidate?.marked&&recStops.length>0){
     recStops[recStops.length-1].dur_s=Math.round((Date.now()-recStops[recStops.length-1].startT)/1000);
@@ -4835,7 +5080,12 @@ function stopRec(){
   const score=calcGTAScore(recPoints,recStops);
   const elev=calcElevGain(recPoints);
   const time_s=Math.round((recPoints[recPoints.length-1].t-recPoints[0].t)/1000);
-  const rec={name,points:[...recPoints],stops:[...recStops],date:new Date(),dist,score,elev,time_s};
+  // what this run was aiming at, so the result can be read as hit or miss
+  // rather than just as a class
+  const target=GTATarget.active()
+    ? {classId:GTATarget.classId,refName:GTATarget.refName||null}
+    : null;
+  const rec={name,points:[...recPoints],stops:[...recStops],date:new Date(),dist,score,elev,time_s,target};
   savedRecs.push(rec);
   const idx=savedRecs.length-1;
   renderRecCard(rec,idx);
@@ -4846,7 +5096,12 @@ function stopRec(){
   // Auto-load the recording just saved: route + stops appear on the map
   // and ▶ Nav is ready — no need to hunt for the Load button.
   loadRec(idx);
-  showAlert('arrived',`✓ ${name} · GTA ${score.cls}${score.matched!=null?' '+score.matched+'/5':''}${elev!=null?' · +'+elev+' m':''} · tap START`);
+  // the headline is whether the target was met, not just which class it fell in
+  const hit = target && score.cls===target.classId && score.matched===5;
+  const verdict = !target ? `GTA ${score.cls}`
+    : hit ? `✓ ${target.classId} MET`
+    : `${target.classId} target · got ${score.cls} ${score.matched}/5`;
+  showAlert('arrived',`✓ ${name} · ${verdict}${elev!=null?' · +'+elev+' m':''} · tap START`);
   if(score.matched!=null)speakText(`Cycle saved. Class ${score.cls}, ${score.matched} of 5 criteria.`,true);
 }
 
