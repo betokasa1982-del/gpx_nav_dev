@@ -853,7 +853,8 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
    selectors, which outrank every class chain regardless of source order.
    If a future skin needs to move these cards, it must use IDs too.        */
 body.cockpit #hud-instr{
-  position:absolute!important;left:14px!important;top:60px!important;
+  /* clear of the rail: at left:14px the distance sat behind it (field, 22 Sep) */
+  position:fixed!important;left:calc(var(--rail-w) + 14px)!important;top:60px!important;
   right:auto!important;bottom:auto!important;width:300px!important;
   min-height:0!important;height:auto!important;max-height:none!important;
   padding:18px 20px 14px!important;overflow:hidden!important;
@@ -1168,6 +1169,13 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
   .gta-card-val{font-size:24px}
   .gta-card-foot{font-size:12px}
 }
+
+/* OFF ROUTE — the one state that must never be mistaken for a turn cue.
+   The word "OFF ROUTE" in the card is the primary signal; the colour only
+   reinforces it, never carries it alone. */
+body.off-route #hud-instr{border-color:var(--red)!important;
+  box-shadow:0 0 0 2px rgba(255,23,68,.35)!important}
+body.off-route .hud-instr-action{color:var(--red)!important}
 </style>
 </head>
 <body>
@@ -3153,6 +3161,7 @@ function stopNav(){
   if(Sequence.active)Sequence.stop();
   Playback.stop();
   CycleGate.reset();
+  try{resetOffRoute();}catch(e){}   // deviation state is per-run
   try{updBigStart()}catch(e){}
   el('nav-hud').classList.remove('on');el('hud-toggle').classList.remove('on');el('hud-voice').style.display='none';
   if(window.speechSynthesis)window.speechSynthesis.cancel();
@@ -3570,6 +3579,95 @@ function _routeBearingAt(routeM){
 }
 
 /* §13: STRAIGHT / CURVE / TURN, plus where to draw the arrow */
+/* ══ NAV GUIDANCE — what the card actually tells the driver ═══════════════
+   The card used to print `anchorM - routeProgressM`, which is where the ARROW
+   is drawn (50 m at rest, up to 150 m at speed) — a rendering constant shown
+   as if it were a navigation distance. That is why it read "50 m" forever.
+
+   A recorded cycle is a line, not a road network, so the honest facts are:
+     1. have I left the line?      ← the only thing that makes it trustworthy
+     2. where is the next decision, and how far is it REALLY?
+     3. if there is none, how far to the end of the cycle?
+   Each is a measured quantity with a name, in that order of importance. */
+const NAV_GUIDE_CFG={
+  offRouteMinM : 35,   // below this, GPS noise; never cry wolf
+  offRouteAccF : 2.5,  // ...scaled by the fix's own accuracy
+  offConfirm   : 2,    // consecutive fixes before declaring OFF ROUTE
+  backConfirm  : 2,    // ...and before clearing it
+};
+let _offRouteN=0,_onRouteN=0,_offRoute=false;
+
+/* maneuver vocabulary → what the driver is being asked to do */
+function maneuverKind(t){
+  if(t==='left'||t==='right'||t==='shl'||t==='shr')return 'TURN';
+  if(t==='sl'||t==='sr')return 'CURVE';
+  return 'STRAIGHT';
+}
+function maneuverDir(t){
+  if(t==='left'||t==='shl'||t==='sl')return 'left';
+  if(t==='right'||t==='shr'||t==='sr')return 'right';
+  return null;
+}
+function maneuverLabel(t){
+  return {left:'TURN LEFT',right:'TURN RIGHT',shl:'SHARP LEFT',shr:'SHARP RIGHT',
+          sl:'KEEP LEFT',sr:'KEEP RIGHT'}[t]||'CONTINUE ON ROUTE';
+}
+
+/* off-route needs persistence in both directions: one bad fix must not raise
+   the alarm, and one good fix must not clear a real deviation */
+function _updOffRoute(accuracyM){
+  const xt=matchState&&isFinite(matchState.crossTrackM)?Math.abs(matchState.crossTrackM):null;
+  if(xt==null){_offRouteN=0;_onRouteN=0;return _offRoute;}
+  const lim=Math.max(NAV_GUIDE_CFG.offRouteMinM,(accuracyM||0)*NAV_GUIDE_CFG.offRouteAccF);
+  if(xt>lim){_onRouteN=0;if(++_offRouteN>=NAV_GUIDE_CFG.offConfirm)_offRoute=true;}
+  else{_offRouteN=0;if(++_onRouteN>=NAV_GUIDE_CFG.backConfirm)_offRoute=false;}
+  return _offRoute;
+}
+function resetOffRoute(){_offRouteN=0;_onRouteN=0;_offRoute=false;}
+
+/* A warning mark, deliberately not an arrow: any arrow shown while the
+   vehicle is off the recorded line reads as "keep going this way". */
+function offRouteGlyph(size){
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none"
+    stroke="#ff1744" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+    aria-label="Off route">
+    <path d="M12 3.5 1.8 21h20.4L12 3.5z"/>
+    <path d="M12 10v4.6"/><circle cx="12" cy="17.8" r="1.1" fill="#ff1744" stroke="none"/>
+  </svg>`;
+}
+
+function navGuidance(accuracyM){
+  const total=routeCumM.length?routeCumM[routeCumM.length-1]:0;
+  const here=routeProgressM;
+
+  // 1 — off the recorded line
+  if(_updOffRoute(accuracyM)){
+    const xt=Math.round(Math.abs(matchState.crossTrackM));
+    return {mode:'OFF_ROUTE',kind:'OFF',dir:null,distM:xt,
+      action:'OFF ROUTE',detail:`${xt} m off — return to the route`};
+  }
+
+  // 2 — the next real decision, at its real distance
+  const next=(maneuvers||[]).find(m=>m.type!=='straight'&&m.type!=='arrive'
+                                  &&(m.distFromStart*1000)>here+5);
+  if(next){
+    const d=Math.max(0,next.distFromStart*1000-here);
+    const after=(maneuvers||[]).find(m=>m.type!=='straight'&&m.type!=='arrive'
+                                  &&(m.distFromStart*1000)>next.distFromStart*1000+5);
+    const detail=after
+      ? `then ${maneuverLabel(after.type).toLowerCase()} in ${fmtDist(
+          Math.max(0,after.distFromStart*1000-next.distFromStart*1000))}`
+      : 'last turn of the cycle';
+    return {mode:'DECISION',kind:maneuverKind(next.type),dir:maneuverDir(next.type),
+      distM:d,action:maneuverLabel(next.type),detail};
+  }
+
+  // 3 — nothing left to decide: say what the number means
+  const toEnd=Math.max(0,total-here);
+  return {mode:'CRUISE',kind:'STRAIGHT',dir:null,distM:toEnd,
+    action:'CONTINUE ON ROUTE',detail:'no more turns — to the end of the cycle'};
+}
+
 function computeGuidance(routeM,speedKmh){
   const out={kind:'STRAIGHT',dir:null,deltaDeg:0,overM:0,
              anchorM:routeM,bearing:null,entryBearing:null,confident:false};
@@ -4830,41 +4928,34 @@ function updInstruction(nearIdx,distFromStart){
   /* Playback owns visual guidance.  The arrow is derived from route
      geometry, never from the legacy maneuver text. */
   if(Playback.active){
-    const g=computeGuidance(routeProgressM,Math.max(0,calcSpeedFromPoints(
-      currentPos.lat,currentPos.lng)??0));
-    const dirLabel=g.kind==='TURN'
-      ? `Turn ${g.dir||'ahead'}`
-      : g.kind==='CURVE'
-        ? 'Follow the road'
-        : 'Continue on route';
-
-    el('hud-icon-arrow').innerHTML=guidanceArrowSvg(g.kind,g.dir,88);
-    el('hud-icon').className=`hud-instr-icon ${g.kind==='TURN'?'turn':g.kind==='CURVE'?'straight':'straight'}`;
+    const g=navGuidance(currentPos&&currentPos.acc);
+    el('hud-icon-arrow').innerHTML = g.kind==='OFF'
+      ? offRouteGlyph(88)          // never a direction while off the line
+      : guidanceArrowSvg(g.kind,g.dir,88);
+    el('hud-icon').className='hud-instr-icon '+(g.kind==='TURN'?'turn':'straight');
     el('hud-icon-lbl').textContent='';
 
-    const ahead=Math.max(0,(g.anchorM||routeProgressM)-routeProgressM);
     const distEl=el('hud-dist');
-    if(g.kind==='STRAIGHT'){
-      distEl.textContent=fmtDist(ahead);
-      distEl.className='hud-instr-dist far';
-      el('hud-action').textContent='Continue on route';
+    if(g.mode==='OFF_ROUTE'){
+      // the deviation IS the headline — a turn instruction while off the line
+      // is worse than no instruction
+      distEl.textContent=fmtDist(g.distM);
+      distEl.className='hud-instr-dist close';
     }else{
-      distEl.textContent=fmtDist(ahead);
-      distEl.className='hud-instr-dist '+(ahead>200?'far':ahead>50?'medium':'close');
-      el('hud-action').textContent=dirLabel;
+      distEl.textContent=fmtDist(g.distM);
+      distEl.className='hud-instr-dist '+
+        (g.mode==='CRUISE'?'far':g.distM>200?'far':g.distM>50?'medium':'close');
     }
-    el('hud-detail').textContent=g.kind==='CURVE'
-      ? 'Road curve — follow the highlighted route'
-      : g.kind==='TURN'
-        ? 'Follow the highlighted route'
-        : 'Stay on the highlighted route';
+    el('hud-action').textContent=g.action;
+    el('hud-detail').textContent=g.detail;
+    document.body.classList.toggle('off-route',g.mode==='OFF_ROUTE');
 
-    const upcoming=maneuvers.filter(m=>m.idx>nearIdx&&m.distFromStart>distFromStart);
-    const nextNext=upcoming.find(m=>m.type!=='arrive');
+    // the preview now names the driver's actual task: the next stop
+    const nxStop=stops.find(s=>s.state!=='done');
     const previewEl=el('hud-preview');
-    if(nextNext){
-      const d2=Math.max(0,(nextNext.distFromStart*1000)-routeProgressM);
-      previewEl.textContent=`Next decision · ${fmtDist(d2)}`;
+    if(nxStop&&nxStop.routeDistanceM!=null){
+      const ds=Math.max(0,nxStop.routeDistanceM-routeProgressM);
+      previewEl.textContent=`Next stop · ${fmtDist(ds)}`;
       previewEl.classList.add('visible');
     }else{
       previewEl.classList.remove('visible');
@@ -4880,10 +4971,11 @@ function updInstruction(nearIdx,distFromStart){
 
     // No generic turn voice in Playback. Stop/event voice remains owned by
     // the Playback Voice Scheduler elsewhere in the application.
-    el('peek-icon').innerHTML=guidanceArrowSvg(g.kind,g.dir,34);
-    el('peek-name').textContent=dirLabel;
-    el('peek-sub').textContent=g.kind==='STRAIGHT'?'':fmtDist(ahead);
-    el('peek-dist').textContent='';
+    el('peek-icon').innerHTML = g.kind==='OFF'
+      ? offRouteGlyph(30) : guidanceArrowSvg(g.kind,g.dir,34);
+    el('peek-name').textContent=g.action;
+    el('peek-sub').textContent=g.detail;
+    el('peek-dist').textContent=fmtDist(g.distM);
     return;
   }
 

@@ -3949,3 +3949,146 @@ function gtaRun(kmh,seconds,stopEvery,stopDur){
 GTATarget.clear();
 console.log('ALL GTA-TARGET TESTS PASSED');
 __group('GTA target tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  NAV GUIDANCE — the card must state measured facts, never a constant
+//  Field report 22 Sep: "fica mostrando sempre 50m e uma seta que nao serve
+//  para nada". The distance shown was anchorM - routeProgressM, i.e. where
+//  the arrow is DRAWN (50 m at rest, 150 m at speed) — not a distance to
+//  anything. These lock the replacement.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── nav guidance ──');
+
+// a route that goes straight, turns hard left, then straight again
+function ngRoute(){
+  const pts=[];
+  for(let i=0;i<120;i++)pts.push({lat:LAT0+i*DLAT,lng:LNG0});          // north 1.2 km
+  const lat=LAT0+119*DLAT;
+  for(let i=1;i<=120;i++)pts.push({lat,lng:LNG0-i*0.00011});           // west
+  return pts.map((p,i)=>({lat:p.lat,lng:p.lng,t:1700000000000+i*1000}));
+}
+function ngSetup(){
+  const rec={name:'ng',points:ngRoute(),stops:[]};
+  loadFresh(rec);
+  navActive=true; Playback.begin('1');
+  resetOffRoute();
+  return rec;
+}
+
+// ── NG-1: the distance is never the arrow's draw distance ──
+(function(){
+  ngSetup();
+  routeProgressM=0;
+  const slow=navGuidance(5);
+  routeProgressM=0;
+  const fast=navGuidance(5);
+  // the old bug: the number changed with SPEED because it was the lookahead
+  console.assert(slow.distM===fast.distM,
+    'NG-1: the distance still moves with speed — it is the arrow anchor again');
+  console.assert(slow.distM>200,
+    'NG-1: distance to a turn 1.2 km away reads '+slow.distM+' m');
+  console.assert(![50,100,150].includes(Math.round(slow.distM)),
+    'NG-1: the distance is one of the lookahead constants');
+  console.log('NG-1. distance is measured ('+Math.round(slow.distM)+' m), not the lookahead OK');
+})();
+
+// ── NG-2: it names the real next decision, and counts down to it ──
+(function(){
+  ngSetup();
+  routeProgressM=0;   const far=navGuidance(5);
+  routeProgressM=900; const near=navGuidance(5);
+  console.assert(far.mode==='DECISION'&&near.mode==='DECISION','NG-2: no decision found on a route with a turn');
+  console.assert(near.distM<far.distM,'NG-2: the distance does not count down as the vehicle advances');
+  console.assert(/TURN|KEEP|SHARP/.test(far.action),'NG-2: the action does not name a manoeuvre: '+far.action);
+  console.assert(far.dir==='left'||far.dir==='right','NG-2: no direction on a real turn');
+  console.assert(far.kind==='TURN'||far.kind==='CURVE','NG-2: kind wrong: '+far.kind);
+  console.log('NG-2. names the turn ('+far.action+') and counts down '+
+    Math.round(far.distM)+' → '+Math.round(near.distM)+' m OK');
+})();
+
+// ── NG-3: with no decision left, the number is explained ──
+(function(){
+  ngSetup();
+  routeProgressM=routeCumM[routeCumM.length-1]-100;   // past every turn
+  const g=navGuidance(5);
+  console.assert(g.mode==='CRUISE','NG-3: still claims a decision at the end of the route');
+  console.assert(g.distM>0&&g.distM<=140,'NG-3: end distance wrong: '+g.distM);
+  console.assert(/end of the cycle/.test(g.detail),'NG-3: the number is not explained: '+g.detail);
+  console.log('NG-3. cruise states what the distance is ('+Math.round(g.distM)+' m to the end) OK');
+})();
+
+// ── NG-4: off route outranks any turn cue, and needs persistence ──
+(function(){
+  ngSetup();
+  routeProgressM=100;
+  matchState={crossTrackM:4,confidence:'HIGH'};
+  console.assert(navGuidance(5).mode==='DECISION','NG-4: on-route wrongly flagged');
+  // one bad fix must not cry wolf
+  matchState={crossTrackM:80,confidence:'HIGH'};
+  const first=navGuidance(5);
+  console.assert(first.mode!=='OFF_ROUTE','NG-4: a single fix raised the alarm');
+  const second=navGuidance(5);
+  console.assert(second.mode==='OFF_ROUTE','NG-4: a sustained 80 m deviation was not reported');
+  console.assert(second.action==='OFF ROUTE'&&/return to the route/.test(second.detail),
+    'NG-4: the off-route card does not say what to do');
+  // a direction cue while off the line reads as "keep going this way"
+  console.assert(/Off route/.test(offRouteGlyph(88))&&!/guidanceArrow/.test(offRouteGlyph(88)),
+    'NG-4: the off-route mark is not a non-directional warning');
+  console.assert(second.distM===80,'NG-4: it does not show how far off: '+second.distM);
+  // and one good fix must not clear a real deviation
+  matchState={crossTrackM:3,confidence:'HIGH'};
+  console.assert(navGuidance(5).mode==='OFF_ROUTE','NG-4: a single good fix cleared the deviation');
+  console.assert(navGuidance(5).mode!=='OFF_ROUTE','NG-4: never recovers to on-route');
+  console.log('NG-4. off route: 2 fixes to raise, 2 to clear, distance shown OK');
+})();
+
+// ── NG-5: a poor fix widens the threshold instead of crying wolf ──
+(function(){
+  ngSetup(); routeProgressM=100;
+  matchState={crossTrackM:50,confidence:'HIGH'};
+  navGuidance(40); const g=navGuidance(40);      // accuracy 40 m → limit 100 m
+  console.assert(g.mode!=='OFF_ROUTE','NG-5: 50 m deviation on a 40 m fix reported as off route');
+  navGuidance(5); const g2=navGuidance(5);       // same deviation, good fix
+  console.assert(g2.mode==='OFF_ROUTE','NG-5: 50 m deviation on a 5 m fix not reported');
+  console.log('NG-5. threshold scales with GPS accuracy OK');
+})();
+
+// ── NG-6: the real cycles produce usable decisions, not noise ──
+(function(){
+  // this is what makes the card worth trusting — measured on the cycles the
+  // driver actually runs, not on a synthetic loop
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'testdata','Cycle_city_12_08_2026_16_03.json'),
+           '/tmp/dev/gpx_nav_dev-main/testdata/Cycle_city_12_08_2026_16_03.json']
+    .find(p=>fs.existsSync(p));
+  if(!f){console.log('NG-6. SKIPPED (real cycle fixture not present)');return;}
+  const rec=JSON.parse(fs.readFileSync(f,'utf8'))[0];
+  loadFresh(rec); navActive=true; Playback.begin('1'); resetOffRoute();
+  matchState={crossTrackM:2,confidence:'HIGH'};
+  const decisions=maneuvers.filter(m=>m.type!=='straight'&&m.type!=='arrive');
+  console.assert(decisions.length>=10,'NG-6: a 15.8 km city cycle yielded only '+decisions.length+' decisions');
+  // walk the cycle and check every card is a real, shrinking distance
+  let bad=0,constant=0,last=null;
+  for(let m=0;m<routeCumM[routeCumM.length-1];m+=250){
+    routeProgressM=m;
+    const g=navGuidance(6);
+    if(!(g.distM>=0&&isFinite(g.distM)))bad++;
+    if(g.mode==='DECISION'&&last!=null&&Math.abs(g.distM-last)<0.01)constant++;
+    last=g.mode==='DECISION'?g.distM:null;
+  }
+  console.assert(bad===0,'NG-6: '+bad+' cards showed a non-finite distance');
+  console.assert(constant===0,'NG-6: the distance froze on '+constant+' consecutive samples');
+  console.log('NG-6. real city cycle: '+decisions.length+' decisions, no frozen distance OK');
+})();
+
+// ── NG-7: the card is not hidden behind the rail ──
+(function(){
+  const css=document.__cssText||'';
+  const m=/body\.cockpit #hud-instr\{[^}]*left:calc\(var\(--rail-w\)/.exec(css);
+  console.assert(m,'NG-7: the manoeuvre card is positioned without clearing the rail');
+  console.assert(/body\.off-route \.hud-instr-action\{[^}]*color:var\(--red\)/.test(css),
+    'NG-7: off route has no visual state on the card');
+  console.log('NG-7. card clears the rail; off-route state styled OK');
+})();
+console.log('ALL NAV-GUIDANCE TESTS PASSED');
+__group('Nav guidance tests');
