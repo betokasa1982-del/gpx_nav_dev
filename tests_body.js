@@ -4548,3 +4548,188 @@ const _realSpeakF22=speakText; speakText=(t,f)=>{_spoken.push(String(t));};
 speakText=_realSpeakF22;
 console.log('ALL FIELD 22/09 TESTS PASSED');
 __group('Field cycle 22/09 tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FIELD 22/09 (second drive) — storage, the AT-STOP surface, live GTA
+//  Reported after updating the app:
+//    · "o ciclo que eu havia gravado nao estava na lista"
+//    · "a reproducao travou depois do stop 3" (TIME LEFT 00:18, 0 km/h)
+//    · "o cronometro na parada nao existe ou e impossivel de visualizar"
+//    · "os eventos deveriam ser imagems bem visiveis durante a parada"
+//    · repeating a cycle gives the driver no GTA feedback
+//  Measured causes: a cycle with photos is 0.39 MB of JSON — 0.78 MB in
+//  localStorage — so six cycles filled the ~5 MB origin quota; and one
+//  corrupt entry made JSON.parse throw for the WHOLE list. The stop surface
+//  was redrawn only from onGPS, which Android stops delivering while parked.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── field 22/09 (storage · at-stop · live GTA) ──');
+(function(){
+  const S_fs=require('fs'),S_path=require('path');
+  const html=S_fs.readFileSync(
+    [S_path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+      .find(p=>S_fs.existsSync(p)),'utf8');
+  const code=html.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+
+  // ── STORE-1: cycles are stored where size is not a cliff ──
+  console.assert(/indexedDB/.test(code),'STORE-1: cycles are still confined to localStorage');
+  console.assert(/CYCLE_STORE/.test(code)&&/cycleDBWriteAll/.test(code),
+    'STORE-1: no cycle object store');
+  console.log('STORE-1. cycles stored in IndexedDB OK');
+
+  // ── STORE-2: the localStorage mirror must not carry the photos, or it
+  //             reintroduces the very quota that lost the cycle ──
+  const mirror=/function saveRecsMirror\(\)\{[\s\S]*?\n\}/.exec(code);
+  console.assert(mirror,'STORE-2: no mirror function');
+  console.assert(mirror&&/photo:null/.test(mirror[0]),
+    'STORE-2: the localStorage mirror still writes stop photos');
+  console.log('STORE-2. localStorage mirror is photo-free OK');
+
+  // ── STORE-3: a corrupt record may only lose itself ──
+  const loader=/function loadStoredRecordings\(\)\{[\s\S]*?\n\}\n/.exec(code);
+  console.assert(loader,'STORE-3: loader not found');
+  console.assert(loader&&/forEach\(\(r,i\)=>\{[\s\S]*?try\{/.test(loader[0]),
+    'STORE-3: records are not parsed one at a time');
+  // and prove it with the real function
+  const _recs=savedRecs.slice();
+  const good={name:'good',dist:1,date:new Date().toISOString(),
+    points:[{lat:57.7,lng:11.9,t:1},{lat:57.71,lng:11.9,t:2000}],stops:[]};
+  savedRecs.length=0;
+  localStorage.setItem('gpx-nav-recs',JSON.stringify([good,{name:'bad',points:null},good]));
+  loadStoredRecordings();
+  console.assert(savedRecs.length===2,
+    'STORE-3: a corrupt record took the list down with it ('+savedRecs.length+' of 2 recovered)');
+  // a completely unparseable blob must not throw
+  savedRecs.length=0;
+  localStorage.setItem('gpx-nav-recs','{truncated');
+  let threw=false; try{loadStoredRecordings();}catch(e){threw=true;}
+  console.assert(!threw,'STORE-3: an unreadable store threw instead of degrading');
+  localStorage.removeItem('gpx-nav-recs');
+  savedRecs.length=0;_recs.forEach(r=>savedRecs.push(r));
+  console.log('STORE-3. one corrupt record loses only itself OK');
+
+  // ── AS-1: the stop surface has a clock of its own ──
+  //          (the field freeze: redrawn only from onGPS, no fixes while parked)
+  console.assert(/function ensureAtStopClock\(\)\{[\s\S]*?setInterval\(/.test(code),
+    'AS-1: the AT STOP surface has no clock of its own');
+  console.assert(/id="atstop"/.test(html)&&/id="as-clock"/.test(html),
+    'AS-1: the AT STOP surface is not in the DOM');
+  console.log('AS-1. AT STOP surface ticks on its own 1 Hz clock OK');
+
+  // ── AS-2: dwell clock format — hh:mm:ss overflowed and clipped the digits ──
+  console.assert(fmtDwell(35)==='00:35','AS-2: 35 s rendered as '+fmtDwell(35));
+  console.assert(fmtDwell(95)==='01:35','AS-2: 95 s rendered as '+fmtDwell(95));
+  console.assert(fmtDwell(0)==='00:00','AS-2: 0 s rendered as '+fmtDwell(0));
+  console.assert(fmtDwell(3725)==='1:02:05','AS-2: an hour rendered as '+fmtDwell(3725));
+  console.assert(!/^00:/.test(fmtDwell(35).replace('00:','')),'AS-2: leading hour field returned');
+  console.log('AS-2. dwell clock reads mm:ss, hours only past an hour OK');
+
+  // ── AS-3: a number that is not moving must say so ──
+  console.assert(/TIMER NOT RUNNING/.test(code),
+    'AS-3: a stopped timer still shows a static number with no explanation');
+  console.assert(/OVER PLAN/.test(code),'AS-3: no over-plan state');
+  console.assert(/id="as-go"/.test(html)&&/atStopStart\(\)/.test(code),
+    'AS-3: the driver cannot start the stop timer from the driving screen');
+  console.log('AS-3. idle / running / over-plan states all reachable OK');
+
+  // ── AS-4: events are big tiles with a word, not colour alone ──
+  const ren=/function renderAtStop\(\)\{[\s\S]*?\n\}/.exec(code);
+  console.assert(ren&&/as-evt/.test(ren[0])&&/shortLabel/.test(ren[0]),
+    'AS-4: stop events are not rendered as labelled tiles');
+  console.assert(/stopEventSvg\(e,44\)/.test(ren?ren[0]:''),
+    'AS-4: the event glyph is not drawn at glance size');
+  const tile=/\.as-evt\{[^}]*\}/.exec(html);
+  console.assert(tile&&/min-height:96px/.test(tile[0]),'AS-4: event tiles are not glance-sized');
+  console.log('AS-4. event tiles are 96 px with a 44 px glyph and a word OK');
+
+  // ── SWEEP-1: the sweep walks only the head of the queue ──
+  //   Field evidence: the card read "4/8" with Stop 3 still current, i.e. a
+  //   stop further down the list had already been retired. On a closed cycle
+  //   the final stop anchors near the start and was swept in the first 80 m.
+  stops.length=0;
+  [[1,0],[2,500],[3,20]].forEach(([id,rd])=>stops.push(
+    {id,name:'Stop '+id,lat:57.7+id/1000,lng:11.9,routeDistanceM:rd,
+     state:'waiting',elapsed:0,dur_s:10,events:[],photo:null}));
+  stops[0].state='done';
+  routeProgressM=200;                    // past stop 3's anchor, before stop 2's
+  sweepPassedStops();
+  console.assert(stops[2].state==='waiting',
+    'SWEEP-1: a stop deeper in the cycle was retired while an earlier one was pending');
+  console.assert(stops[1].state==='waiting','SWEEP-1: the pending head stop was retired too early');
+  // and once the head IS passed, it retires and the walk continues
+  routeProgressM=700;
+  sweepPassedStops();
+  console.assert(stops[1].state==='done'&&stops[1].missed,'SWEEP-1: the passed head stop was not retired');
+  console.assert(stops[2].state==='done'&&stops[2].missed,'SWEEP-1: the walk did not continue past it');
+  console.log('SWEEP-1. sweep retires from the head of the queue only OK');
+
+  // ── SWEEP-2: never sweep the stop the bus is standing at ──
+  stops.forEach(s=>{s.state='waiting';s.missed=false;});
+  stops[0].state='current'; routeProgressM=99999;
+  sweepPassedStops();
+  console.assert(stops[0].state==='current','SWEEP-2: the current stop was retired');
+  console.assert(stops[1].state==='waiting','SWEEP-2: the walk continued past the current stop');
+  console.log('SWEEP-2. the walk stops at the stop being served OK');
+
+  // ── GTA-LIVE-1: the repeat verdict uses the SAME metrics as the final score ──
+  const rp=/function renderPlaybackGTA\(\)\{[\s\S]*?\n\}/.exec(code);
+  console.assert(rp&&/calcCycleMetrics\(/.test(rp[0]),
+    'GTA-LIVE-1: the live verdict computes its own metrics — it can disagree with the score');
+  console.assert(/function resetPlaybackGTA/.test(code),'GTA-LIVE-1: no per-run reset');
+  console.log('GTA-LIVE-1. live verdict and final score share calcCycleMetrics OK');
+
+  // ── GTA-LIVE-2: the target is the loaded cycle's own class ──
+  console.assert(/resetPlaybackGTA\(rec\.score&&rec\.score\.cls/.test(code),
+    'GTA-LIVE-2: playback does not take its target from the loaded cycle');
+  console.log('GTA-LIVE-2. the reference cycle\'s class is the target OK');
+
+  // ── GTA-LIVE-3: visible while driving — the LIVE CYCLE panel is hidden in
+  //                cockpit mode, so the verdict needs its own surface ──
+  console.assert(/body\.driver-mode \.lcm\{display:none!important\}/.test(html),
+    'GTA-LIVE-3: assumption changed — the LIVE CYCLE panel is no longer hidden while driving');
+  console.assert(/id="gtabar"/.test(html),'GTA-LIVE-3: no driver-facing GTA surface');
+  console.assert(/body\.cockpit \.gtabar\{display:block/.test(html),
+    'GTA-LIVE-3: the GTA strip is not shown in cockpit mode');
+  console.log('GTA-LIVE-3. GTA strip has its own surface, visible in cockpit OK');
+
+  // ── GTA-LIVE-4: all five criteria, each with a direction to correct ──
+  console.assert(/GB_KEYS=\[/.test(code),'GTA-LIVE-4: no criteria table for the strip');
+  const keys=(/GB_KEYS=\[([\s\S]*?)\];/.exec(code)||[])[1]||'';
+  ['spk','spd','dspd','vmax','idle'].forEach(k=>
+    console.assert(new RegExp("k:'"+k+"'").test(keys),'GTA-LIVE-4: criterion '+k+' missing from the strip'));
+  console.assert(/↑/.test(code)&&/↓/.test(code)&&/✓/.test(code),
+    'GTA-LIVE-4: the strip does not say which way to correct');
+  console.log('GTA-LIVE-4. five criteria, each with a correction direction OK');
+
+  // ── AS-5: one stop surface, not two — #nsc needs the id to be outranked ──
+  console.assert(/body\.at-stop #nsc,body\.cockpit\.at-stop #nsc\{display:none!important\}/.test(html),
+    'AS-5: the old stop card is not hidden while the AT STOP panel is up '+
+    '(body.cockpit #nsc forces display:block !important and outranks a class-only rule)');
+  console.log('AS-5. AT STOP replaces the Next Stop Card instead of stacking on it OK');
+  stops.length=0;
+})();
+console.log('ALL FIELD 22/09-B TESTS PASSED');
+__group('Field 22/09-B tests');
+
+// ── STORE-4: booting without IndexedDB must not throw ──────────────────────
+//   The no-IDB path (private mode, old WebViews) used to be deferred to a
+//   microtask, which accidentally hid a boot-order dependency: the loader ran
+//   before Sequence existed. Made synchronous, it threw at startup and the
+//   cycle list came up empty — the same symptom the driver reported. This
+//   whole suite runs without IndexedDB, so reaching here is the proof; the
+//   assertion pins the guard so it cannot be removed silently.
+(function(){
+  const S_fs=require('fs'),S_path=require('path');
+  const html=S_fs.readFileSync(
+    [S_path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+      .find(p=>S_fs.existsSync(p)),'utf8');
+  console.assert(/try\{Sequence\.restore\(\);\}/.test(html),
+    'STORE-4: Sequence.restore() is unguarded at boot again');
+  console.assert(/if\(!idbAvailable\)\{show\(fromLocal\(\)\);return Promise\.resolve\(\);\}/.test(html),
+    'STORE-4: the no-IndexedDB path is not synchronous');
+  let threw=false;
+  try{loadStoredRecordings();}catch(e){threw=true;}
+  console.assert(!threw,'STORE-4: booting the cycle list without IndexedDB throws');
+  console.log('STORE-4. boot without IndexedDB is clean OK');
+})();
+console.log('ALL STORE-4 CHECKS PASSED');
+__group('Storage boot tests');

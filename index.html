@@ -117,7 +117,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .score-badge.m0{background:rgba(248,81,73,.2);color:#ff1744}
 
 /* ── LIVE CYCLE METRICS ── */
-.lcm{position:absolute;right:10px;top:430px;width:195px;
+.lcm{position:absolute;right:10px;top:430px;width:232px;
   max-width:calc(100vw - 20px);box-sizing:border-box;
   background:#070707;border:1px solid var(--border);
   border-left:3px solid var(--blue,#00b0ff);border-radius:12px;
@@ -131,6 +131,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .lcm-l{font-size:13px;color:#a3a3a3}
 .lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:#00b0ff}
 .lcm-sub .lcm-v{font-size:14px;color:#f5f5f5}
+/* ── GTA verdict while repeating a cycle ───────────────────────
+   Repeatability is the point of the app, so the driver has to see whether he
+   is still inside the reference cycle's GTA class WHILE he drives it, not
+   afterwards. Each row carries the live value, the class range, and a glyph
+   saying which way to correct — status is never left to colour alone.     */
+.lcm-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.lcm-score{font-family:var(--mono);font-size:14px;font-weight:700;color:#a3a3a3}
+.lcm-score.ok{color:var(--green,#00e676)}
+.lcm-score.warn{color:var(--warn,#ffc400)}
+.lcm-t{font-family:var(--mono);font-size:12px;color:#a3a3a3;min-width:78px;text-align:right}
+.lcm-row.in  .lcm-v,.lcm-row.in  .lcm-t{color:var(--green,#00e676)}
+.lcm-row.out .lcm-v,.lcm-row.out .lcm-t{color:var(--warn,#ffc400)}
 /* When the ROUTE STOPS drawer is open it covers the lower-right corner —
    hide Live Cycle so the two panels never overlap/clip each other. */
 body.stops-open .lcm{opacity:0;pointer-events:none}
@@ -187,6 +199,57 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   color:var(--green);border-color:var(--green)}
 .evt-btn.active .evt-state{opacity:1;background:var(--green);color:#070707;border-color:var(--green)}
 .nsc-leg{color:#00b0ff;font-family:var(--mono);font-size:13px;font-weight:700}
+
+/* ── AT STOP panel ────────────────────────────────────────────────────────
+   The driver's whole job while parked is on this one surface: how long is
+   left, which events he owes, and one control. Sizes are set for a glance
+   from the driver's seat, not for a desk.                                 */
+.atstop{position:absolute;right:10px;top:96px;width:min(360px,42vw);
+  background:var(--panel);border:1px solid var(--border);
+  border-left:4px solid var(--green,#00e676);border-radius:12px;
+  padding:12px 14px 14px;display:none;z-index:1250}
+body.at-stop .atstop{display:block}
+body.at-stop .nsc{display:none!important}          /* one stop surface, not two */
+.atstop.over{border-left-color:var(--red,#ff1744)}
+.as-head{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--green,#00e676)}
+.atstop.over .as-head{color:var(--red,#ff1744)}
+.as-name{font-size:20px;font-weight:800;line-height:1.1;margin:2px 0 4px;color:var(--text)}
+.as-clock{font-family:var(--mono);font-size:64px;font-weight:700;line-height:.92;
+  letter-spacing:-.02em;color:var(--green,#00e676);font-variant-numeric:tabular-nums}
+.atstop.over .as-clock{color:var(--red,#ff1744)}
+.as-sub{font-family:var(--mono);font-size:14px;color:var(--muted);margin-top:2px}
+.as-bar{height:6px;background:rgba(255,255,255,.10);border-radius:4px;
+  overflow:hidden;margin:10px 0 12px}
+.as-fill{height:100%;width:0;background:var(--green,#00e676);transition:width .4s linear}
+.atstop.over .as-fill{background:var(--red,#ff1744)}
+/* Events as big tiles — the icon carries the instruction, the word confirms it */
+.as-events{display:flex;gap:10px}
+.as-events:empty{display:none}
+.as-evt{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:12px 6px 10px;border-radius:8px;background:rgba(255,255,255,.05);
+  border:2px solid currentColor;min-height:96px;justify-content:center}
+.as-evt b{font-family:var(--display);font-size:16px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase}
+.as-evt.door {color:var(--green,#00e676)}
+.as-evt.knee {color:var(--blue,#00b0ff)}
+.as-evt.brake{color:var(--red,#ff1744)}
+.as-ctl{display:flex;gap:10px;margin-top:12px}
+.as-ctl:empty{display:none}
+.as-btn{flex:1;min-height:56px;border-radius:12px;font-family:var(--display);
+  font-size:17px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  border:2px solid;cursor:pointer;background:transparent}
+.as-btn.go  {color:var(--green,#00e676);border-color:var(--green,#00e676)}
+.as-btn.done{color:var(--text);border-color:var(--border)}
+.as-btn[hidden]{display:none}
+/* Portrait / narrow tablets: the panel spans the foot of the map instead of
+   squeezing the right column. */
+@media (max-width:900px){
+  .atstop{right:8px;left:8px;width:auto;top:auto;bottom:calc(var(--actionbar-h,84px) + 8px)}
+  .as-clock{font-size:64px}
+  .as-evt{min-height:84px}
+}
 .nsc-photo{width:100%;height:158px;object-fit:cover;border-radius:8px;
   margin-top:8px;border:1px solid var(--border);cursor:pointer;
   display:block;max-width:100%}
@@ -887,6 +950,52 @@ body.cockpit #nsc{
   grid-template-columns:none!important}
 body.cockpit #nsc .nsc-photo{height:180px!important;width:100%!important;display:block}
 body.cockpit #nsc .nsc-leg{display:none!important}  /* dev pacing — not driver info */
+
+/* ══ AT STOP in the cockpit ════════════════════════════════════
+   The AT STOP panel takes over the Next Stop Card's own slot, so the driver's
+   eyes do not have to move when the bus arrives. #nsc needs the id in the
+   selector: body.cockpit #nsc already forces display:block !important and
+   outranks a class-only hide.                                            */
+body.at-stop #nsc,body.cockpit.at-stop #nsc{display:none!important}
+body.cockpit .atstop{position:absolute;right:14px;left:auto;top:auto;bottom:86px;
+  width:304px;background:var(--ck-card);border:1px solid var(--ck-line);
+  border-left:4px solid var(--green);border-radius:12px;padding:14px 16px;z-index:1210}
+body.cockpit .atstop.over{border-left-color:var(--red)}
+
+/* ══ GTA verdict strip ═════════════════════════════════════════
+   The LIVE CYCLE panel is hidden in driver/cockpit mode by design (it is dev
+   information), so the repeatability verdict needs a surface of its own that
+   the driver actually sees while driving. Bottom-left, opposite the stop
+   card, out of the instruction card's way.                               */
+.gtabar{display:none}
+body.cockpit .gtabar{display:block;position:absolute;
+  left:calc(var(--rail-w) + 14px);bottom:86px;width:300px;
+  background:var(--ck-card);border:1px solid var(--ck-line);
+  border-left:4px solid var(--blue);border-radius:12px;padding:10px 12px;z-index:1205}
+.gb-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.gb-cls{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--blue)}
+.gb-score{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--muted)}
+.gb-score.ok{color:var(--green)}
+.gb-score.warn{color:var(--warn)}
+.gb-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.gb-cell{display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:6px 1px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid transparent}
+.gb-cell .gb-k{font-family:var(--mono);font-size:12px;letter-spacing:0;color:var(--muted)}
+.gb-cell .gb-v{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--text)}
+.gb-cell .gb-s{font-size:13px;font-weight:700;line-height:1}
+.gb-cell.in {border-color:var(--green);color:var(--green)}
+.gb-cell.out{border-color:var(--warn);color:var(--warn)}
+.gb-cell.in  .gb-v{color:var(--green)}
+.gb-cell.out .gb-v{color:var(--warn)}
+@media (max-width:900px){
+  body.cockpit .atstop{width:min(52vw,246px);right:10px;bottom:78px;padding:12px 13px}
+  body.cockpit .atstop .as-clock{font-size:52px}
+  body.cockpit .atstop .as-evt{min-height:70px}
+  body.cockpit .atstop .as-btn{min-height:50px;font-size:15px}
+  body.cockpit .gtabar{left:calc(var(--rail-w) + 10px);bottom:78px;width:min(52vw,246px)}
+  .gb-cell .gb-v{font-size:15px}
+}
 body.cockpit #cockpit-speed{position:absolute!important;right:14px!important;
   top:68px!important;left:auto!important;bottom:auto!important;
   /* The actual-speed numeral is the cockpit's dominant metric and is the
@@ -1257,12 +1366,48 @@ body.off-route .hud-instr-action{color:var(--red)!important}
       <div class="nsc-events" id="nsc-events" style="display:none"></div>
     </div>
 
+    <!-- GTA verdict: is the driver still repeating the reference cycle? -->
+    <div class="gtabar" id="gtabar" aria-live="polite">
+      <div class="gb-head">
+        <span class="gb-cls">GTA <span id="gb-cls">—</span></span>
+        <span class="gb-score" id="gb-score">—</span>
+      </div>
+      <div class="gb-grid" id="gb-grid"></div>
+    </div>
+
+    <!-- AT STOP — takes over while the vehicle is at a stop. Driven by its
+         own 1 Hz clock, never by GPS fixes: Android stops delivering fixes
+         while the bus is parked, which froze this whole surface in the field
+         (22/09, Stop 3: "TIME LEFT 00:18" for three minutes). -->
+    <div class="atstop" id="atstop" aria-live="polite">
+      <div class="as-head"><span id="as-title">AT STOP</span><span id="as-count">–/–</span></div>
+      <div class="as-name" id="as-name">—</div>
+      <div class="as-clock" id="as-clock">--:--</div>
+      <div class="as-sub" id="as-sub">—</div>
+      <div class="as-bar"><div class="as-fill" id="as-fill"></div></div>
+      <div class="as-events" id="as-events"></div>
+      <div class="as-ctl">
+        <button class="as-btn go"   id="as-go"   onclick="atStopStart()">▶ START TIMER</button>
+        <button class="as-btn done" id="as-done" onclick="atStopDepart()">✓ DEPART</button>
+      </div>
+    </div>
+
     <!-- Live cycle metrics: updated continuously during navigation -->
     <div class="lcm" id="lcm">
-      <div class="lcm-title">LIVE CYCLE</div>
-      <div class="lcm-row"><span class="lcm-l">stops/km</span><span class="lcm-v" id="lcm-spk">—</span></div>
-      <div class="lcm-row"><span class="lcm-l">avg driving</span><span class="lcm-v" id="lcm-drv">—</span></div>
-      <div class="lcm-row"><span class="lcm-l">avg total</span><span class="lcm-v" id="lcm-avg">—</span></div>
+      <div class="lcm-head">
+        <span class="lcm-title">GTA <span id="lcm-cls">—</span></span>
+        <span class="lcm-score" id="lcm-score">—</span>
+      </div>
+      <div class="lcm-row" id="lcm-row-spk"><span class="lcm-l">stops/km</span>
+        <span class="lcm-v" id="lcm-spk">—</span><span class="lcm-t" id="lcm-t-spk"></span></div>
+      <div class="lcm-row" id="lcm-row-spd"><span class="lcm-l">avg total</span>
+        <span class="lcm-v" id="lcm-avg">—</span><span class="lcm-t" id="lcm-t-spd"></span></div>
+      <div class="lcm-row" id="lcm-row-dspd"><span class="lcm-l">avg driving</span>
+        <span class="lcm-v" id="lcm-drv">—</span><span class="lcm-t" id="lcm-t-dspd"></span></div>
+      <div class="lcm-row" id="lcm-row-vmax"><span class="lcm-l">max speed</span>
+        <span class="lcm-v" id="lcm-vmax">—</span><span class="lcm-t" id="lcm-t-vmax"></span></div>
+      <div class="lcm-row" id="lcm-row-idle"><span class="lcm-l">idle</span>
+        <span class="lcm-v" id="lcm-idle">—</span><span class="lcm-t" id="lcm-t-idle"></span></div>
       <div class="lcm-row lcm-sub"><span class="lcm-l">dist · idle</span><span class="lcm-v" id="lcm-extra">—</span></div>
     </div>
 
@@ -1988,25 +2133,115 @@ function checkQuota(){
   }catch(e){return 0;}
 }
 
-function saveRecordings(){
+/* ══ cycle store ═══════════════════════════════════════════════════════════
+   Cycles used to live in localStorage as one JSON string. Two ways that lost
+   a day of driving, both reported from the field on 22/09:
+     · quota — a cycle with stop photos is ~0.4 MB of JSON, which localStorage
+       holds as ~0.8 MB of UTF-16. Five or six cycles fill the ~5 MB origin
+       quota and the next save throws. The cycle exists only in memory and is
+       gone at the next reload.
+     · all-or-nothing parse — one corrupt or truncated entry (exactly what a
+       failed quota write leaves behind) made JSON.parse throw for the WHOLE
+       list, so every cycle vanished from the list at once.
+   IndexedDB is now the store: no practical size limit, one record per cycle,
+   and a bad record can only lose itself. localStorage is kept as a legacy
+   source to import from and as a photo-less emergency mirror — it is never
+   deleted, so the migration itself cannot lose anything.                   */
+const CYCLE_DB='gpx-nav-cycles', CYCLE_STORE='cycles', CYCLE_DB_VER=1;
+let _cycleDB=null, _cycleDBReady=null, _cycleDBOff=false;
+
+function cycleDBOpen(){
+  if(_cycleDBReady)return _cycleDBReady;
+  _cycleDBReady=new Promise(resolve=>{
+    let idb=null;
+    try{idb=(typeof indexedDB!=='undefined')?indexedDB:null;}catch(e){idb=null;}
+    if(!idb){_cycleDBOff=true;return resolve(null);}          // fall back to localStorage
+    let req;
+    try{req=idb.open(CYCLE_DB,CYCLE_DB_VER);}catch(e){_cycleDBOff=true;return resolve(null);}
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(CYCLE_STORE))db.createObjectStore(CYCLE_STORE,{keyPath:'id'});
+    };
+    req.onsuccess=()=>{_cycleDB=req.result;resolve(_cycleDB);};
+    req.onerror=()=>{_cycleDBOff=true;resolve(null);};        // private mode, blocked storage
+    req.onblocked=()=>{_cycleDBOff=true;resolve(null);};
+  });
+  return _cycleDBReady;
+}
+function cycleId(r,i){
+  if(r.id)return r.id;
+  const t=(r.date instanceof Date?r.date.getTime():Date.parse(r.date))||Date.now();
+  return 'c'+t+'-'+i;
+}
+/* Whole-list replace: savedRecs is the single source of truth in memory. */
+function cycleDBWriteAll(recs){
+  return cycleDBOpen().then(db=>{
+    if(!db)return false;
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(CYCLE_STORE,'readwrite');
+      const st=tx.objectStore(CYCLE_STORE);
+      st.clear();
+      recs.forEach((r,i)=>{
+        st.put({...r,id:cycleId(r,i),
+          date:r.date instanceof Date?r.date.toISOString():r.date});
+      });
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=()=>reject(tx.error||new Error('cycle write failed'));
+      tx.onabort=()=>reject(tx.error||new Error('cycle write aborted'));
+    });
+  });
+}
+function cycleDBReadAll(){
+  return cycleDBOpen().then(db=>{
+    if(!db)return null;
+    return new Promise(resolve=>{
+      try{
+        const tx=db.transaction(CYCLE_STORE,'readonly');
+        const rq=tx.objectStore(CYCLE_STORE).getAll();
+        rq.onsuccess=()=>resolve(rq.result||[]);
+        rq.onerror=()=>resolve(null);
+      }catch(e){resolve(null);}
+    });
+  });
+}
+
+/* The localStorage mirror carries everything EXCEPT the photos, so it stays
+   small enough never to hit the quota. It is a safety net for the cycle list,
+   not a second copy of the images. */
+function saveRecsMirror(){
   try{
     localStorage.setItem('gpx-nav-recs', JSON.stringify(
-      savedRecs.filter(Boolean).map(r=>({
+      savedRecs.filter(Boolean).map((r,i)=>({
+        id:cycleId(r,i),
         name:r.name, dist:+(r.dist??0)||0,
         date:r.date instanceof Date?r.date.toISOString():r.date,
         elev:r.elev??null, time_s:r.time_s??null, score:r.score??null,
-        // alt kept (0.1 m) — dropping it silently destroyed elevation gain on reload
         points:r.points.map(p=>({lat:p.lat,lng:p.lng,t:p.t,
           ...(p.alt!=null&&!isNaN(+p.alt)?{alt:Math.round(p.alt*10)/10}:{})})),
-        stops:r.stops.map(s=>({lat:s.lat,lng:s.lng,t:s.t,dur_s:s.dur_s,photo:s.photo||null,events:s.events||[]}))
+        stops:r.stops.map(s=>({lat:s.lat,lng:s.lng,t:s.t,dur_s:s.dur_s,
+          photo:null,photoInDB:!!(s.photo&&s.photo.length>10),events:s.events||[]}))
       }))
     ));
-    checkQuota();
-  }catch(e){
-    if(/quota/i.test(e.name||'')||/quota/i.test(e.message||'')){
-      alert('Storage FULL — this cycle was NOT saved.\nExport All, delete old cycles and try again.');
-    }else console.warn('Recordings not saved:',e.message);
-  }
+    return true;
+  }catch(e){return false;}
+}
+
+function saveRecordings(){
+  const recs=savedRecs.filter(Boolean);
+  // ensure every cycle carries a stable id before either store sees it
+  recs.forEach((r,i)=>{if(!r.id)r.id=cycleId(r,i);});
+  const mirrored=saveRecsMirror();
+  checkQuota();
+  cycleDBWriteAll(recs).then(okDB=>{
+    if(okDB||mirrored)return;
+    alert('This cycle could NOT be saved on the tablet.\nExport it now (Share JSON / GPX) before closing the app.');
+  }).catch(e=>{
+    console.warn('Cycle store write failed:',e&&e.message);
+    if(!mirrored)
+      alert('This cycle could NOT be saved on the tablet.\nExport it now (Share JSON / GPX) before closing the app.');
+    else
+      alert('Stop photos could not be stored — the cycle itself was saved.\nExport it (Share JSON) if you need the photos.');
+  });
 }
 
 // ════ P0.1 — Crash recovery: in-flight recording flushed every 30 s ════
@@ -2036,22 +2271,68 @@ function checkInflightRecovery(){
 }
 
 function loadStoredRecordings(){
-  try{
-    const raw=localStorage.getItem('gpx-nav-recs');
-    if(!raw)return;
-    const parsed=JSON.parse(raw);
-    parsed.forEach(r=>{
-      const rec={...r,date:new Date(r.date)};
-      savedRecs.push(rec);
-      renderRecCard(rec,savedRecs.length-1);
+  // Parsed one record at a time: a single corrupt entry may only lose itself.
+  // Parsing the whole array at once is what emptied the list in the field.
+  const fromLocal=()=>{
+    const out=[];
+    let raw=null;
+    try{raw=localStorage.getItem('gpx-nav-recs');}catch(e){return out;}
+    if(!raw)return out;
+    let arr=null;
+    try{arr=JSON.parse(raw);}catch(e){console.warn('Cycle list unreadable:',e.message);return out;}
+    if(!Array.isArray(arr))return out;
+    arr.forEach((r,i)=>{
+      try{
+        if(!r||!Array.isArray(r.points)||r.points.length<2)return;
+        out.push({...r,date:new Date(r.date)});
+      }catch(e){console.warn('Cycle '+i+' skipped:',e.message);}
     });
-    Sequence.restore();
+    return out;
+  };
+  const show=list=>{
+    list.forEach(rec=>{savedRecs.push(rec);renderRecCard(rec,savedRecs.length-1);});
+    // Boot order: this can run before Sequence is initialised (it did, the
+    // moment the no-IndexedDB path stopped deferring to a microtask — which
+    // means private mode and old WebViews would have thrown here and shown an
+    // empty cycle list). Restore late if it is not ready yet.
+    try{Sequence.restore();}
+    catch(e){setTimeout(()=>{try{Sequence.restore();}catch(e2){}},0);}
     if(savedRecs.length){
-      el('rec-badge').textContent=String(savedRecs.length||'');
-      el('rec-empty').style.display='none';
+      const b=el('rec-badge');if(b)b.textContent=String(savedRecs.length||'');
+      const e2=el('rec-empty');if(e2)e2.style.display='none';
     }
-  }catch(e){console.warn('Recordings not loaded:',e.message);}
+  };
+  // No IndexedDB (private mode, an old WebView, blocked storage): there is
+  // nothing to await, so the list is built synchronously exactly as before.
+  let idbAvailable=false;
+  try{idbAvailable=(typeof indexedDB!=='undefined')&&!!indexedDB;}catch(e){idbAvailable=false;}
+  if(!idbAvailable){show(fromLocal());return Promise.resolve();}
+  try{
+    return cycleDBReadAll().then(rows=>{
+      if(rows&&rows.length){
+        // IndexedDB is the store: it has the photos
+        show(rows.filter(r=>r&&Array.isArray(r.points)&&r.points.length>=2)
+                 .map(r=>({...r,date:new Date(r.date)})));
+        return;
+      }
+      // first run after the update, or IDB unavailable — take what localStorage
+      // has and, if IDB works, migrate it in. The localStorage copy is kept.
+      const legacy=fromLocal();
+      show(legacy);
+      if(legacy.length&&!_cycleDBOff)
+        cycleDBWriteAll(savedRecs.filter(Boolean)).catch(e=>
+          console.warn('Cycle migration failed:',e&&e.message));
+    }).catch(e=>{
+      console.warn('Cycle store unreadable:',e&&e.message);
+      show(fromLocal());
+    });
+  }catch(e){
+    console.warn('Recordings not loaded:',e.message);
+    try{show(fromLocal());}catch(e2){}
+    return Promise.resolve();
+  }
 }
+
 let photoPreviewStopId=null;  // which stop photo is showing in overlay
 
 // ── Photo helpers ────────────────────────────────────
@@ -2913,6 +3194,7 @@ function updCardState(s){
     st.textContent=s.missed?'Missed'
       :{waiting:'Waiting',current:'At stop',done:'Done'}[s.state]}
   refreshStopIcons(); // re-evaluates which stop is NEXT (pulsing highlight)
+  try{renderAtStop()}catch(e){}
 }
 
 // ── TIMERS ─────────────────────────────────────────────
@@ -3505,6 +3787,8 @@ const Playback={
 
   begin(totalLaps){
     if(!playbackCycle){this.state='IDLE';this.active=false;return;}
+    // each run is judged on its own fixes, never on a previous attempt's
+    try{pbPoints=[];}catch(e){}
     LapManager.configure(totalLaps??(el('lap-select')?el('lap-select').value:1));
     // §28: an interrupted session for this same cycle demands explicit recovery
     let saved=null;
@@ -3624,6 +3908,9 @@ const Playback={
       updCardState(s);
     });
     insideStop.clear();departGate=null;evtAnnounced.clear();
+    // every lap is a separate repeat of the reference cycle, so the live GTA
+    // verdict restarts with it instead of averaging the laps together
+    try{pbPoints=[];live.dist=0;live.moving=0;live.idle=0;live.last=null;}catch(e){}
     stops.forEach(s=>evtAnnounced.add(s.id));   // keep the frozen radial voice silenced
     resetMatcher();                              // route progress restarts (call, not change)
     refreshStopIcons();
@@ -4375,9 +4662,78 @@ function stopSim(silent){
   }
 }
 
+/* ── AT STOP surface ──────────────────────────────────────────────────────
+   Everything the driver needs while parked, on one clock of its own.
+   The Next Stop Card is redrawn only from onGPS, and Android stops feeding
+   fixes once the vehicle is stationary — so in the field the countdown froze
+   at its starting value and playback looked dead (22/09, Stop 3: 00:18 shown
+   unchanged for three minutes at 0 km/h). This surface ticks at 1 Hz whether
+   or not a fix arrives, and when no timer is running it says so and offers
+   the button instead of showing a number that is not moving.              */
+let _atStopClock=null;
+function ensureAtStopClock(){
+  if(_atStopClock)return;
+  _atStopClock=setInterval(()=>{
+    renderAtStop();
+    if(!stops.some(s=>s.state==='current')){clearInterval(_atStopClock);_atStopClock=null;}
+  },1000);
+}
+function atStopCurrent(){return stops.find(s=>s.state==='current')||null;}
+function atStopStart(){const s=atStopCurrent();if(s&&!s.running)startTimer(s.id);renderAtStop();}
+function atStopDepart(){const s=atStopCurrent();if(!s)return;
+  markDone(s.id);closeStopPhoto();
+  showAlert('departed',`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
+  renderAtStop();}
+
+/* Dwell times are seconds and minutes, never hours: hh:mm:ss overflowed the
+   panel and clipped the digits that matter. */
+function fmtDwell(t){
+  t=Math.max(0,Math.round(t||0));
+  const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;
+  return (h?h+':'+String(m).padStart(2,'0'):String(m).padStart(2,'0'))+':'+String(x).padStart(2,'0');
+}
+function renderAtStop(){
+  const p=el('atstop');if(!p)return;
+  const s=atStopCurrent();
+  document.body.classList.toggle('at-stop',!!s&&navActive);
+  if(!s||!navActive)return;
+  ensureAtStopClock();
+  const planned=+s.dur_s||0, elapsed=+s.elapsed||0;
+  const over=planned>0&&elapsed>planned;
+  p.classList.toggle('over',over);
+  const retired=stops.filter(x=>x.state==='done').length;
+  el('as-count').textContent=`${Math.min(retired+1,stops.length)}/${stops.length}`;
+  el('as-name').textContent=s.name||('Stop '+s.id);
+  // A number that is not moving is worse than no number: say which it is.
+  if(!s.running&&elapsed===0){
+    el('as-title').textContent='AT STOP · TIMER NOT RUNNING';
+    el('as-clock').textContent=planned?fmtDwell(planned):'--:--';
+    el('as-sub').textContent=planned?'planned '+fmtDwell(planned)+' — press START':'no planned dwell recorded';
+  }else if(over){
+    el('as-title').textContent='AT STOP · OVER PLAN';
+    el('as-clock').textContent='+'+fmtDwell(elapsed-planned);
+    el('as-sub').textContent=`planned ${fmtDwell(planned)} · elapsed ${fmtDwell(elapsed)}`;
+  }else{
+    el('as-title').textContent=planned?'AT STOP · TIME LEFT':'AT STOP · ELAPSED';
+    el('as-clock').textContent=planned?fmtDwell(planned-elapsed):fmtDwell(elapsed);
+    el('as-sub').textContent=planned?`planned ${fmtDwell(planned)}`:'no planned dwell recorded';
+  }
+  const fill=el('as-fill');
+  if(fill)fill.style.width=(planned?Math.min(100,(elapsed/planned)*100):0)+'%';
+  // Big event tiles — the icon is the instruction, the word confirms it.
+  const evs=normalizeStopEvents(s.events);
+  const cls={openDoor:'door',kneeling:'knee',handBrake:'brake'};
+  el('as-events').innerHTML=evs.map(e=>
+    `<div class="as-evt ${cls[e]}" title="${STOP_EVENTS[e].label}" aria-label="${STOP_EVENTS[e].label}">`+
+    stopEventSvg(e,44)+`<b>${STOP_EVENTS[e].shortLabel}</b></div>`).join('');
+  const go=el('as-go');   if(go)go.hidden=!!s.running;
+  const dn=el('as-done'); if(dn)dn.hidden=false;
+}
+
 // ── Next Stop Card updater (called every GPS tick while navigating) ──
 function updNextStopCard(lat,lng){
   const c=el('nsc');if(!c)return;
+  renderAtStop();                     // parked: this is the surface that matters
   const next=navActive?stops.find(x=>x.state!=='done'):null;
   if(!next){c.style.display='none';return}
   // Compact glanceable time: mm:ss, hours only when >= 1h
@@ -4437,6 +4793,10 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
     }
   }
   live.last={lat,lng};live.lastT=ts;
+  // calcCycleMetrics derives speed from consecutive fixes, so it needs the
+  // fixes themselves — {lat,lng,t}, exactly the shape the recorder stores.
+  pbPoints.push({lat,lng,t:ts});
+  if(pbPoints.length>20000)pbPoints.splice(0,5000);   // long sessions stay bounded
   // Stops counted from the nav state machine (arrivals), not distance
   live.stops=stops.filter(x=>x.state!=='waiting').length;
 
@@ -4450,6 +4810,101 @@ function updLiveMetrics(lat,lng,kmh,ts,stopsBefore){
   el('lcm-drv').textContent=live.moving>5?avgDrv.toFixed(1)+' km/h':'—';
   el('lcm-avg').textContent=total>5?avgTot.toFixed(1)+' km/h':'—';
   el('lcm-extra').textContent=`${km.toFixed(2)} km · ${Math.round(idlePct)}%`;
+  renderPlaybackGTA();
+}
+
+/* ── live GTA verdict while repeating a cycle ──────────────────────────
+   The whole purpose of playback is repeatability: driving the reference cycle
+   again while holding its GTA criteria. Until now the driver got that verdict
+   only after the fact, from the recorded file. This evaluates the cycle he is
+   driving NOW against the class of the cycle he loaded.
+   The numbers come from calcCycleMetrics — the same function that scores a
+   recording — so the live panel and the final score can never disagree.   */
+let pbPoints=[];               // fixes accumulated since playback/nav began
+let pbRefClass=null;           // GTA class of the loaded reference cycle
+function resetPlaybackGTA(cls){pbPoints=[];pbRefClass=cls||null;}
+function pbClassRanges(){return VBC_CLASSES.find(c=>c.id===pbRefClass)||null;}
+function renderPlaybackGTA(){
+  const cEl=el('lcm-cls'),sEl=el('lcm-score');
+  if(!cEl||!sEl)return;
+  const cls=pbClassRanges();
+  cEl.textContent=pbRefClass||'—';
+  const rows=[
+    {k:'spk', id:'lcm-spk', r:cls?cls.spk :null, dec:1, unit:''},
+    {k:'spd', id:'lcm-avg', r:cls?cls.spd :null, dec:1, unit:' km/h'},
+    {k:'dspd',id:'lcm-drv', r:cls?cls.dspd:null, dec:1, unit:' km/h'},
+    {k:'vmax',id:'lcm-vmax',r:cls?cls.vmax:null, dec:0, unit:' km/h'},
+    {k:'idle',id:'lcm-idle',r:cls?cls.idle:null, dec:0, unit:'%'},
+  ];
+  // not enough of the cycle driven yet to judge anything
+  const m=(pbPoints.length>=20)?calcCycleMetrics(pbPoints,live.stops||0):null;
+  if(!m||!cls){
+    sEl.textContent=cls?'warming up':'no target';
+    sEl.className='lcm-score';
+    rows.forEach(x=>{
+      const t=el('lcm-t-'+x.k); if(t)t.textContent=x.r?fmtRange(x.r,x.dec):'';
+      const row=el('lcm-row-'+x.k); if(row)row.className='lcm-row';
+    });
+    if(el('lcm-vmax'))el('lcm-vmax').textContent='—';
+    if(el('lcm-idle'))el('lcm-idle').textContent='—';
+    renderGTABar(null,null,0,false);
+    return;
+  }
+  const val={spk:m.stopsKm,spd:m.avg,dspd:m.drive,vmax:m.vmax,idle:m.idlePct};
+  if(el('lcm-vmax'))el('lcm-vmax').textContent=Math.round(m.vmax)+' km/h';
+  if(el('lcm-idle'))el('lcm-idle').textContent=Math.round(m.idlePct)+'%';
+  let ok=0;
+  rows.forEach(x=>{
+    const v=val[x.k], inR=v>=x.r[0]&&v<=x.r[1];
+    if(inR)ok++;
+    const row=el('lcm-row-'+x.k);
+    if(row)row.className='lcm-row '+(inR?'in':'out');
+    const t=el('lcm-t-'+x.k);
+    // glyph says which way to correct; the range says by how much
+    if(t)t.textContent=(inR?'✓ ':(v<x.r[0]?'↑ ':'↓ '))+fmtRange(x.r,x.dec);
+  });
+  sEl.textContent=ok+'/5';
+  sEl.className='lcm-score '+(ok===5?'ok':'warn');
+  renderGTABar(rows,val,ok,true);
+}
+
+/* The driver-facing half of the same verdict. Five cells, each with the live
+   value and a glyph saying which way to move it — ↑ raise, ↓ lower, ✓ inside
+   the class range. The range itself stays in the LIVE CYCLE panel; at the
+   wheel the direction is the actionable part. */
+const GB_KEYS=[{k:'spk',lbl:'S/KM',dec:1},{k:'spd',lbl:'AVG',dec:0},
+               {k:'dspd',lbl:'DRV',dec:0},{k:'vmax',lbl:'MAX',dec:0},
+               {k:'idle',lbl:'IDLE',dec:0}];
+function renderGTABar(rows,val,ok,ready){
+  const g=el('gb-grid'),c=el('gb-cls'),sc=el('gb-score');
+  if(!g||!c||!sc)return;
+  c.textContent=pbRefClass||'—';
+  if(!ready||!val){
+    sc.textContent=pbRefClass?'warming up':'no target';
+    sc.className='gb-score';
+    g.innerHTML=GB_KEYS.map(x=>
+      `<div class="gb-cell"><span class="gb-k">${x.lbl}</span>`+
+      `<span class="gb-v">—</span><span class="gb-s">·</span></div>`).join('');
+    return;
+  }
+  const byKey={}; rows.forEach(r=>byKey[r.k]=r);
+  g.innerHTML=GB_KEYS.map(x=>{
+    const r=byKey[x.k], v=val[x.k];
+    const inR=r&&r.r&&v>=r.r[0]&&v<=r.r[1];
+    const glyph=inR?'✓':(r&&r.r&&v<r.r[0]?'↑':'↓');
+    const title=inR?'inside the class range'
+      :(r&&r.r&&v<r.r[0]?'below the class range — increase':'above the class range — reduce');
+    return `<div class="gb-cell ${inR?'in':'out'}" title="${x.lbl}: ${title}">`+
+      `<span class="gb-k">${x.lbl}</span>`+
+      `<span class="gb-v">${Number(v).toFixed(x.dec)}</span>`+
+      `<span class="gb-s" aria-label="${title}">${glyph}</span></div>`;
+  }).join('');
+  sc.textContent=ok+'/5';
+  sc.className='gb-score '+(ok===5?'ok':'warn');
+}
+function fmtRange(r,dec){
+  const f=n=>Number(n).toFixed(dec||0);
+  return f(r[0])+'–'+f(r[1]);
 }
 
 function nscPhotoTap(){
@@ -5213,20 +5668,29 @@ function gateBlocks(gate,stop){
    while the bus drove through stops 3 to 8, the distance counting UP.
    A stop the vehicle has measurably driven past is recorded as MISSED. That
    is a real test result and it is shown as one; what it must not do is take
-   the rest of the cycle down with it.                                      */
+   the rest of the cycle down with it.
+   The sweep walks ONLY from the head of the queue and stops at the first
+   stop that is still ahead. Scanning the whole list retired stops deep in
+   the cycle: on a closed loop the final stop anchors near the start, so at
+   80 m of progress it was marked missed while the bus was at stop 3 — the
+   card then counted "4/8" with Stop 3 still current. A stop can only be
+   missed once every stop before it has been settled.                      */
 function sweepPassedStops(){
   if(!stops.length||routeProgressM==null)return;
-  stops.forEach(s=>{
-    if(s.state!=='waiting')return;        // never a stop the bus is sitting at
-    if(s.routeDistanceM==null)return;     // unanchored: no evidence either way
-    if(routeProgressM<=s.routeDistanceM+NAV.MISS_PAST_M)return;
+  for(const s of stops){
+    if(s.state==='done')continue;         // settled — look at the one behind it
+    if(s.state!=='waiting')break;         // the bus is AT this stop: walk ends
+    if(s.routeDistanceM==null)break;      // unanchored: no evidence, no walking past
+    if(routeProgressM<=s.routeDistanceM+NAV.MISS_PAST_M)break;  // not passed yet
     markDone(s.id,true);
+    // §19: the Voice Scheduler is the single owner of stop voice during
+    // playback, so the miss is reported visually only.
     showAlert('missed',`⚠ ${s.name} not detected — recorded as MISSED`);
     if(navDebug){
       navDebugLog.push(`STOP-MISSED P${s.id} progress=${Math.round(routeProgressM)}m anchor=${Math.round(s.routeDistanceM)}m`);
       if(navDebugLog.length>40)navDebugLog.shift();
     }
-  });
+  }
 }
 
 function checkArrival(lat,lng,rawKmh,match,accuracyM){
@@ -5647,6 +6111,8 @@ function loadRec(idx){
     // §18/§26: compile ONCE at load — never per GPS fix. Old recordings have
     // no playlist; compileCycle derives one without touching the JSON (§2).
     loadedCycleMeta={name:rec.name||'cycle',date:rec.date||''};
+    // the class this cycle was recorded in IS the target when repeating it
+    resetPlaybackGTA(rec.score&&rec.score.cls&&rec.score.cls!=='—'?rec.score.cls:null);
     playbackCycle=compileCycle();
     Playback.stop();
     try{
