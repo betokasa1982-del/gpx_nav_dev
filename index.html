@@ -366,7 +366,9 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
    put it under the rail once the shell changed — the GTA panel was being
    read with its first column hidden. */
   position:fixed;bottom:calc(var(--ab-h) + var(--safe-b) + 12px);
-  left:calc(var(--rail-w) + 12px);max-width:min(360px,calc(100vw - var(--rail-w) - 24px));
+  /* clear of the live card column, which owns the left strip while recording */
+  left:calc(var(--rail-w) + 210px);
+  max-width:min(340px,calc(100vw - var(--rail-w) - 222px));
   z-index:910;pointer-events:auto;
   background:#1b1b1b;border:1px solid var(--red);border-radius:12px;
   padding:8px 12px;display:none;align-items:center;gap:8px;
@@ -1069,7 +1071,9 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .gta-picker{position:fixed;inset:0;z-index:4000;background:rgba(7,7,7,.92);
   display:none;align-items:center;justify-content:center;padding:var(--s-lg)}
 .gta-picker.on{display:flex}
-.gta-card{width:min(560px,100%);max-height:88vh;overflow-y:auto;background:var(--panel);
+/* the picker's own container — renamed off .gta-card, which now belongs to
+   the criterion cards and would clamp this to their height */
+.gta-sheet{width:min(560px,100%);max-height:88vh;overflow-y:auto;background:var(--panel);
   border:1px solid var(--border);border-radius:12px;padding:var(--s-lg)}
 .gta-head{display:flex;align-items:center;justify-content:space-between;
   font-size:14px;font-weight:600;letter-spacing:1.6px;color:var(--accent);margin-bottom:var(--s-sm)}
@@ -1094,25 +1098,76 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .gta-actions .btn{flex:1;min-height:52px;font-size:14px}
 .gta-actions .gta-start{flex:2}
 
-/* live panel — five criteria, each with the value, the window and which way
-   to correct. "▲" means push it up, "▼" means ease off. */
-.gta-live{margin-top:var(--s-sm);border-top:1px solid var(--border);padding-top:var(--s-sm)}
-.gta-live-head{font-size:13px;font-weight:600;letter-spacing:.6px;color:var(--muted);
-  margin-bottom:4px}
-.gta-live-head b{color:var(--accent)}
-.gta-score{font-family:var(--display);font-size:16px;color:var(--warn);margin-left:4px}
+/* ── LIVE CRITERION CARDS ────────────────────────────────────────────────
+   Five cards down the left of the map (field request, 22 Sep: "cinco cards
+   com os criterios seriam mais facil de visualizar").
+
+   Each card = label · value · a track showing the allowed window as a band
+   with the current value marked on it · the state. The state is an icon AND
+   a word, never colour alone: sunlight, glare and colour-blindness all take
+   the colour away, and a driver glancing for half a second needs the shape
+   and the word to survive that. Colour is the third channel, not the only
+   one. The number itself stays white — a coloured numeral on a dark panel
+   loses contrast exactly when it matters most.                            */
+.gta-cards{position:fixed;left:calc(var(--rail-w) + 12px);top:calc(var(--bar-h) + 12px);
+  bottom:auto;max-height:calc(100dvh - var(--bar-h) - var(--ab-h) - var(--safe-b) - 24px);
+  width:186px;z-index:905;
+  display:flex;flex-direction:column;gap:var(--s-sm);pointer-events:none}
+.gta-cards-head{flex-shrink:0;display:flex;align-items:center;gap:var(--s-sm);
+  font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1.4px;
+  color:var(--muted);background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:8px 10px}
+.gta-cards-head b{color:var(--accent)}
+.gta-score{margin-left:auto;font-family:var(--display);font-size:20px;color:var(--warn)}
 .gta-score.full{color:var(--green)}
-.gta-row{display:grid;grid-template-columns:1fr auto auto auto;gap:var(--s-sm);
-  align-items:baseline;font-size:13px;padding:3px 0}
-.gta-row .gta-lbl{color:var(--muted)}
-.gta-row .gta-val{font-family:var(--mono);font-weight:600;color:var(--text);min-width:58px;text-align:right}
-.gta-row .gta-want{font-family:var(--mono);font-size:12px;color:var(--muted);min-width:62px;text-align:right}
-.gta-row .gta-ref{font-family:var(--mono);font-size:12px;color:var(--accent-2)}
-.gta-row .gta-mark{min-width:18px;text-align:center;font-weight:700}
-.gta-row.ok .gta-mark{color:var(--green)}
-.gta-row.off .gta-mark{color:var(--warn)}
-.gta-row.off .gta-val{color:var(--warn)}
-.gta-wait{color:var(--muted);font-style:italic}
+.gta-warm{margin-left:auto;font-size:12px;font-weight:400;letter-spacing:.2px;font-style:italic}
+
+.gta-cards-list{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;gap:var(--s-sm)}
+/* sized to content: stretching five cards over a tall viewport turns each
+   into a mostly-empty box and pushes the value away from the eye */
+.gta-card{flex:0 1 auto;min-height:84px;max-height:116px;
+  background:var(--panel);border:1px solid var(--border);
+  border-left:3px solid var(--border);border-radius:8px;padding:8px 10px;
+  display:flex;flex-direction:column;justify-content:center;gap:3px}
+.gta-card-top{display:flex;align-items:center;gap:6px}
+.gta-card-lbl{font-family:var(--sans);font-size:12px;letter-spacing:.6px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gta-chip{margin-left:auto;font-family:var(--sans);font-size:12px;font-weight:700;
+  letter-spacing:.4px;white-space:nowrap}
+.gta-card-val{font-family:var(--display);font-size:30px;font-weight:700;line-height:1;
+  color:var(--text);font-variant-numeric:tabular-nums}
+.gta-card-foot{font-family:var(--mono);font-size:12px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gta-card-foot .gta-ref{color:var(--accent-2)}
+
+/* track: hairline rail, the allowed window as a band, the value as a marker */
+.gta-track{position:relative;height:12px;margin:2px 0}
+.gta-track:before{content:'';position:absolute;left:0;right:0;top:5px;height:2px;
+  background:var(--border)}
+.gta-band{position:absolute;top:3px;height:6px;border-radius:999px;
+  background:rgba(0,230,118,.30)}
+.gta-mark{position:absolute;top:0;width:12px;height:12px;margin-left:-6px;
+  border-radius:50%;border:2px solid var(--panel)}   /* surface ring */
+.gta-mark.gta-in{background:var(--green)}
+.gta-mark.gta-low,.gta-mark.gta-high{background:var(--warn)}
+.gta-mark.gta-none{background:var(--muted)}
+.gta-ref-tick{position:absolute;top:1px;width:2px;height:10px;margin-left:-1px;
+  background:var(--accent-2)}
+
+/* state: border + chip colour, always alongside the icon and the word */
+.gta-card.gta-in{border-left-color:var(--green)}
+.gta-card.gta-in .gta-chip{color:var(--green)}
+.gta-card.gta-low,.gta-card.gta-high{border-left-color:var(--warn)}
+.gta-card.gta-low .gta-chip,.gta-card.gta-high .gta-chip{color:var(--warn)}
+.gta-card.gta-none .gta-chip{color:var(--muted)}
+.gta-card-wait{flex:0 0 auto;color:var(--muted);font-size:13px;font-style:italic;
+  text-align:center;padding:var(--s-md)}
+
+@media (max-height:700px){
+  .gta-cards{width:168px}
+  .gta-card-val{font-size:24px}
+  .gta-card-foot{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -1272,7 +1327,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 
   <!-- ═══ GTA TARGET PICKER — the step before the wheels turn ═══════════ -->
   <div class="gta-picker" id="gta-picker">
-    <div class="gta-card">
+    <div class="gta-sheet">
       <div class="gta-head">
         <span>TARGET CYCLE</span>
         <button class="drawer-close" onclick="closeTargetPicker()" aria-label="Cancel">✕</button>
@@ -1292,6 +1347,16 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
     </div>
   </div>
 
+  <!-- ═══ GTA LIVE CARDS — one card per criterion, down the left of the map
+       A table makes the driver read; a card is read at a glance. Each card
+       carries the value, where it sits inside the allowed window, and the
+       state as an icon AND a word — never colour alone, which is exactly
+       what fails in a moving vehicle and in sunlight. -->
+  <div class="gta-cards" id="gta-live" style="display:none">
+    <div class="gta-cards-head" id="gta-live-head"></div>
+    <div class="gta-cards-list" id="gta-live-rows"></div>
+  </div>
+
   <!-- Recording indicator -->
   <div class="rec-ind" id="rec-ind">
     <div class="rec-dot"></div>
@@ -1299,10 +1364,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
       <div class="rec-label">Recording route</div>
       <div class="rec-stats"       id="rec-stats">0 pts · 0.0 km</div>
       <div class="rec-stops-count" id="rec-sc">0 stops detected</div>
-      <div class="gta-live" id="gta-live" style="display:none">
-        <div class="gta-live-head" id="gta-live-head"></div>
-        <div class="gta-live-rows" id="gta-live-rows"></div>
-      </div>
+
     </div>
     <button class="btn stop-nav" style="padding:5px 10px;font-size:11px;min-height:30px" onclick="toggleRec()">■ Stop</button>
   </div>
@@ -1677,31 +1739,60 @@ function renderGTALive(force){
   const ev=GTATarget.evaluate(recPoints,recStops.length);
   const head=el('gta-live-head'), body=el('gta-live-rows');
   if(!ev.ready){
-    if(head)head.textContent=GTATarget.active()
-      ? 'Target '+GTATarget.classId+' · warming up'
-      : 'No target · warming up';
-    if(body)body.innerHTML='<div class="gta-row gta-wait">Needs ~30 s of movement</div>';
+    if(head)head.innerHTML=(GTATarget.active()
+      ? 'TARGET <b>'+GTATarget.classId+'</b>' : 'NO TARGET')+
+      '<span class="gta-warm">warming up</span>';
+    if(body)body.innerHTML='<div class="gta-card gta-card-wait">'+
+      '<span>Needs about 30 seconds of movement</span></div>';
     return;
   }
   if(head){
     head.innerHTML=GTATarget.active()
-      ? `Target <b>${GTATarget.classId}</b> <span class="gta-score${ev.matched===5?' full':''}">`+
-        `${ev.matched}/5</span>`
-      : 'No target · live metrics';
+      ? `TARGET <b>${GTATarget.classId}</b>`+
+        `<span class="gta-score${ev.matched===5?' full':''}">${ev.matched}/5</span>`
+      : 'NO TARGET<span class="gta-warm">measuring only</span>';
   }
-  if(body){
-    body.innerHTML=ev.rows.map(r=>{
-      const mark=r.ok===null?'':r.ok?'✓':(r.dir==='low'?'▲':'▼');
-      const cls=r.ok===null?'':r.ok?'ok':'off';
-      const want=r.range?`${r.range[0]}–${r.range[1]}`:'';
-      const ref=r.ref!=null?`<span class="gta-ref">ref ${r.ref}</span>`:'';
-      return `<div class="gta-row ${cls}">
-        <span class="gta-lbl">${r.label}</span>
-        <span class="gta-val">${r.val}${r.unit}</span>
-        <span class="gta-want">${want}</span>${ref}
-        <span class="gta-mark">${mark}</span></div>`;
-    }).join('');
+  if(!body)return;
+  body.innerHTML=ev.rows.map(r=>gtaCardHTML(r)).join('');
+}
+
+/* One criterion, one card. The track shows the allowed window as a band and
+   the current value as a marker on it, so "how far off am I" is a position,
+   not a subtraction the driver has to do at the wheel.
+   (Named gtaCardHTML because cardHTML already exists for stop cards — the
+   collision silently shadowed this one and rendered stop markup instead.) */
+function gtaCardHTML(r){
+  const state = r.ok===null ? 'none' : r.ok ? 'in' : (r.dir==='low'?'low':'high');
+  const ICON  = {in:'✓', low:'▲', high:'▼', none:'·'}[state];
+  const WORD  = {in:'IN', low:'LOW', high:'HIGH', none:'—'}[state];
+  const val   = `${r.val}${r.unit}`;
+  let track='';
+  if(r.range){
+    // Domain brackets the window by its own width, so the band always sits in
+    // the middle third and the marker has room to show how far outside it is.
+    const lo=r.range[0], hi=r.range[1];
+    const span=Math.max(hi-lo,Math.max(hi*0.15,1));
+    const d0=Math.max(0,lo-span), d1=hi+span;
+    const pc=v=>Math.max(0,Math.min(100,(v-d0)/(d1-d0)*100));
+    const bandL=pc(lo), bandW=Math.max(2,pc(hi)-pc(lo));
+    const mark=pc(r.val);
+    const refMark=r.ref!=null?`<i class="gta-ref-tick" style="left:${pc(r.ref)}%"></i>`:'';
+    track=`<div class="gta-track">
+        <i class="gta-band" style="left:${bandL}%;width:${bandW}%"></i>
+        ${refMark}
+        <i class="gta-mark gta-${state}" style="left:${mark}%"></i>
+      </div>`;
   }
+  return `<div class="gta-card gta-${state}">
+    <div class="gta-card-top">
+      <span class="gta-card-lbl">${r.label}</span>
+      <span class="gta-chip gta-${state}">${ICON} ${WORD}</span>
+    </div>
+    <div class="gta-card-val">${val}</div>
+    ${track}
+    <div class="gta-card-foot">${r.range?`target ${r.range[0]}–${r.range[1]}`:'no target'}${
+      r.ref!=null?` <span class="gta-ref">· ref ${r.ref}</span>`:''}</div>
+  </div>`;
 }
 
 const GTA_TARGET_KEY='gpx-gta-target';

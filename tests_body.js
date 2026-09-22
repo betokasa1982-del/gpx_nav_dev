@@ -3901,6 +3901,51 @@ function gtaRun(kmh,seconds,stopEvery,stopDur){
   console.log('GTA-8. live panel scoped to recording only OK');
 })();
 
+// ── GTA-9: five criterion cards, each readable without colour ──
+(function(){
+  // The first build named this renderer cardHTML, which already existed for
+  // stop cards. The collision was silent: the panel filled with stop markup
+  // and no card appeared. Names are asserted, not assumed.
+  console.assert(typeof gtaCardHTML==='function','GTA-9: the card renderer lost its own name');
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  console.assert((html.match(/function gtaCardHTML\(/g)||[]).length===1,'GTA-9: renderer duplicated');
+
+  GTATarget.setClass('Ci2');
+  const ev=GTATarget.evaluate(gtaRun(18,900),0);
+  const cards=ev.rows.map(r=>gtaCardHTML(r));
+  console.assert(cards.length===5,'GTA-9: expected five cards, got '+cards.length);
+
+  // state must survive with the colour removed: icon AND word on every card
+  cards.forEach((c,i)=>{
+    console.assert(/class="gta-chip/.test(c),'GTA-9: card '+i+' has no state chip');
+    console.assert(/(✓ IN|▲ LOW|▼ HIGH|· —)/.test(c),
+      'GTA-9: card '+i+' state is colour-only — no icon and word');
+    console.assert(/gta-card-val/.test(c),'GTA-9: card '+i+' has no value');
+    console.assert(/target \d/.test(c),'GTA-9: card '+i+' does not state its window');
+  });
+  // the marker must sit inside the track, and the band must be visible
+  const one=cards[1];
+  const mark=/class="gta-mark[^"]*" style="left:([\d.]+)%/.exec(one);
+  const band=/class="gta-band" style="left:([\d.]+)%;width:([\d.]+)%/.exec(one);
+  console.assert(mark&&+mark[1]>=0&&+mark[1]<=100,'GTA-9: value marker outside the track');
+  console.assert(band&&+band[2]>=2,'GTA-9: target band collapsed to nothing');
+
+  // an out-of-range value still lands on the track rather than overflowing
+  const far=gtaCardHTML({key:'spd',label:'Avg',val:200,unit:' km/h',range:[15,23],ref:null,ok:false,dir:'high'});
+  const fm=/class="gta-mark[^"]*" style="left:([\d.]+)%/.exec(far);
+  console.assert(fm&&+fm[1]<=100,'GTA-9: a wildly out-of-range value overflows the track');
+  console.assert(/▼ HIGH/.test(far),'GTA-9: over-range card does not say HIGH');
+  // the picker's container was also ".gta-card"; the card rules then clamped
+  // the whole modal to a criterion card's height
+  console.assert(!/class="gta-card"/.test(html),
+    'GTA-9: something other than a criterion card wears .gta-card');
+  console.assert(/class="gta-sheet"/.test(html),'GTA-9: the picker lost its own container class');
+  console.log('GTA-9. five cards, icon+word state, marker clamped, classes separate OK');
+})();
+
 GTATarget.clear();
 console.log('ALL GTA-TARGET TESTS PASSED');
 __group('GTA target tests');
