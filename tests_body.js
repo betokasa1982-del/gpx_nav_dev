@@ -4733,3 +4733,101 @@ __group('Field 22/09-B tests');
 })();
 console.log('ALL STORE-4 CHECKS PASSED');
 __group('Storage boot tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FIELD 22/09-C — the exit button, and stops orphaned in 'current'
+//  Reported with two screenshots at 97-100 km/h on the motorway:
+//    · the ✕ (exit navigation) "ta congelado ou nao funciona"
+//    · the AT STOP panel showing "Stop 1 · TIMER NOT RUNNING" while driving
+//  Measured: the ✕ sits inside .nav-hud, which is pointer-events:none so the
+//  map stays draggable; every other control re-enables it, this one never did
+//  — clicks went through to the map. And a stop could only leave 'current'
+//  through the timer, so with auto-start off it stayed 'current' for the rest
+//  of the cycle and blocked every later stop.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── field 22/09-C (exit button · orphaned stops) ──');
+(function(){
+  const C_fs=require('fs'),C_path=require('path');
+  const html=C_fs.readFileSync(
+    [C_path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+      .find(p=>C_fs.existsSync(p)),'utf8');
+  const code=html.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+
+  // ── EXIT-1: the only way out of navigation must accept a click ──
+  console.assert(/\.nav-hud\{[^}]*pointer-events:none/.test(html),
+    'EXIT-1: assumption changed — .nav-hud no longer blocks pointer events');
+  const rule=/body\.cockpit #cockpit-exit\{[\s\S]*?\}/.exec(html);
+  console.assert(rule,'EXIT-1: the cockpit exit rule is gone');
+  console.assert(rule&&/pointer-events:auto!important/.test(rule[0]),
+    'EXIT-1: the exit button is inside a pointer-events:none layer and never re-enables them');
+  console.assert(rule&&/z-index:1300!important/.test(rule[0]),
+    'EXIT-1: the exit button has no stacking guarantee over the map');
+  console.assert(/id="cockpit-exit"[^>]*onclick="exitNavigation\(\)"/.test(html),
+    'EXIT-1: the exit button is not wired to exitNavigation');
+  console.log('EXIT-1. exit button is clickable and wired OK');
+
+  // ── ORPHAN-1: leaving a stop retires it even when no timer ever ran ──
+  const dep=/const leftForGood[\s\S]*?\n    \}/.exec(code);
+  console.assert(dep,'ORPHAN-1: the departure branch was not found');
+  console.assert(dep&&/else if\(leftForGood&&s\.state==='current'\)/.test(dep[0]),
+    'ORPHAN-1: a stop can still only leave "current" through the timer');
+  console.assert(dep&&/s\.untimed=\(s\.elapsed===0\)/.test(dep[0]),
+    'ORPHAN-1: a stop left without a measured dwell is not recorded as such');
+  console.log('ORPHAN-1. departure retires a stop with no timer OK');
+
+  // ── ORPHAN-2: end to end on the real cycle, with auto-start OFF ──
+  const F_fs=require('fs'),F_path=require('path');
+  const f=[F_path.join(__dirname,'testdata','Cycle_field_22_09.json'),
+           '/tmp/dev/gpx_nav_dev-main/testdata/Cycle_field_22_09.json']
+    .find(p=>F_fs.existsSync(p));
+  if(f){
+    const REC=JSON.parse(F_fs.readFileSync(f,'utf8'))[0];
+    loadFresh(JSON.parse(JSON.stringify(REC)));
+    navActive=true;insideStop.clear();departGate=null;evtAnnounced.clear();
+    el('rng-radius').value='10';
+    el('rng-auto').value='0';          // the driver turned auto-start off
+    el('rng-autostop').value='1';
+    Playback.begin('1');
+    REC.points.forEach(q=>onGPS({coords:{latitude:q.lat,longitude:q.lng,accuracy:6,
+      altitude:q.alt||0,speed:q.speed,heading:null},timestamp:q.t}));
+    const stuck=stops.filter(s=>s.state==='current');
+    console.assert(stuck.length===0,
+      'ORPHAN-2: '+stuck.length+' stop(s) left orphaned in "current" after the cycle: P'+
+      stuck.map(s=>s.id).join(',P'));
+    const pending=stops.filter(s=>s.state==='waiting');
+    console.assert(pending.length===0,
+      'ORPHAN-2: an orphaned stop blocked '+pending.length+' later stops');
+    const untimed=stops.filter(s=>s.untimed).length;
+    console.assert(untimed>0,
+      'ORPHAN-2: stops were completed with no timer yet none is flagged untimed');
+    console.log('ORPHAN-2. auto-start OFF: no stop stranded, '+untimed+' flagged "No time" OK');
+    exitNavigation();
+  }
+
+  // ── ORPHAN-3: "No time" is its own outcome, not silently "Done" ──
+  console.assert(/st\.textContent=s\.missed\?'Missed':\(s\.untimed&&s\.state==='done'\?'No time'/.test(code),
+    'ORPHAN-3: a stop with no measured dwell is labelled the same as a completed one');
+  console.assert(/\.sc-badge\.untimed\{/.test(html),'ORPHAN-3: no badge style for an untimed stop');
+  console.assert(/done&&untimed\?'\?'/.test(code),'ORPHAN-3: the map pin shows a clean tick for an untimed stop');
+  console.log('ORPHAN-3. visited / not timed / missed are three distinct outcomes OK');
+
+  // ── ALERT-1: every showAlert type used must have a style, or it renders
+  //             as bare white text over a light basemap ──
+  const types=[...code.matchAll(/showAlert\(\s*'([a-z-]+)'/g)].map(m=>m[1]);
+  const styled=[...html.matchAll(/\.arriving\.([a-z-]+)\s*\{/g)].map(m=>m[1]);
+  const unstyled=[...new Set(types)].filter(t=>!styled.includes(t));
+  console.assert(unstyled.length===0,
+    'ALERT-1: showAlert type(s) with no style, unreadable over the map: '+unstyled.join(', '));
+  console.log('ALERT-1. all '+[...new Set(types)].length+' alert types are styled OK');
+
+  // ── GTA-VIS-1: the strip is sized to be read from the driver's seat ──
+  const cell=/\.gb-cell \.gb-v\{[^}]*\}/.exec(html);
+  console.assert(cell&&/font-size:26px/.test(cell[0]),
+    'GTA-VIS-1: the GTA values are back below glance size');
+  const glyph=/\.gb-cell \.gb-s\{[^}]*\}/.exec(html);
+  console.assert(glyph&&/font-size:20px/.test(glyph[0]),'GTA-VIS-1: the direction glyph shrank');
+  console.assert(/\.gb-cell\{[^}]*min-height:74px/.test(html),'GTA-VIS-1: the cells lost their height');
+  console.log('GTA-VIS-1. GTA markers at glance size OK');
+})();
+console.log('ALL FIELD 22/09-C TESTS PASSED');
+__group('Field 22/09-C tests');

@@ -506,6 +506,9 @@ body.at-stop .nsc{display:none!important}          /* one stop surface, not two 
 .arriving.arrived {background:var(--green);color:#000;box-shadow:none}
 .arriving.departed{background:var(--blue);color:#000;box-shadow:none}
 .arriving.stop-alert{background:var(--red);color:#fff;box-shadow:none}
+/* A warning the driver must not miss over a light basemap: showAlert('missed')
+   had no style at all and rendered as white text on the map. */
+.arriving.missed  {background:var(--warn);color:#000;box-shadow:none}
 @keyframes popIn{from{transform:translate(-50%,-50%) scale(.7);opacity:0}}
 @keyframes blink{50%{opacity:.15}}
 
@@ -584,7 +587,9 @@ body.at-stop .nsc{display:none!important}          /* one stop surface, not two 
 /* A missed stop stays legible — it is a test result the engineer must see,
    not a completed stop to fade out. Word + colour, never colour alone. */
 .stop-card.state-missed{opacity:1;border-left:3px solid var(--warn,#ffc400)}
-.sc-badge.missed{background:rgba(255,196,0,.14);color:var(--warn,#ffc400);font-weight:700}
+.sc-badge.missed{background:rgba(255,196,0,.14);color:var(--warn);font-weight:700}
+.sc-badge.untimed{background:rgba(0,176,255,.14);color:var(--blue);font-weight:700}
+.stop-card.state-untimed{opacity:1;border-left:3px solid var(--blue)}
 .stop-card.state-over{border-color:var(--red)}
 .sc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 7px}
 .sc-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -969,21 +974,22 @@ body.cockpit .atstop.over{border-left-color:var(--red)}
    card, out of the instruction card's way.                               */
 .gtabar{display:none}
 body.cockpit .gtabar{display:block;position:absolute;
-  left:calc(var(--rail-w) + 14px);bottom:86px;width:300px;
+  left:calc(var(--rail-w) + 14px);bottom:86px;width:378px;
   background:var(--ck-card);border:1px solid var(--ck-line);
   border-left:4px solid var(--blue);border-radius:12px;padding:10px 12px;z-index:1205}
 .gb-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.gb-cls{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:.06em;
+.gb-cls{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;color:var(--blue)}
-.gb-score{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--muted)}
+.gb-score{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--muted)}
 .gb-score.ok{color:var(--green)}
 .gb-score.warn{color:var(--warn)}
-.gb-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
-.gb-cell{display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:6px 1px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid transparent}
+.gb-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.gb-cell{display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:9px 2px 8px;border-radius:8px;background:rgba(255,255,255,.05);
+  border:2px solid transparent;min-height:74px;justify-content:center}
 .gb-cell .gb-k{font-family:var(--mono);font-size:12px;letter-spacing:0;color:var(--muted)}
-.gb-cell .gb-v{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--text)}
-.gb-cell .gb-s{font-size:13px;font-weight:700;line-height:1}
+.gb-cell .gb-v{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1;color:var(--text)}
+.gb-cell .gb-s{font-size:20px;font-weight:800;line-height:1}
 .gb-cell.in {border-color:var(--green);color:var(--green)}
 .gb-cell.out{border-color:var(--warn);color:var(--warn)}
 .gb-cell.in  .gb-v{color:var(--green)}
@@ -993,8 +999,10 @@ body.cockpit .gtabar{display:block;position:absolute;
   body.cockpit .atstop .as-clock{font-size:52px}
   body.cockpit .atstop .as-evt{min-height:70px}
   body.cockpit .atstop .as-btn{min-height:50px;font-size:15px}
-  body.cockpit .gtabar{left:calc(var(--rail-w) + 10px);bottom:78px;width:min(52vw,246px)}
-  .gb-cell .gb-v{font-size:15px}
+  body.cockpit .gtabar{left:calc(var(--rail-w) + 10px);bottom:78px;width:min(56vw,320px)}
+  .gb-cell .gb-v{font-size:21px}
+  .gb-cell .gb-s{font-size:17px}
+  .gb-cell{min-height:66px;padding:7px 1px 6px}
 }
 body.cockpit #cockpit-speed{position:absolute!important;right:14px!important;
   top:68px!important;left:auto!important;bottom:auto!important;
@@ -1008,6 +1016,11 @@ body.cockpit #cockpit-exit{position:absolute!important;right:14px!important;
      removed in the CSS cleanup — the driver was left inside navigation with
      no way out (field, 16 Aug). The lock now owns the display too. */
   display:flex!important;align-items:center!important;justify-content:center!important;
+  /* .nav-hud is pointer-events:none so the map stays draggable through the
+     HUD; every control inside re-enables it. This one never did, so the only
+     way out of navigation was inert — clicks went straight through to the map
+     (field, 22 Sep: "o que marquei em vermelho ta congelado"). */
+  pointer-events:auto!important;z-index:1300!important;
   font-size:18px}
 /* landscape safety: shorter viewport, slightly shorter dock photo */
 @media (orientation:landscape) and (max-height:860px){
@@ -3113,11 +3126,11 @@ function parseGPX(xml,filename){
 // A missed stop is a result, not a completed stop: it keeps the full-size pin
 // and is marked with "!" in the warning colour — the glyph carries the status,
 // never the colour alone.
-function mkStopIcon(id,state,isNext,missed){
+function mkStopIcon(id,state,isNext,missed,untimed){
   const colors={waiting:'#ff6a00',current:'#00e676',done:'#555'};
   const done=state==='done'&&!missed;
-  const lbl=missed?'!':(done?'✓':id);
-  const c=missed?'#ffc400':(colors[state]||'#ff6a00');
+  const lbl=missed?'!':(done&&untimed?'?':(done?'✓':id));
+  const c=missed?'#ffc400':(done&&untimed?'#00b0ff':(colors[state]||'#ff6a00'));
   const SZ=done?30:(isNext||state==='current'?46:38);
   const cls=state==='current'?'mk-pulse-g':(isNext?'mk-pulse-a':'');
   return L.divIcon({
@@ -3128,7 +3141,7 @@ function mkStopIcon(id,state,isNext,missed){
 function refreshStopIcons(){
   const next=stops.find(x=>x.state!=='done');
   stops.forEach(x=>stopMarkers[x.id]?.setIcon(
-    mkStopIcon(x.id,x.state,x===next&&x.state!=='current',x.missed)));
+    mkStopIcon(x.id,x.state,x===next&&x.state!=='current',x.missed,x.untimed)));
 }
 function renderCard(s){
   if(el('stops-empty')) el('stops-empty').style.display='none';
@@ -3186,13 +3199,19 @@ function updCardProgress(s){
 function updCardState(s){
   const card=el(`sc-${s.id}`);if(!card)return;
   const vstate=s.missed?'missed'
+    :(s.untimed&&s.state==='done')?'untimed'
     :(s.state==='current'&&s.dur_s>0&&s.elapsed>s.dur_s?'over':s.state);
   card.className=`stop-card state-${vstate}`;
   const num=el(`scnum-${s.id}`);if(num)num.className=`sc-num ${s.state==='waiting'?'waiting':s.state==='current'?'current':'done'}`;
   const st=el(`scst-${s.id}`);
-  if(st){st.className=`sc-badge ${s.missed?'missed':s.state}`;
-    st.textContent=s.missed?'Missed'
-      :{waiting:'Waiting',current:'At stop',done:'Done'}[s.state]}
+  if(st){
+    // Three distinct outcomes, each with its own word: the bus never stopped
+    // (Missed), it stopped but no dwell was measured (No time), or it stopped
+    // and the dwell was recorded (Done).
+    const tag=s.missed?'missed':(s.untimed&&s.state==='done'?'untimed':s.state);
+    st.className=`sc-badge ${tag}`;
+    st.textContent=s.missed?'Missed':(s.untimed&&s.state==='done'?'No time'
+      :{waiting:'Waiting',current:'At stop',done:'Done'}[s.state])}
   refreshStopIcons(); // re-evaluates which stop is NEXT (pulsing highlight)
   try{renderAtStop()}catch(e){}
 }
@@ -3229,7 +3248,7 @@ function pauseTimer(id){
 }
 function resetTimer(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
-  s.elapsed=0;s.state='waiting';s.missed=false;
+  s.elapsed=0;s.state='waiting';s.missed=false;s.untimed=false;
   const d=el(`td-${id}`);if(d){d.textContent='00:00:00';d.className='sc-time-val'}
   const bar=el(`scb-${id}`);if(bar)bar.style.width='0%';
   const dEl=el(`scd-${id}`);if(dEl)dEl.textContent='';
@@ -3237,7 +3256,7 @@ function resetTimer(id){
 }
 function markDone(id,missed){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
-  s.state='done';s.missed=!!missed;insideStop.delete(id);
+  s.state='done';s.missed=!!missed;if(missed)s.untimed=false;insideStop.delete(id);
   // Gate carries the stop's ROUTE position: leaving the circle is not enough,
   // the vehicle must also have advanced along the recorded cycle. It also
   // carries the stop's id, because the gate exists to block THAT stop being
@@ -3904,7 +3923,7 @@ const Playback={
     // stop occurrence runtime state — same reset startNav applies
     stops.forEach(s=>{
       clearInterval(s.intervalId);
-      s.state='waiting';s.elapsed=0;s.running=false;s.missed=false;
+      s.state='waiting';s.elapsed=0;s.running=false;s.missed=false;s.untimed=false;
       updCardState(s);
     });
     insideStop.clear();departGate=null;evtAnnounced.clear();
@@ -5780,11 +5799,29 @@ function checkArrival(lat,lng,rawKmh,match,accuracyM){
     const pastOnRoute = s.routeDistanceM!=null
       && routeProgressM>s.routeDistanceM+NAV.STOP_PASSED_M
       && distM>radius;
+    // Unambiguous departure: measurably past the stop on the recorded cycle,
+    // or simply far away when the stop has no anchor.
+    const leftForGood = pastOnRoute || distM>Math.max(effectiveRadius*3,60);
     if(distM>effectiveRadius*1.2||pastOnRoute){
       insideStop.delete(id);
       if(autoStop&&s.running){
         pauseTimer(id);markDone(id);
         showAlert('departed',`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
+        if(photoPreviewStopId===id)closeStopPhoto();
+      }else if(leftForGood&&s.state==='current'){
+        /* A stop could only leave 'current' through the timer. With the timer
+           never started (auto-start off, or the driver did not press GO) the
+           stop stayed 'current' for the rest of the cycle: it blocked every
+           later stop exactly like a missed one, and the AT STOP panel sat on
+           screen at 100 km/h (field, 22 Sep). The vehicle has demonstrably
+           left, so the stop is retired here. If no time was measured that is
+           recorded as such — the visit is real, the dwell figure is not. */
+        if(s.running)pauseTimer(id);
+        s.untimed=(s.elapsed===0);
+        markDone(id);
+        showAlert(s.untimed?'missed':'departed',
+          s.untimed?`⚠ ${s.name} — left with no dwell time recorded`
+                   :`✓ ${s.name} · ${fmtTime(s.elapsed)}`);
         if(photoPreviewStopId===id)closeStopPhoto();
       }
     }
