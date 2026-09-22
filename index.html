@@ -518,6 +518,10 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}}
 .stop-card.state-current{border-color:var(--green);box-shadow:0 0 0 1px rgba(63,185,80,.12)}
 .stop-card.state-done{opacity:.4}
+/* A missed stop stays legible — it is a test result the engineer must see,
+   not a completed stop to fade out. Word + colour, never colour alone. */
+.stop-card.state-missed{opacity:1;border-left:3px solid var(--warn,#ffc400)}
+.sc-badge.missed{background:rgba(255,196,0,.14);color:var(--warn,#ffc400);font-weight:700}
 .stop-card.state-over{border-color:var(--red)}
 .sc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 7px}
 .sc-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -2502,11 +2506,15 @@ function renderHudPanel(){
   const current=stops.find(s=>s.state==='current');
   const next=stops.find(s=>s.state==='waiting');
   const toShow=[current,next].filter(Boolean);
-  const total=stops.length, done=stops.filter(s=>s.state==='done').length;
+  const total=stops.length;
+  const retired=stops.filter(s=>s.state==='done').length;
+  const missed=stops.filter(s=>s.state==='done'&&s.missed).length;
+  const done=retired-missed;          // a missed stop is not a completed stop
   // Progress header
   const hdr=document.createElement('div');
   hdr.style.cssText='padding:6px 12px;font-size:11px;font-family:var(--mono);color:var(--muted);border-bottom:1px solid var(--border)';
-  hdr.textContent=`Stop ${done+1} of ${total} · ${done} done`;
+  hdr.textContent=`Stop ${Math.min(retired+1,total)} of ${total} · ${done} done`
+    +(missed?` · ${missed} missed`:'');
   c.appendChild(hdr);
   toShow.forEach(s=>{
     const row=document.createElement('div');
@@ -2516,8 +2524,9 @@ function renderHudPanel(){
     const timerCls=s.running?'running':delta>0&&s.elapsed>0?'over':'';
     row.className=`hud-stop-row ${s.state}`;
     row.innerHTML=`
-      <div class="hud-sr-num ${s.state==='done'?'done':s.state==='current'?'current':'waiting'}">
-        ${s.state==='done'?'✓':s.id}
+      <div class="hud-sr-num ${s.state==='done'?'done':s.state==='current'?'current':'waiting'}"
+        ${s.missed?'title="Not detected — recorded as missed" style="color:var(--warn)"':''}>
+        ${s.missed?'!':(s.state==='done'?'✓':s.id)}
       </div>
       <div class="hud-sr-name">${s.name}<span class="evt-inline">${
         normalizeStopEvents(s.events).map(e=>
@@ -2820,19 +2829,25 @@ function parseGPX(xml,filename){
 // ── STOP CARDS ─────────────────────────────────────────
 // Bigger 10"-readable pins. The NEXT pending stop pulses amber, the stop the
 // vehicle is currently at pulses green — the driver sees the target at a glance.
-function mkStopIcon(id,state,isNext){
+// A missed stop is a result, not a completed stop: it keeps the full-size pin
+// and is marked with "!" in the warning colour — the glyph carries the status,
+// never the colour alone.
+function mkStopIcon(id,state,isNext,missed){
   const colors={waiting:'#ff6a00',current:'#00e676',done:'#555'};
-  const lbl=state==='done'?'✓':id;const c=colors[state]||'#ff6a00';
-  const SZ=state==='done'?30:(isNext||state==='current'?46:38);
+  const done=state==='done'&&!missed;
+  const lbl=missed?'!':(done?'✓':id);
+  const c=missed?'#ffc400':(colors[state]||'#ff6a00');
+  const SZ=done?30:(isNext||state==='current'?46:38);
   const cls=state==='current'?'mk-pulse-g':(isNext?'mk-pulse-a':'');
   return L.divIcon({
-    html:`<div class="${cls}" style="background:${c};color:${state==='done'?'#aaa':'#000'};width:${SZ}px;height:${SZ}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:${state==='done'?12:17}px;font-weight:800">${lbl}</span></div>`,
+    html:`<div class="${cls}" style="background:${c};color:${done?'#aaa':'#000'};width:${SZ}px;height:${SZ}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:${done?12:17}px;font-weight:800">${lbl}</span></div>`,
     className:'',iconSize:[SZ,SZ],iconAnchor:[SZ/2,SZ],popupAnchor:[0,-SZ-4]
   });
 }
 function refreshStopIcons(){
   const next=stops.find(x=>x.state!=='done');
-  stops.forEach(x=>stopMarkers[x.id]?.setIcon(mkStopIcon(x.id,x.state,x===next&&x.state!=='current')));
+  stops.forEach(x=>stopMarkers[x.id]?.setIcon(
+    mkStopIcon(x.id,x.state,x===next&&x.state!=='current',x.missed)));
 }
 function renderCard(s){
   if(el('stops-empty')) el('stops-empty').style.display='none';
@@ -2889,10 +2904,14 @@ function updCardProgress(s){
 }
 function updCardState(s){
   const card=el(`sc-${s.id}`);if(!card)return;
-  card.className=`stop-card state-${s.state==='current'&&s.dur_s>0&&s.elapsed>s.dur_s?'over':s.state}`;
+  const vstate=s.missed?'missed'
+    :(s.state==='current'&&s.dur_s>0&&s.elapsed>s.dur_s?'over':s.state);
+  card.className=`stop-card state-${vstate}`;
   const num=el(`scnum-${s.id}`);if(num)num.className=`sc-num ${s.state==='waiting'?'waiting':s.state==='current'?'current':'done'}`;
   const st=el(`scst-${s.id}`);
-  if(st){st.className=`sc-badge ${s.state}`;st.textContent={waiting:'Waiting',current:'At stop',done:'Done'}[s.state]}
+  if(st){st.className=`sc-badge ${s.missed?'missed':s.state}`;
+    st.textContent=s.missed?'Missed'
+      :{waiting:'Waiting',current:'At stop',done:'Done'}[s.state]}
   refreshStopIcons(); // re-evaluates which stop is NEXT (pulsing highlight)
 }
 
@@ -2928,18 +2947,20 @@ function pauseTimer(id){
 }
 function resetTimer(id){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
-  s.elapsed=0;s.state='waiting';
+  s.elapsed=0;s.state='waiting';s.missed=false;
   const d=el(`td-${id}`);if(d){d.textContent='00:00:00';d.className='sc-time-val'}
   const bar=el(`scb-${id}`);if(bar)bar.style.width='0%';
   const dEl=el(`scd-${id}`);if(dEl)dEl.textContent='';
   updCardState(s);updTotals();updSummaryBar();
 }
-function markDone(id){
+function markDone(id,missed){
   pauseTimer(id);const s=stops.find(s=>s.id===id);if(!s)return;
-  s.state='done';insideStop.delete(id);
+  s.state='done';s.missed=!!missed;insideStop.delete(id);
   // Gate carries the stop's ROUTE position: leaving the circle is not enough,
-  // the vehicle must also have advanced along the recorded cycle.
-  departGate={lat:s.lat,lng:s.lng,routeDistanceM:s.routeDistanceM??null};
+  // the vehicle must also have advanced along the recorded cycle. It also
+  // carries the stop's id, because the gate exists to block THAT stop being
+  // re-armed on the next lap — see gateBlocks().
+  departGate={stopId:s.id,lat:s.lat,lng:s.lng,routeDistanceM:s.routeDistanceM??null};
   stopArrivalCandidate=null;
   updCardState(s);updSummaryBar();
   if(hudPanelOpen)renderHudPanel();
@@ -2952,11 +2973,16 @@ function updTotals(){
   const d=real-prog;el('h-real').className=`tstat-v${d>120?' over':d>0?' warn':' ok'}`;
 }
 function updSummaryBar(){
-  const done=stops.filter(s=>s.state==='done').length,n=stops.length;
+  // "done" is stops actually completed — a missed stop is retired from the
+  // pointer but must never inflate the completed count an engineer reads.
+  const n=stops.length;
+  const done=stops.filter(s=>s.state==='done'&&!s.missed).length;
+  const missedN=stops.filter(s=>s.state==='done'&&s.missed).length;
   const real=stops.reduce((a,s)=>a+s.elapsed,0),prog=stops.reduce((a,s)=>a+s.dur_s,0);
   const delta=real-prog,pct=prog?(real/prog)*100:0;
-  el('h-stops').textContent=`${done}/${n}`;
-  el('sb-done').textContent=`${done}/${n}`;
+  const stopsTxt=`${done}/${n}`+(missedN?` (${missedN} missed)`:'');
+  el('h-stops').textContent=stopsTxt;
+  el('sb-done').textContent=stopsTxt;
   el('sb-prog').textContent=prog?fmtTime(prog):'—';
   el('sb-rlbl').textContent=`Actual: ${fmtTime(real)}`;
   const sfill=el('sb-fill');
@@ -3594,7 +3620,7 @@ const Playback={
     // stop occurrence runtime state — same reset startNav applies
     stops.forEach(s=>{
       clearInterval(s.intervalId);
-      s.state='waiting';s.elapsed=0;s.running=false;
+      s.state='waiting';s.elapsed=0;s.running=false;s.missed=false;
       updCardState(s);
     });
     insideStop.clear();departGate=null;evtAnnounced.clear();
@@ -4463,6 +4489,15 @@ const NAV = {
   ARRIVE_CONFIRM:        2,// consecutive valid samples before a stop turns 'current'
   STOP_DIR_MAX_DEG: 110,   // approach vs movement bearing max error
   DEPART_PROGRESS_M: 60,   // route advance required to clear a departure gate
+  // ── stop sequencing (22/09 field cycle) ────────────────────────────────
+  GATE_AHEAD_M:      20,   // a pending stop this much further along the cycle
+                           // than the departure gate is a DIFFERENT stop, not
+                           // the gated one re-armed on the next lap
+  STOP_PASSED_M:     15,   // route advance past a stop's anchor that counts as
+                           // having left it, when the next stop is so close
+                           // that the departure circle still covers this one
+  MISS_PAST_M:       80,   // route metres past a stop's anchor before it is
+                           // recorded as MISSED so the cycle can carry on
   TURN_WIN_M:        15,   // bearing window each side for maneuver detection
   TURN_WIN_MIN_PTS:   2,   // but never fewer than N points
 };
@@ -5150,6 +5185,50 @@ function updInstruction(nearIdx,distFromStart){
 // has actually left. Cleared once distance from the gate exceeds the radius.
 let departGate=null;
 
+/* ── departure gate identity ───────────────────────────────────────────────
+   A departure gate is raised when a stop completes. Its job is to stop GPS
+   jitter inside that stop from immediately re-arming THE SAME stop on the
+   next lap. It was applied to any pending stop within 30 m of the gate,
+   which also caught a genuinely DIFFERENT stop that happens to sit nearby.
+   Field cycle 22/09/2026: P1 and P2 are 18.4 m apart, so P2 stayed gated
+   through its entire approach, dwell and departure, never arrived, and —
+   because it never turned done — blocked P3..P8 for the rest of the cycle.
+   Route position separates the two cases: the same stop on the next lap has
+   the same anchor, a different stop further along the cycle does not.      */
+function gateBlocks(gate,stop){
+  if(!gate||!stop)return false;
+  const nearby=haversine(gate.lat,gate.lng,stop.lat,stop.lng)*1000<30;
+  if(!nearby)return false;
+  const differentStop=gate.stopId!=null&&stop.id!=null&&gate.stopId!==stop.id;
+  if(differentStop&&gate.routeDistanceM!=null&&stop.routeDistanceM!=null)
+    return (stop.routeDistanceM-gate.routeDistanceM)<=NAV.GATE_AHEAD_M;
+  return true;
+}
+
+/* ── passed-stop sweep (head-of-line blocking) ─────────────────────────────
+   The arrival pointer is "the first stop that is not done". One stop that
+   never confirms therefore freezes the pointer and silently kills every
+   remaining stop, photo and event card for the rest of the cycle — which is
+   exactly what the driver saw on 22/09: the Next Stop Card sat on Stop 2
+   while the bus drove through stops 3 to 8, the distance counting UP.
+   A stop the vehicle has measurably driven past is recorded as MISSED. That
+   is a real test result and it is shown as one; what it must not do is take
+   the rest of the cycle down with it.                                      */
+function sweepPassedStops(){
+  if(!stops.length||routeProgressM==null)return;
+  stops.forEach(s=>{
+    if(s.state!=='waiting')return;        // never a stop the bus is sitting at
+    if(s.routeDistanceM==null)return;     // unanchored: no evidence either way
+    if(routeProgressM<=s.routeDistanceM+NAV.MISS_PAST_M)return;
+    markDone(s.id,true);
+    showAlert('missed',`⚠ ${s.name} not detected — recorded as MISSED`);
+    if(navDebug){
+      navDebugLog.push(`STOP-MISSED P${s.id} progress=${Math.round(routeProgressM)}m anchor=${Math.round(s.routeDistanceM)}m`);
+      if(navDebugLog.length>40)navDebugLog.shift();
+    }
+  });
+}
+
 function checkArrival(lat,lng,rawKmh,match,accuracyM){
   if(!stops.length)return;
   const radius=+el('rng-radius').value;
@@ -5168,6 +5247,10 @@ function checkArrival(lat,lng,rawKmh,match,accuracyM){
       : routeProgressM>departGate.routeDistanceM+NAV.DEPART_PROGRESS_M;
     if(leftPhysically&&leftOnRoute)departGate=null;
   }
+
+  // Stops the vehicle has driven past without arriving are retired here, so
+  // the pointer below can never be frozen by a single missed stop.
+  sweepPassedStops();
 
   // ── SEQUENCE-AWARE ARRIVAL: only the NEXT pending stop can arrive ──
   // Test cycles visit the same physical location on every lap; distance-only
@@ -5189,7 +5272,7 @@ function checkArrival(lat,lng,rawKmh,match,accuracyM){
     }
 
     // Gate check: same-spot next-lap stop must wait for a real departure first
-    const gated=departGate&&haversine(departGate.lat,departGate.lng,next.lat,next.lng)*1000<30;
+    const gated=gateBlocks(departGate,next);
 
     // Arrival = distance AND route position AND approach direction,
     // then held for ARRIVE_CONFIRM consecutive samples before it counts.
@@ -5224,7 +5307,16 @@ function checkArrival(lat,lng,rawKmh,match,accuracyM){
     const s=stops.find(x=>x.id===id);
     if(!s){insideStop.delete(id);return;}
     const distM=haversine(lat,lng,s.lat,s.lng)*1000;
-    if(distM>effectiveRadius*1.2){
+    // Leaving the circle is the normal signal. It fails when the NEXT stop is
+    // closer than the circle itself: on the 22/09 cycle the bus stood at P2
+    // (18.4 m away) while P1's 21.6 m departure circle still held it 'current',
+    // so P2 could not become the pointer until the bus was already past it.
+    // Route position is the tie-breaker — we are measurably further along the
+    // recorded cycle than this stop, and outside its own arrival radius.
+    const pastOnRoute = s.routeDistanceM!=null
+      && routeProgressM>s.routeDistanceM+NAV.STOP_PASSED_M
+      && distM>radius;
+    if(distM>effectiveRadius*1.2||pastOnRoute){
       insideStop.delete(id);
       if(autoStop&&s.running){
         pauseTimer(id);markDone(id);

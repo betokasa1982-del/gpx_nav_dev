@@ -4382,3 +4382,169 @@ console.log('\n── basemap tiles ──');
 })();
 console.log('ALL BASEMAP TILE TESTS PASSED');
 __group('Basemap tile tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FIELD 22/09/2026 — stop sequencing on a real recorded cycle
+//  Reported: "na gravacao pareceu funcionar bem ... mas na hora de reproduzir
+//  nao funcionou nada bem, nao detectou paradas, nao mostrou foto, nao
+//  mostrou figura com eventos da parada".
+//  Measured cause, in order:
+//    1. P1 and P2 are 18.4 m apart — inside P1's 21.6 m departure circle, so
+//       P1 stayed 'current' while the bus was standing at P2.
+//    2. markDone(P1) raised a departure gate that blocked ANY pending stop
+//       within 30 m — including P2, a different stop 25 m further along.
+//    3. P2 therefore never arrived, and because the arrival pointer is "the
+//       first stop that is not done", P3..P8 were never evaluated at all.
+//       The Next Stop Card sat on Stop 2 for the rest of the cycle, showing
+//       Stop 2's photo and Stop 2's events with the distance counting UP.
+//  All three symptoms the driver reported come from this one chain.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── field cycle 22/09 (stop sequencing) ──');
+const _realSpeakF22=speakText; speakText=(t,f)=>{_spoken.push(String(t));};
+(function(){
+  const F_fs=require('fs'),F_path=require('path');
+  const f=[F_path.join(__dirname,'testdata','Cycle_field_22_09.json'),
+           '/tmp/dev/gpx_nav_dev-main/testdata/Cycle_field_22_09.json']
+    .find(p=>F_fs.existsSync(p));
+  if(!f){console.log('FIELD22. fixture missing — suite skipped'); return;}
+  const REC=JSON.parse(F_fs.readFileSync(f,'utf8'))[0];
+
+  function beginField(radius){
+    loadFresh(JSON.parse(JSON.stringify(REC)));
+    navActive=true;insideStop.clear();departGate=null;evtAnnounced.clear();
+    el('rng-radius').value=String(radius||10);
+    el('rng-auto').value='1'; el('rng-autostop').value='1';
+    Playback.begin('1');
+    _spoken=[];
+  }
+  // replay the driver's own fixes; JSON speed is m/s, as the Geolocation API gives it
+  function driveField(onFix){
+    REC.points.forEach((q,i)=>{
+      onGPS({coords:{latitude:q.lat,longitude:q.lng,accuracy:6,altitude:q.alt||0,
+        speed:q.speed,heading:null},timestamp:q.t});
+      if(onFix)onFix(i);
+    });
+  }
+  const sep=(a,b)=>haversine(REC.stops[a].lat,REC.stops[a].lng,
+                             REC.stops[b].lat,REC.stops[b].lng)*1000;
+
+  // FIELD22-1: the trigger geometry, stated as a fact about the recording
+  const d12=sep(0,1);
+  console.assert(Math.abs(d12-18.4)<3,'FIELD22-1: P1->P2 separation '+d12.toFixed(1)+' m, expected ~18.4');
+  console.assert(d12<10*1.8*1.2,
+    'FIELD22-1: the fixture no longer reproduces the masking case (P2 outside P1 departure circle)');
+  console.log('FIELD22-1. P1->P2 '+d12.toFixed(1)+' m — inside the departure circle OK');
+
+  // FIELD22-2: every stop is anchored and carries what the driver must see
+  beginField(10);
+  console.assert(stops.length===8,'FIELD22-2: '+stops.length+' stops loaded, expected 8');
+  console.assert(stops.every(s=>s.routeDistanceM!=null),'FIELD22-2: a stop lost its route anchor');
+  console.assert(stops.filter(s=>s.photo&&s.photo.length>10).length===6,'FIELD22-2: photos did not survive load');
+  console.assert(stops.filter(s=>s.events&&s.events.length).length===7,'FIELD22-2: stop events did not survive load');
+  console.log('FIELD22-2. 8 stops anchored · 6 photos · 7 with events OK');
+
+  // FIELD22-3: THE REGRESSION — replaying the driver's own fixes must work
+  //            through the whole cycle, not die after the first stop
+  beginField(10);
+  driveField();
+  const pending=stops.filter(s=>s.state==='waiting');
+  console.assert(pending.length===0,
+    'FIELD22-3: '+pending.length+' stops never evaluated (head-of-line block): P'+pending.map(s=>s.id).join(',P'));
+  const arrived=stops.filter(s=>s.state==='done'&&!s.missed).length;
+  console.assert(arrived===8,'FIELD22-3: only '+arrived+'/8 stops were detected on replay');
+  console.log('FIELD22-3. all 8 stops detected replaying the driver\'s own fixes OK');
+
+  // FIELD22-4: each stop must become the pointer while the bus is AT it,
+  //            not after it has driven past — that is what froze the card
+  beginField(10);
+  const cardAt=[];
+  const closest=REC.stops.map(s=>{let bi=0,bd=1e9;
+    REC.points.forEach((q,i)=>{const d=haversine(q.lat,q.lng,s.lat,s.lng)*1000;
+      if(d<bd){bd=d;bi=i;}});return bi;});
+  driveField(i=>{
+    const k=closest.indexOf(i);
+    if(k>=0){const n=stops.find(s=>s.state!=='done');cardAt.push(n?n.id:null);}
+  });
+  const wrong=cardAt.map((id,k)=>({at:k+1,shown:id})).filter(x=>x.shown!==x.at);
+  console.assert(wrong.length===0,
+    'FIELD22-4: the Next Stop Card pointed at the wrong stop: '+
+    wrong.map(x=>'at P'+x.at+' showed P'+x.shown).join(' | '));
+  console.log('FIELD22-4. pointer tracks the bus through all 8 stops OK');
+
+  // FIELD22-5: gateBlocks — a gate blocks the stop it was raised for, and
+  //            releases a different stop that is further along the cycle
+  const gate={stopId:1,lat:REC.stops[0].lat,lng:REC.stops[0].lng,routeDistanceM:0};
+  const sameNextLap={id:1,lat:REC.stops[0].lat,lng:REC.stops[0].lng,routeDistanceM:0};
+  const nearbyAhead={id:2,lat:REC.stops[1].lat,lng:REC.stops[1].lng,routeDistanceM:25};
+  const farAway    ={id:5,lat:REC.stops[4].lat,lng:REC.stops[4].lng,routeDistanceM:1523};
+  console.assert(gateBlocks(gate,sameNextLap)===true,
+    'FIELD22-5: the gate stopped protecting the same stop on the next lap');
+  console.assert(gateBlocks(gate,nearbyAhead)===false,
+    'FIELD22-5: a different stop further along the cycle is still gated');
+  console.assert(gateBlocks(gate,farAway)===false,'FIELD22-5: a distant stop is gated');
+  console.assert(gateBlocks(null,nearbyAhead)===false,'FIELD22-5: no gate must not block');
+  // a co-located stop that is NOT measurably ahead stays gated
+  console.assert(gateBlocks(gate,{id:9,lat:REC.stops[0].lat,lng:REC.stops[0].lng,routeDistanceM:5})===true,
+    'FIELD22-5: a co-located stop at the same route position lost its gate');
+  console.log('FIELD22-5. gate blocks by identity + route position, not by proximity alone OK');
+
+  // FIELD22-6: head-of-line — a stop that genuinely cannot arrive must not
+  //            take the rest of the cycle with it
+  beginField(10);
+  stops[2].lat+=0.01; stops[2].lng+=0.01;   // move P3 a km off the route: unreachable
+  stops[2].routeDistanceM=stops[2].routeDistanceM; // anchor unchanged — it is passed, not moved
+  driveField();
+  const p3=stops.find(s=>s.id===3);
+  console.assert(p3.state==='done'&&p3.missed===true,
+    'FIELD22-6: an unreachable stop was not recorded as missed (state='+p3.state+', missed='+p3.missed+')');
+  const after=stops.filter(s=>s.id>3);
+  console.assert(after.every(s=>s.state==='done'&&!s.missed),
+    'FIELD22-6: stops after the missed one were blocked: '+
+    after.filter(s=>s.state!=='done'||s.missed).map(s=>'P'+s.id+':'+s.state).join(' '));
+  console.log('FIELD22-6. one unreachable stop is recorded MISSED; P4..P8 still detected OK');
+
+  // FIELD22-7: a missed stop must never be counted as a completed stop —
+  //            that would quietly corrupt the stops/km an engineer reads
+  updSummaryBar();
+  const txt=el('h-stops').textContent;
+  console.assert(/^7\/8/.test(txt),'FIELD22-7: completed count read "'+txt+'", expected 7/8');
+  console.assert(/missed/i.test(txt),'FIELD22-7: the missed stop is not reported: "'+txt+'"');
+  console.log('FIELD22-7. counter reads "'+txt+'" OK');
+
+  // FIELD22-8: the sweep must never retire a stop the bus is standing at
+  beginField(10);
+  stops[0].state='current';
+  routeProgressM=(stops[0].routeDistanceM||0)+5000;
+  sweepPassedStops();
+  console.assert(stops[0].state==='current'&&!stops[0].missed,
+    'FIELD22-8: the sweep retired the stop the vehicle is at');
+  // and an unanchored stop is never swept — no evidence either way
+  beginField(10);
+  stops[1].routeDistanceM=null; routeProgressM=99999;
+  sweepPassedStops();
+  console.assert(stops[1].state==='waiting','FIELD22-8: an unanchored stop was swept on no evidence');
+  console.log('FIELD22-8. sweep spares the current stop and unanchored stops OK');
+
+  // FIELD22-9: a missed stop is re-armed cleanly for the next lap
+  beginField(10);
+  stops[1].state='done'; stops[1].missed=true;
+  Playback._nextLap();
+  console.assert(stops[1].state==='waiting'&&stops[1].missed===false,
+    'FIELD22-9: the missed flag survived the lap re-arm');
+  console.log('FIELD22-9. lap re-arm clears the missed flag OK');
+
+  // FIELD22-10: the miss must be visible, not silent — word, not colour alone
+  const html=F_fs.readFileSync(
+    [F_path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+      .find(p=>F_fs.existsSync(p)),'utf8');
+  console.assert(/st\.textContent=s\.missed\?'Missed'/.test(html),
+    'FIELD22-10: the stop card does not label a missed stop');
+  console.assert(/\.sc-badge\.missed\{/.test(html),'FIELD22-10: no badge style for a missed stop');
+  console.assert(/s\.missed\?'!'/.test(html),'FIELD22-10: the map pin carries no glyph for a missed stop');
+  console.assert(/recorded as MISSED/.test(html),'FIELD22-10: the driver is not told a stop was missed');
+  console.log('FIELD22-10. missed stops are labelled in the card, the pin and an alert OK');
+  exitNavigation();
+})();
+speakText=_realSpeakF22;
+console.log('ALL FIELD 22/09 TESTS PASSED');
+__group('Field cycle 22/09 tests');
