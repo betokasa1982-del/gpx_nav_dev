@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#a371f7">
+<meta name="theme-color" content="#ffc400">
 <meta name="application-name" content="GPX Navigator DEV">
 <meta name="apple-mobile-web-app-title" content="GPX DEV">
 <title>GPX Navigator DEV</title>
@@ -14,7 +14,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
    STYLE LAYERS — cleaned 16 Aug (CSS-only pass; JS untouched, verified by hash)
@@ -37,10 +37,31 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root{
-  --bg:#0d1117;--panel:#161b22;--panel2:#1c2128;--border:#30363d;
-  --accent:#f0a500;--green:#3fb950;--red:#f85149;--blue:#58a6ff;
-  --text:#e6edf3;--muted:#a3adb8;
-  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+  /* ═══ APEXCYCLE — Dark-First Utility ═══════════════════════════════════
+     "A high-contrast, minimalist telemetry command center optimized for
+     peripheral vision and split-second glanceability at high speeds."
+     Pure OLED blacks prevent glare; graphite surfaces carry the hierarchy.
+     Palette, type scale and grid come from design_guidelines.json.       */
+  --bg:#070707;            /* surface — pure OLED black                  */
+  --panel:#1b1b1b;         /* surfaceSecondary — graphite cards          */
+  --panel2:#262626;        /* surfaceTertiary — raised rows              */
+  --border:#333333;--border-strong:#595959;--divider:#1a1a1a;
+  --accent:#ff6a00;        /* brand                                      */
+  --accent-2:#ff8a33;      /* brandSecondary                             */
+  --accent-dim:#4d2600;    /* brandTertiary                              */
+  --on-accent:#000000;
+  --green:#00e676;--red:#ff1744;--blue:#00b0ff;--warn:#ffc400;
+  --text:#f5f5f5;--muted:#a3a3a3;
+  /* Barlow Condensed carries the huge glanceable numerals; IBM Plex Sans
+     the labels; IBM Plex Mono keeps timers and data rows column-aligned.
+     System fallbacks (Roboto Condensed ships on Android) keep the cockpit
+     legible when the webfont is unavailable offline.                     */
+  --display:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;
+  --sans:'IBM Plex Sans',system-ui,'Roboto',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Roboto Mono',monospace;
+  /* strict 8pt grid — prevents visual jitter during fast updates */
+  --s-xs:4px;--s-sm:8px;--s-md:12px;--s-lg:16px;--s-xl:24px;--s-2xl:32px;
+  --r-sm:4px;--r-md:8px;--r-lg:12px;--r-pill:999px;
   --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -53,18 +74,21 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .logo{font-size:16px;font-weight:700;letter-spacing:2px;color:var(--accent);display:flex;align-items:center;gap:4px;flex-shrink:0}
 .top-stats{display:flex;gap:8px;flex:1;overflow:hidden;align-items:center}
 .tstat{display:flex;flex-direction:column;min-width:0}
-.tstat-l{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.tstat-l{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
 .tstat-v{font-size:14px;font-weight:700;font-family:var(--mono);white-space:nowrap}
 .tstat-v.ok{color:var(--green)}.tstat-v.warn{color:var(--accent)}.tstat-v.over{color:var(--red)}
 .tdiv{width:1px;height:24px;background:var(--border);flex-shrink:0}
 .top-actions{display:flex;gap:5px;flex-shrink:0}
 .btn{display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 11px;
-  border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text);
-  font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;
+  border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);
+  font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;
   text-transform:uppercase;min-height:38px;white-space:nowrap;user-select:none}
 .btn:active{opacity:.65}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#000}
-.btn.go{background:var(--green);border-color:var(--green);color:#000}
+/* secondary/utility (GPX, JSON, export) — ghosted so it never competes
+   with the primary action or with a "start driving" CTA */
+.btn.primary{background:transparent;border-color:var(--accent);color:var(--accent)}
+/* primary action on a card — brand, exactly one per row */
+.btn.go{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .btn.stop-nav{background:var(--red);border-color:var(--red);color:#fff}
 .btn.rec{background:rgba(248,81,73,.15);border-color:var(--red);color:var(--red)}
 .btn.rec-on{background:var(--red);border-color:var(--red);color:#fff;animation:recPulse 1.5s infinite}
@@ -76,60 +100,60 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex
 .sum-bar.on{display:flex}
 .sb-cols{display:flex;width:100%;align-items:center;gap:10px}
 .sb-item{display:flex;flex-direction:column;align-items:center;flex:1}
-.sb-lbl{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.sb-lbl{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
 .sb-val{font-size:15px;font-weight:700;font-family:var(--mono)}
 .sb-val.ok{color:var(--green)}.sb-val.warn{color:var(--accent)}.sb-val.over{color:var(--red)}
 .sb-div{width:1px;height:28px;background:var(--border);flex-shrink:0}
 .sb-prog{flex:2;display:flex;flex-direction:column;gap:3px}
-.sb-prog-row{display:flex;justify-content:space-between;font-size:9px;font-family:var(--mono);color:var(--muted)}
-.sb-pbar{height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden}
-.sb-pfill{height:100%;border-radius:3px;transition:width .5s,background .5s}
+.sb-prog-row{display:flex;justify-content:space-between;font-size:12px;font-family:var(--mono);color:var(--muted)}
+.sb-pbar{height:5px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
+.sb-pfill{height:100%;border-radius:4px;transition:width .5s,background .5s}
 
-.score-badge{display:inline-block;font-size:10px;font-weight:800;font-family:var(--mono);
+.score-badge{display:inline-block;font-size:13px;font-weight:800;font-family:var(--mono);
   padding:1px 6px;border-radius:8px;vertical-align:1px;margin-left:4px}
-.score-badge.m5{background:rgba(63,185,80,.18);color:#3fb950}
-.score-badge.m4{background:rgba(88,166,255,.18);color:#58a6ff}
-.score-badge.m3{background:rgba(240,165,0,.18);color:#f0a500}
-.score-badge.m0{background:rgba(248,81,73,.2);color:#f85149}
+.score-badge.m5{background:rgba(63,185,80,.18);color:#00e676}
+.score-badge.m4{background:rgba(88,166,255,.18);color:#00b0ff}
+.score-badge.m3{background:rgba(240,165,0,.18);color:#ff6a00}
+.score-badge.m0{background:rgba(248,81,73,.2);color:#ff1744}
 
 /* ── LIVE CYCLE METRICS ── */
 .lcm{position:absolute;right:10px;top:430px;width:195px;
   max-width:calc(100vw - 20px);box-sizing:border-box;
-  background:rgba(13,17,23,.97);border:1px solid var(--border);
-  border-left:3px solid var(--blue,#58a6ff);border-radius:12px;
+  background:#070707;border:1px solid var(--border);
+  border-left:3px solid var(--blue,#00b0ff);border-radius:12px;
   padding:9px 12px;pointer-events:auto;display:none;z-index:905;
-  box-shadow:0 4px 18px rgba(0,0,0,.55);
+  box-shadow:none;
   transition:opacity .2s}
-.lcm-title{font-size:11px;letter-spacing:1.5px;color:#aeb9c4;
+.lcm-title{font-size:13px;letter-spacing:1.5px;color:#a3a3a3;
   font-weight:800;font-family:var(--mono);margin-bottom:5px}
 .lcm-row{display:flex;justify-content:space-between;align-items:baseline;
   padding:3px 0;border-top:1px solid rgba(255,255,255,.08)}
-.lcm-l{font-size:13px;color:#aeb9c4}
-.lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:#79b8ff}
-.lcm-sub .lcm-v{font-size:14px;color:#e6edf3}
+.lcm-l{font-size:13px;color:#a3a3a3}
+.lcm-v{font-family:var(--mono);font-size:19px;font-weight:700;color:#00b0ff}
+.lcm-sub .lcm-v{font-size:14px;color:#f5f5f5}
 /* When the ROUTE STOPS drawer is open it covers the lower-right corner —
    hide Live Cycle so the two panels never overlap/clip each other. */
 body.stops-open .lcm{opacity:0;pointer-events:none}
 
 /* ── NEXT STOP CARD ── */
 .nsc-name{font-size:17px;font-weight:800;line-height:1.15;margin:2px 0 1px;
-  color:#e8eef6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  color:#f5f5f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nsc{position:absolute;right:10px;top:215px;width:236px;
   max-width:calc(100vw - 20px);max-height:calc(100vh - 260px);overflow:hidden;
   box-sizing:border-box;
-  background:rgba(13,17,23,.97);border:1px solid var(--border);
+  background:#070707;border:1px solid var(--border);
   border-left:3px solid var(--accent);border-radius:12px;
   padding:10px 12px;pointer-events:auto;display:none;z-index:905;
-  box-shadow:0 4px 18px rgba(0,0,0,.55)}
-.nsc-head{display:flex;justify-content:space-between;font-size:11px;
-  letter-spacing:1.5px;color:#aeb9c4;font-weight:800;font-family:var(--mono)}
+  box-shadow:none}
+.nsc-head{display:flex;justify-content:space-between;font-size:13px;
+  letter-spacing:1.5px;color:#a3a3a3;font-weight:800;font-family:var(--mono)}
 .nsc-dist{font-family:var(--mono);font-size:44px;font-weight:800;
   color:var(--accent);line-height:1.15;margin:3px 0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nsc.atstop .nsc-dist{color:var(--green,#3fb950)}
-.nsc.atstop{border-left-color:#3fb950}
+.nsc.atstop .nsc-dist{color:var(--green,#00e676)}
+.nsc.atstop{border-left-color:#00e676}
 .nsc-row{display:flex;justify-content:space-between;align-items:center;
-  font-size:13px;margin-top:2px;color:#e6edf3}
+  font-size:13px;margin-top:2px;color:#f5f5f5}
 .veh-icon{background:none;border:none}
 .veh-wrap{position:relative;width:46px;height:46px;display:flex;
   align-items:center;justify-content:center;pointer-events:none}
@@ -145,8 +169,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* Event chips — shape first, colour second, so they survive daylight and
    greyscale. `compact` drops the caption on narrow screens (§11). */
 .evt-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;
-  border:1px solid var(--accent);border-radius:7px;color:var(--accent);
-  background:rgba(240,165,0,.10);font-size:11px;line-height:1;white-space:nowrap}
+  border:1px solid var(--accent);border-radius:8px;color:var(--accent);
+  background:rgba(240,165,0,.10);font-size:13px;line-height:1;white-space:nowrap}
 .evt-chip b{font-weight:700;letter-spacing:.4px}
 .evt-chip.compact{padding:3px 5px;gap:0}
 .evt-chip svg{display:block}
@@ -156,13 +180,13 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* Recording buttons: ON/OFF must not rely on colour alone (§3). */
 .evt-btn{display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
 .evt-btn .evt-glyph{display:block;color:currentColor}
-.evt-btn .evt-name{font-size:11px;line-height:1.1}
-.evt-btn .evt-state{font-family:var(--mono);font-size:9px;letter-spacing:1px;
-  padding:1px 5px;border-radius:6px;border:1px solid currentColor;opacity:.75}
+.evt-btn .evt-name{font-size:13px;line-height:1.1}
+.evt-btn .evt-state{font-family:var(--mono);font-size:12px;letter-spacing:1px;
+  padding:1px 5px;border-radius:8px;border:1px solid currentColor;opacity:.75}
 .evt-btn.active{border-width:2px;background:rgba(63,185,80,.18);
   color:var(--green);border-color:var(--green)}
-.evt-btn.active .evt-state{opacity:1;background:var(--green);color:#0d1117;border-color:var(--green)}
-.nsc-leg{color:#79b8ff;font-family:var(--mono);font-size:13px;font-weight:700}
+.evt-btn.active .evt-state{opacity:1;background:var(--green);color:#070707;border-color:var(--green)}
+.nsc-leg{color:#00b0ff;font-family:var(--mono);font-size:13px;font-weight:700}
 .nsc-photo{width:100%;height:158px;object-fit:cover;border-radius:8px;
   margin-top:8px;border:1px solid var(--border);cursor:pointer;
   display:block;max-width:100%}
@@ -180,13 +204,13 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   .hud-detail{font-size:15px}
   .hud-spd-val{font-size:42px}
   .hud-tgt{font-size:14px}
-  .stab{font-size:12px;padding:13px 2px}
+  .stab{font-size:14px;padding:13px 2px}
   .nsc{width:320px;top:235px;padding:14px 16px}
   .nsc-name{font-size:21px}
   .nsc-dist{font-size:62px}
   .nsc-row{font-size:15px}
   .nsc-evt{gap:6px}
-  .evt-chip{font-size:12px;padding:4px 9px}
+  .evt-chip{font-size:14px;padding:4px 9px}
   .nsc-leg{font-size:14px}
   .nsc-photo{height:210px}
   .lcm{width:256px;top:495px;padding:11px 14px}
@@ -199,7 +223,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .map-wrap{position:relative;flex:1;min-height:0;overflow:hidden}
 /* Map is 2x the viewport so heading-up rotation never exposes empty corners.
    The visible area is the central quarter; controls are offset back inside. */
-#map{position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:#1a1f2e;
+#map{position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:#0e0e0e;
   will-change:transform;transition:transform .45s linear}
 #map .leaflet-bottom{bottom:25%}
 #map .leaflet-top{top:25%}
@@ -217,9 +241,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* ── INSTRUCTION CARD (top, full-width strip like Waze) ── */
 .hud-instr{
   position:absolute;top:0;left:0;right:0;pointer-events:auto;
-  background:rgba(13,17,23,.96);border-bottom:1px solid var(--border);
+  background:#070707;border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:0;
-  backdrop-filter:blur(10px);
 }
 /* Arrow box */
 /* ── HUD instruction bar — compact for tablet ── */
@@ -229,7 +252,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   font-size:52px;padding:8px 6px;gap:2px;
   border-right:1px solid var(--border);transition:all .4s;
 }
-.hud-icon-lbl{font-size:8px;letter-spacing:1px;text-transform:uppercase;
+.hud-icon-lbl{font-size:12px;letter-spacing:1px;text-transform:uppercase;
   font-family:var(--mono);color:var(--muted);text-align:center;line-height:1}
 .hud-instr-body{flex:1;padding:6px 12px;min-width:0;display:flex;flex-direction:column;justify-content:center}
 .hud-instr-dist{font-size:28px;font-weight:700;font-family:var(--mono);line-height:1;transition:color .4s}
@@ -238,8 +261,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .hud-instr-dist.close {color:var(--red);animation:urgentPulse .8s infinite}
 @keyframes urgentPulse{50%{opacity:.4}}
 .hud-instr-action{font-size:17px;font-weight:700;color:var(--text);margin:2px 0}
-.hud-instr-detail{font-size:11px;color:var(--muted);font-family:var(--mono)}
-.hud-next-preview{font-size:10px;color:rgba(139,148,158,.7);font-family:var(--mono);
+.hud-instr-detail{font-size:13px;color:var(--muted);font-family:var(--mono)}
+.hud-next-preview{font-size:13px;color:rgba(139,148,158,.7);font-family:var(--mono);
   margin-top:3px;padding:2px 6px;background:rgba(255,255,255,.05);
   border-radius:4px;display:none}
 .hud-next-preview.visible{display:block}
@@ -249,8 +272,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   border-left:1px solid var(--border);padding:8px 4px;
 }
 .hud-spd-val{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1}
-.hud-spd-unit{font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:1px}
-.hud-tgt{font-size:10px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-top:2px;white-space:nowrap}
+.hud-spd-unit{font-size:12px;color:var(--muted);font-family:var(--mono);letter-spacing:1px}
+.hud-tgt{font-size:13px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-top:2px;white-space:nowrap}
 
 /* Instruction colors by type */
 .hud-instr-icon.stop   {background:rgba(248,81,73,.15);border-right-color:rgba(248,81,73,.3)}
@@ -263,51 +286,50 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   position:absolute;right:12px;top:100px;pointer-events:auto;
   background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:50%;
   width:60px;height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  backdrop-filter:blur(8px);
 }
 .hud-compass-arrow{font-size:26px;transition:transform .3s}
 .lap-badge{position:absolute;top:8px;left:50%;transform:translateX(-50%);
-  z-index:1150;pointer-events:none;font:700 12px/1 var(--mono);
-  letter-spacing:1.5px;color:#0d1117;background:var(--accent);
-  padding:5px 12px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
-.lap-select{background:var(--panel2,#161b22);color:var(--fg,#e6edf3);
-  border:1px solid var(--border,#30363d);border-radius:7px;
+  z-index:1150;pointer-events:none;font:700 14px/1 var(--mono);
+  letter-spacing:1.5px;color:#070707;background:var(--accent);
+  padding:5px 12px;border-radius:12px;box-shadow:none}
+.lap-select{background:var(--panel2,#1b1b1b);color:var(--fg,#f5f5f5);
+  border:1px solid var(--border,#333333);border-radius:8px;
   padding:7px 10px;font:600 13px var(--mono);min-width:110px}
 .nav-debug{position:absolute;left:8px;top:8px;z-index:1200;display:none;
   max-width:280px;max-height:56vh;overflow:auto;pointer-events:none;
-  background:rgba(6,10,16,.86);border:1px solid #2b3440;border-radius:8px;padding:7px 9px}
+  background:rgba(6,10,16,.86);border:1px solid #333333;border-radius:8px;padding:7px 9px}
 .nav-debug.on{display:block}
-.nav-debug pre{margin:0;font:10px/1.35 var(--mono);color:#9fb4c9;white-space:pre-wrap}
-.hud-compass-deg{font-size:10px;font-family:var(--mono);color:var(--muted)}
+.nav-debug pre{margin:0;font:13px/1.35 var(--mono);color:#a3a3a3;white-space:pre-wrap}
+.hud-compass-deg{font-size:13px;font-family:var(--mono);color:var(--muted)}
 
 /* ── ROUTE PROGRESS (bottom strip) ── */
 .hud-strip{
   position:absolute;bottom:58px;left:8px;right:8px;pointer-events:auto;
-  background:rgba(13,17,23,.85);border:1px solid var(--border);border-radius:8px;
-  padding:6px 12px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(8px);
+  background:#070707;border:1px solid var(--border);border-radius:8px;
+  padding:6px 12px;display:flex;align-items:center;gap:10px;
 }
-.hud-sbar{flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
-.hud-sfill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;transition:width .5s}
-.hud-slbl{font-size:11px;font-family:var(--mono);color:var(--muted);white-space:nowrap}
+.hud-sbar{flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.hud-sfill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:4px;transition:width .5s}
+.hud-slbl{font-size:13px;font-family:var(--mono);color:var(--muted);white-space:nowrap}
 
 /* Toggle stops panel */
 .hud-toggle{position:absolute;bottom:10px;right:10px;z-index:910;pointer-events:auto;
-  background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:10px;
-  padding:8px 14px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;
-  color:var(--accent);letter-spacing:1px;backdrop-filter:blur(8px);display:none}
+  background:rgba(13,17,23,.9);border:1px solid var(--border);border-radius:8px;
+  padding:8px 14px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;
+  color:var(--accent);letter-spacing:1px;display:none}
 .hud-toggle.on{display:block}
 
 /* Floating stops panel — compact, max 40% screen height */
 .hud-stops-panel{
   position:absolute;bottom:56px;left:8px;right:8px;z-index:910;pointer-events:auto;
-  background:rgba(13,17,23,.96);border:1px solid var(--border);border-radius:12px;
+  background:#070707;border:1px solid var(--border);border-radius:12px;
   display:none;flex-direction:column;
   max-height:40vh;   /* never more than 40% of screen */
-  overflow:hidden;backdrop-filter:blur(12px);
-  box-shadow:0 -4px 24px rgba(0,0,0,.5);
+  overflow:hidden;
+  box-shadow:none;
 }
 .hud-stops-panel.on{display:flex}
-.hud-sp-head{padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;
+.hud-sp-head{padding:8px 12px;border-bottom:1px solid var(--border);font-size:14px;
   font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
   display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 
@@ -321,7 +343,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .hud-stop-row.current{background:rgba(63,185,80,.06)}
 .hud-stop-row.done{opacity:.35}
 .hud-sr-num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+  justify-content:center;font-size:13px;font-weight:700;font-family:var(--mono);flex-shrink:0}
 .hud-sr-num.waiting{background:var(--accent);color:#000}
 .hud-sr-num.current{background:var(--green);color:#000;animation:blink 1.2s infinite}
 .hud-sr-num.done{background:var(--muted);color:#000}
@@ -332,7 +354,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .hud-sr-timer.running{color:var(--green)}
 .hud-sr-timer.over{color:var(--red)}
 .hud-sr-done-btn{
-  background:var(--green);color:#000;border:none;border-radius:6px;
+  background:var(--green);color:#000;border:none;border-radius:8px;
   font-size:13px;font-weight:700;padding:7px 12px;cursor:pointer;
   flex-shrink:0;white-space:nowrap;font-family:var(--sans);
 }
@@ -341,8 +363,8 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* ── RECORDING INDICATOR ── */
 .rec-ind{
   position:absolute;bottom:165px;left:12px;z-index:910;pointer-events:auto;
-  background:rgba(90,0,0,.95);border:1px solid var(--red);border-radius:10px;
-  padding:8px 12px;display:none;align-items:center;gap:8px;backdrop-filter:blur(8px);
+  background:rgba(90,0,0,.95);border:1px solid var(--red);border-radius:8px;
+  padding:8px 12px;display:none;align-items:center;gap:8px;
 }
 .rec-ind.on{display:flex}
 .rec-dot{width:10px;height:10px;border-radius:50%;background:var(--red);animation:blink 1s infinite;flex-shrink:0}
@@ -351,17 +373,16 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* Camera + events prompt */
 .cam-prompt{
   position:absolute;bottom:170px;left:50%;transform:translateX(-50%);z-index:1600;
-  background:var(--panel);border:2px solid var(--accent);border-radius:14px;
+  background:var(--panel);border:2px solid var(--accent);border-radius:12px;
   padding:14px 18px;display:none;flex-direction:column;align-items:center;gap:8px;
-  box-shadow:0 6px 30px rgba(0,0,0,.7);min-width:280px;max-width:340px;
-  backdrop-filter:blur(8px);animation:popIn .3s ease;
+  box-shadow:none;min-width:280px;max-width:340px;animation:popIn .3s ease;
 }
 .cam-prompt.on{display:flex}
 .cam-prompt-title{font-size:15px;font-weight:700;color:var(--accent);text-align:center}
-.cam-prompt-sub{font-size:11px;color:var(--muted);text-align:center;font-family:var(--mono)}
+.cam-prompt-sub{font-size:13px;color:var(--muted);text-align:center;font-family:var(--mono)}
 .cam-prompt-btns{display:flex;gap:8px;width:100%}
 /* Events section */
-.cam-events-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;
+.cam-events-title{font-size:13px;letter-spacing:2px;text-transform:uppercase;
   color:var(--muted);font-family:var(--mono);align-self:flex-start}
 .cam-events-row{display:flex;gap:8px;width:100%}
 .evt-btn{flex:1;padding:10px 8px;border-radius:8px;border:2px solid var(--border);
@@ -372,7 +393,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .cam-divider{width:100%;height:1px;background:var(--border)}
 /* Event badges on stop markers/cards */
 .stop-event-badge{display:inline-flex;align-items:center;gap:3px;
-  font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:8px;
+  font-size:13px;font-family:var(--mono);padding:2px 6px;border-radius:8px;
   background:rgba(88,166,255,.12);color:var(--blue);margin-left:4px}
 
 /* Stop photo overlay (shown when approaching a stop) */
@@ -382,39 +403,39 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
   width:190px;               /* compact 190px */
   z-index:1400;
   display:none;flex-direction:column;
-  border-radius:10px;overflow:hidden;
-  box-shadow:0 4px 20px rgba(0,0,0,.75);
+  border-radius:8px;overflow:hidden;
+  box-shadow:none;
   border:1px solid var(--border);
   animation:fadeIn .3s ease;
 }
 .stop-photo-ov.on{display:flex}
 .stop-photo-header{
-  background:rgba(13,17,23,.96);padding:5px 8px;
+  background:#070707;padding:5px 8px;
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
 }
-.stop-photo-name{font-size:12px;font-weight:700;color:var(--accent);
+.stop-photo-name{font-size:14px;font-weight:700;color:var(--accent);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
 .stop-photo-close{font-size:16px;cursor:pointer;color:var(--muted);padding:0 2px;flex-shrink:0}
 .stop-photo-img{width:290px;height:195px;object-fit:cover;display:block}
 .stop-photo-none{background:rgba(13,17,23,.9);padding:14px;text-align:center;
-  color:var(--muted);font-size:11px;font-family:var(--mono);height:80px;
+  color:var(--muted);font-size:13px;font-family:var(--mono);height:80px;
   display:flex;align-items:center;justify-content:center}
 
 /* Photo thumbnail in stop card */
 .sc-photo{width:100%;height:90px;object-fit:cover;display:block;
   border-radius:0 0 8px 8px;cursor:pointer}
 .sc-no-photo{display:none}
-.rec-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--red);font-family:var(--mono)}
-.rec-stats{font-size:12px;font-family:var(--mono);color:var(--text)}
-.rec-stops-count{font-size:10px;font-family:var(--mono);color:var(--accent)}
+.rec-label{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--red);font-family:var(--mono)}
+.rec-stats{font-size:14px;font-family:var(--mono);color:var(--text)}
+.rec-stops-count{font-size:13px;font-family:var(--mono);color:var(--accent)}
 
 /* ── ARRIVING ALERT ── */
 .arriving{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1500;
   padding:14px 22px;border-radius:12px;font-size:17px;font-weight:700;letter-spacing:1px;
   display:none;animation:popIn .3s ease;text-align:center}
-.arriving.arrived {background:var(--green);color:#000;box-shadow:0 6px 30px rgba(63,185,80,.5)}
-.arriving.departed{background:var(--blue);color:#000;box-shadow:0 6px 30px rgba(88,166,255,.4)}
-.arriving.stop-alert{background:var(--red);color:#fff;box-shadow:0 6px 30px rgba(248,81,73,.5)}
+.arriving.arrived {background:var(--green);color:#000;box-shadow:none}
+.arriving.departed{background:var(--blue);color:#000;box-shadow:none}
+.arriving.stop-alert{background:var(--red);color:#fff;box-shadow:none}
 @keyframes popIn{from{transform:translate(-50%,-50%) scale(.7);opacity:0}}
 @keyframes blink{50%{opacity:.15}}
 
@@ -426,7 +447,7 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 
 /* ── BOTTOM SHEET ── */
 .sheet{position:absolute;bottom:0;left:0;right:0;
-  background:var(--panel);border-radius:18px 18px 0 0;border-top:1px solid var(--border);
+  background:var(--panel);border-radius:12px 12px 0 0;border-top:1px solid var(--border);
   z-index:1000;display:flex;flex-direction:column;max-height:72vh;
   transition:transform .35s cubic-bezier(.32,.72,0,1);
   transform:translateY(calc(100% - 96px));padding-bottom:var(--safe-b)}
@@ -438,16 +459,16 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* peek (resting): handle + tab bar only (~56px) — header lives in mid/expanded */
 .sheet.peek{transform:translateY(calc(100% - 56px))}
 .sheet.peek .peek{display:none}  /* handle + tab bar only */
-.sheet-handle{width:52px;height:5px;background:var(--muted);border-radius:3px;margin:10px auto 4px;flex-shrink:0;cursor:pointer;opacity:.8}
+.sheet-handle{width:52px;height:5px;background:var(--muted);border-radius:4px;margin:10px auto 4px;flex-shrink:0;cursor:pointer;opacity:.8}
 .peek{display:flex;align-items:center;gap:10px;padding:8px 14px 6px;cursor:pointer;flex-shrink:0;user-select:none}
 .peek-left{flex:1;min-width:0}
 .peek-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.peek-sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.peek-sub{font-size:13px;color:var(--muted);font-family:var(--mono)}
 .peek-dist{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent)}
 
 /* Tabs */
 .sheet-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
-.stab{flex:1;padding:10px 2px;text-align:center;font-size:10px;font-weight:700;letter-spacing:1.2px;
+.stab{flex:1;padding:10px 2px;text-align:center;font-size:13px;font-weight:700;letter-spacing:1.2px;
   text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;user-select:none}
 .stab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .stab-chev{flex:0 0 44px;font-size:15px;line-height:1;color:var(--accent);cursor:pointer;user-select:none}
@@ -457,28 +478,28 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .pane.active{display:flex}
 
 /* Upload */
-.upload-zone{margin:14px;border:2px dashed var(--border);border-radius:10px;padding:22px 14px;
+.upload-zone{margin:14px;border:2px dashed var(--border);border-radius:8px;padding:22px 14px;
   text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
 .upload-zone:active{border-color:var(--accent);background:rgba(240,165,0,.05)}
 .upload-zone input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .upload-zone .icon{font-size:28px}
 .upload-zone strong{color:var(--accent);font-size:15px}
-.upload-zone p{font-size:11px;color:var(--muted)}
+.upload-zone p{font-size:13px;color:var(--muted)}
 
 /* Route info */
 .route-info{margin:0 14px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px}
 .ri-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.ri-item .ril{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.ri-item .ril{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
 .ri-item .riv{font-size:15px;font-weight:700;font-family:var(--mono)}
 
 /* GPS settings */
 .nav-section{padding:12px 14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .nav-field{display:flex;align-items:center;gap:8px}
-.nav-field label{font-size:11px;color:var(--muted);width:145px;flex-shrink:0;font-family:var(--mono)}
+.nav-field label{font-size:13px;color:var(--muted);width:145px;flex-shrink:0;font-family:var(--mono)}
 .nav-field input[type=range]{flex:1;accent-color:var(--accent)}
-.nav-field .val{font-size:11px;font-family:var(--mono);color:var(--accent);width:55px;text-align:right}
+.nav-field .val{font-size:13px;font-family:var(--mono);color:var(--accent);width:55px;text-align:right}
 .gps-status{padding:10px 14px;border-radius:8px;border:1px solid var(--border);
-  font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:10px;background:var(--bg)}
+  font-size:14px;font-family:var(--mono);display:flex;align-items:center;gap:10px;background:var(--bg)}
 .gps-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .gps-dot.wait  {background:var(--muted)}
 .gps-dot.active{background:var(--green);animation:blink 1.2s infinite}
@@ -486,33 +507,33 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 
 /* Stop cards */
 .stops-list{flex:1;overflow-y:auto;padding:8px 12px 12px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
-.stop-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;animation:fadeUp .2s ease;transition:border-color .2s,opacity .2s}
+.stop-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;animation:fadeUp .2s ease;transition:border-color .2s,opacity .2s}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}}
 .stop-card.state-current{border-color:var(--green);box-shadow:0 0 0 1px rgba(63,185,80,.12)}
 .stop-card.state-done{opacity:.4}
 .stop-card.state-over{border-color:var(--red)}
 .sc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 7px}
 .sc-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+  font-size:13px;font-weight:700;font-family:var(--mono);flex-shrink:0}
 .sc-num.waiting{background:var(--accent);color:#000}
 .sc-num.current{background:var(--green);color:#000;animation:blink 1.2s infinite}
 .sc-num.done   {background:var(--muted);color:#000}
 .sc-name{flex:1;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sc-badge{font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:10px;flex-shrink:0}
+.sc-badge{font-size:13px;font-family:var(--mono);padding:2px 8px;border-radius:8px;flex-shrink:0}
 .sc-badge.waiting{background:rgba(240,165,0,.1);color:var(--accent)}
 .sc-badge.current{background:rgba(63,185,80,.15);color:var(--green)}
 .sc-badge.done   {background:rgba(139,148,158,.12);color:var(--muted)}
 .sc-times{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin:0 12px 7px;border-radius:8px;overflow:hidden}
 .sc-time-col{background:var(--panel2);padding:8px 12px}
 .sc-time-col.real{background:var(--panel)}
-.sc-time-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.sc-time-label{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
 .sc-time-val{font-size:20px;font-weight:700;font-family:var(--mono);letter-spacing:1px;color:var(--text);margin-top:1px}
 .sc-time-val.running{color:var(--green)}.sc-time-val.paused{color:var(--accent)}.sc-time-val.over{color:var(--red)}
-.sc-delta{font-size:10px;font-family:var(--mono);margin-top:2px}
+.sc-delta{font-size:13px;font-family:var(--mono);margin-top:2px}
 .sc-delta.ok{color:var(--green)}.sc-delta.warn{color:var(--accent)}.sc-delta.over{color:var(--red)}
 .sc-prog{margin:0 12px 6px}
-.sc-prog-bg{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
-.sc-prog-fill{height:100%;border-radius:3px;transition:width .5s,background .5s;min-width:2px}
+.sc-prog-bg{height:5px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.sc-prog-fill{height:100%;border-radius:4px;transition:width .5s,background .5s;min-width:2px}
 .sc-ctrl{display:flex;align-items:center;gap:7px;padding:0 12px 10px}
 .tbtn{width:36px;height:36px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;flex-shrink:0}
 .tbtn:active{transform:scale(.88)}
@@ -520,19 +541,19 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 .tbtn.ps {background:rgba(240,165,0,.15);color:var(--accent)}
 .tbtn.rst{background:rgba(248,81,73,.08);color:var(--muted)}
 .sc-btns{display:flex;gap:5px;flex:1;justify-content:flex-end}
-.sc-btn{font-size:11px;padding:6px 8px;min-height:32px;border-radius:5px;cursor:pointer;
+.sc-btn{font-size:13px;padding:6px 8px;min-height:32px;border-radius:4px;cursor:pointer;
   border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--sans);
   font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 .sc-btn:active{opacity:.6}
 .stops-bar{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
-.stops-bar .btn{flex:1;font-size:11px;padding:9px 4px}
+.stops-bar .btn{flex:1;font-size:13px;padding:9px 4px}
 
 /* Recorded routes */
 .rec-list{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch}
 .rec-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px}
 .rec-card-head{display:flex;align-items:center;gap:8px}
 .rec-card-name{flex:1;font-size:14px;font-weight:700}
-.rec-card-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.rec-card-meta{font-size:13px;color:var(--muted);font-family:var(--mono)}
 .rec-card-btns{display:flex;gap:6px;margin-top:2px}
 
 /* Pos marker */
@@ -544,10 +565,10 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
 /* Empty */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);padding:28px;text-align:center;flex:1}
 .empty .icon{font-size:36px;opacity:.35}
-.empty p{font-size:12px;line-height:1.6}
+.empty p{font-size:14px;line-height:1.6}
 
 /* Leaflet */
-.leaflet-container{background:#1a1f2e}
+.leaflet-container{background:#0e0e0e}
 .leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-color:var(--border)!important;font-size:18px!important;width:36px!important;height:36px!important;line-height:36px!important}
 .leaflet-control-zoom{margin-bottom:110px!important;margin-left:12px!important}
 /* Keep zoom buttons larger for touch */
@@ -563,16 +584,16 @@ body.stops-open .lcm{opacity:0;pointer-events:none}
    ══════════════════════════════════════════════════════════════════════════ */
 
 :root{
-  --driver-surface:rgba(13,17,23,.96);
-  --driver-surface-2:rgba(22,27,34,.94);
-  --driver-line:rgba(255,255,255,.12);
+  --driver-surface:#070707;
+  --driver-surface-2:#1b1b1b;
+  --driver-line:#333333;
   --driver-shadow:0 10px 34px rgba(0,0,0,.48);
   --driver-radius:16px;
 }
 body.driver-mode .hud-stops-panel{
   left:16px;right:16px;bottom:72px;
   max-height:42vh;
-  border-radius:16px;
+  border-radius:12px;
 }
 
 
@@ -589,8 +610,8 @@ body.driver-mode .veh-wrap{width:68px;height:68px}
 body.driver-mode .veh-bus svg{width:68px;height:68px}
 body.driver-mode .veh-halo{inset:-9px}
 body.driver-mode.stops-open .hud-stops-panel{
-  left:18px;right:18px;bottom:18px;max-height:46vh;border-radius:18px;
-  box-shadow:0 14px 40px rgba(0,0,0,.55);
+  left:18px;right:18px;bottom:18px;max-height:46vh;border-radius:12px;
+  box-shadow:none;
 }
 
 /* Tablet portrait is the actual field layout shown in the screenshots. */
@@ -607,29 +628,30 @@ body.driver-mode.stops-open .hud-stops-panel{
    remain untouched. The cockpit deliberately removes development chrome and
    gives the driver one clear hierarchy: manoeuvre → road → next stop.
    ══════════════════════════════════════════════════════════════════════════ */
+/* Cockpit v6 tokens, re-pointed at the ApexCycle brand. */
 :root{
-  --v6-blue:#19a7ff;
-  --v6-cyan:#48d7ff;
-  --v6-surface:rgba(7,13,19,.88);
-  --v6-surface-solid:#081017;
-  --v6-line:rgba(255,255,255,.14);
-  --v6-shadow:0 14px 40px rgba(0,0,0,.52);
+  --v6-blue:#ff6a00;
+  --v6-cyan:#ff8a33;
+  --v6-surface:#070707;
+  --v6-surface-solid:#070707;
+  --v6-line:#333333;
+  --v6-shadow:none;
 }
 body.driver-mode .topbar,
 body.driver-mode .sum-bar,
 body.driver-mode > .sheet,
 body.driver-mode .install-banner{display:none!important}
-body.driver-mode #map{background:#081018}
+body.driver-mode #map{background:#070707}
 body.driver-mode .hud-toggle{display:none!important}
 body.driver-mode:not(.stops-open) .hud-stops-panel{display:none!important}
 body.driver-mode .leaflet-control-zoom{display:none!important}
-body.driver-mode .leaflet-control-attribution{font-size:8px!important;opacity:.55}
+body.driver-mode .leaflet-control-attribution{font-size:12px!important;opacity:.55}
 body.driver-mode .lcm{display:none!important}
 body.driver-mode .stop-photo-ov{display:none!important}
 
 /* Phone layout: keep the same hierarchy, but stack the stop dock. */
 @media (max-width:599px){
-  body.driver-mode .map-wrap:before{left:10px;top:9px;font-size:8px;padding:6px 8px}
+  body.driver-mode .map-wrap:before{left:10px;top:9px;font-size:12px;padding:6px 8px}
 }
 
 
@@ -637,15 +659,15 @@ body.driver-mode .stop-photo-ov{display:none!important}
    DRIVER UX V7 — TRUE NAVIGATION COCKPIT
    This layer intentionally wins over every legacy/V6 rule above.
    ═══════════════════════════════════════════════════════════════════════ */
-body.driver-mode{overflow:hidden!important;background:#050a0f!important}
+body.driver-mode{overflow:hidden!important;background:#070707!important}
 body.driver-mode .topbar,body.driver-mode .sum-bar,body.driver-mode>.sheet,
 body.driver-mode .install-banner,body.driver-mode .lcm,body.driver-mode .hud-toggle,
 body.driver-mode .hud-stops-panel{display:none!important}
 body.driver-mode .map-wrap{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;z-index:1!important}
 body.driver-mode .nav-hud{display:block!important;position:absolute!important;inset:0!important;z-index:1000!important}
-body.driver-mode .map-wrap:before{content:"GPS  ●   DRIVER MODE"!important;left:50%!important;top:14px!important;transform:translateX(-50%)!important;background:rgba(3,10,16,.76)!important;color:#bfefff!important;border:1px solid rgba(72,215,255,.25)!important;z-index:1003!important}
+body.driver-mode .map-wrap:before{content:"GPS  ●   DRIVER MODE"!important;left:50%!important;top:14px!important;transform:translateX(-50%)!important;background:rgba(3,10,16,.76)!important;color:#ff8a33!important;border:1px solid rgba(72,215,255,.25)!important;z-index:1003!important}
 body.driver-mode .map-wrap:after{z-index:400!important;background:linear-gradient(180deg,rgba(1,6,10,.30),transparent 22%,transparent 72%,rgba(1,6,10,.28))!important}
-.cockpit-speed{display:none}.cockpit-speed-value{font:900 45px/.88 var(--mono)}.cockpit-speed-unit{font:700 11px/1 var(--mono);color:#aebdc6;margin-top:7px}.cockpit-speed-target{position:absolute;right:-5px;top:-4px;min-width:30px;min-height:30px;border-radius:50%;background:#fff;border:3px solid #ef5a29;color:#111;font:900 13px/30px var(--mono);text-align:center}
+.cockpit-speed{display:none}.cockpit-speed-value{font:900 45px/.88 var(--mono)}.cockpit-speed-unit{font:700 13px/1 var(--mono);color:#a3a3a3;margin-top:7px}.cockpit-speed-target{position:absolute;right:-5px;top:-4px;min-width:30px;min-height:30px;border-radius:50%;background:#fff;border:3px solid #ff6a00;color:#111;font:900 13px/30px var(--mono);text-align:center}
 .cockpit-exit{display:none}
 body.driver-mode .leaflet-control-container{display:none!important}
 
@@ -659,8 +681,8 @@ body.driver-mode .leaflet-control-container{display:none!important}
    (right) · orientation (bottom). Technical readouts belong to Developer
    mode, not here. Appended last so it wins over the legacy HUD rules.
    ══════════════════════════════════════════════════════════════════════════ */
-body.cockpit{--ck-card:rgba(16,20,28,.94);--ck-line:rgba(255,255,255,.10);
-  --ck-blue:#4c9dff;--ck-dim:#8b97a8}
+body.cockpit{--ck-card:#1b1b1b;--ck-line:#333333;
+  --ck-blue:#ff6a00;   /* cockpit accent = brand (was info blue) */--ck-dim:#a3a3a3}
 
 /* the map takes the whole screen; chrome is hidden */
 body.cockpit .topbar,body.cockpit .sum-bar,body.cockpit .lcm,
@@ -680,12 +702,12 @@ body.cockpit .hud-instr{
   right:auto!important;width:300px!important;min-height:0!important;
   overflow:hidden!important;pointer-events:auto!important;
   display:flex!important;flex-direction:column!important;align-items:stretch;
-  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:22px;
-  padding:18px 20px 14px;box-shadow:0 14px 40px rgba(0,0,0,.55);
-  backdrop-filter:blur(14px);z-index:1200}
+  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:12px;
+  padding:18px 20px 14px;box-shadow:none;z-index:1200}
 body.cockpit .ck-dist-row{display:flex;align-items:baseline;gap:6px}
-body.cockpit .hud-instr-dist{font-size:48px!important;font-weight:800;line-height:1!important;
-  font-family:var(--mono);color:#fff!important;letter-spacing:-1px;white-space:nowrap}
+body.cockpit .hud-instr-dist{font-size:64px!important;font-weight:700;line-height:1!important;
+  font-family:var(--display);color:#fff!important;letter-spacing:-1.5px;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
 body.cockpit .hud-instr-dist.close{animation:none}
 body.cockpit .hud-instr-icon{background:none!important;border:none!important;
   width:auto;height:auto;padding:6px 0 2px;display:block;color:#fff}
@@ -695,37 +717,36 @@ body.cockpit .hud-instr-body{padding:0;display:block}
 body.cockpit .hud-instr-action{font-size:20px;font-weight:800;letter-spacing:.6px;
   text-transform:uppercase;color:var(--ck-blue);margin:2px 0 6px}
 body.cockpit .ck-road{display:flex;align-items:center;gap:8px;min-height:22px}
-body.cockpit .ck-road-badge{background:#2ea043;color:#fff;font-size:12px;font-weight:800;
-  padding:2px 8px;border-radius:5px;letter-spacing:.5px}
-body.cockpit .hud-instr-detail{font-size:15px;color:#d5dde8;font-family:inherit;
+body.cockpit .ck-road-badge{background:#00e676;color:#000;font-size:14px;font-weight:800;
+  padding:2px 8px;border-radius:4px;letter-spacing:.5px}
+body.cockpit .hud-instr-detail{font-size:15px;color:#e0e0e0;font-family:inherit;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.cockpit .hud-next-preview{font-size:12px;color:var(--ck-dim);margin-top:4px}
+body.cockpit .hud-next-preview{font-size:14px;color:var(--ck-dim);margin-top:4px}
 body.cockpit .ck-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--ck-line)}
-body.cockpit .ck-minibar{height:4px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}
-body.cockpit .ck-minifill{height:100%;background:var(--ck-blue);border-radius:3px;transition:width .5s}
+body.cockpit .ck-minibar{height:4px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden}
+body.cockpit .ck-minifill{height:100%;background:var(--ck-blue);border-radius:4px;transition:width .5s}
 body.cockpit .ck-foot-row{display:flex;justify-content:space-between;margin-top:7px;
-  font-family:var(--mono);font-size:15px;font-weight:700;color:#e8eef6}
+  font-family:var(--mono);font-size:15px;font-weight:700;color:#f5f5f5}
 
 /* ── speed dial (top-right) ────────────────────────────────────────────── */
-body.cockpit .cockpit-speed{position:absolute;right:16px;top:64px;width:104px;height:104px;
+body.cockpit .cockpit-speed{position:absolute;right:16px;top:64px;width:150px;height:150px;
   border-radius:50%;background:var(--ck-card);border:1px solid var(--ck-line);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  box-shadow:0 12px 34px rgba(0,0,0,.55);backdrop-filter:blur(14px);z-index:1200}
-body.cockpit .cockpit-speed-value{font-family:var(--mono);font-size:38px;font-weight:800;
-  line-height:1;color:#fff}
-body.cockpit .cockpit-speed-unit{font-size:11px;color:var(--ck-dim);font-family:var(--mono)}
+  box-shadow:none;z-index:1200}
+body.cockpit .cockpit-speed-value{font-family:var(--display);font-size:88px;font-weight:700;
+  line-height:.86;color:#fff;letter-spacing:-2px;font-variant-numeric:tabular-nums}
+body.cockpit .cockpit-speed-unit{font-size:13px;color:var(--ck-dim);font-family:var(--mono)}
 body.cockpit .cockpit-speed-target{position:absolute;top:112px;right:0;white-space:nowrap;
-  font-family:var(--mono);font-size:13px;font-weight:700;color:#3fb950;
-  background:rgba(16,20,28,.94);border:1px solid rgba(63,185,80,.45);
-  border-radius:14px;padding:3px 10px}
+  font-family:var(--mono);font-size:13px;font-weight:700;color:#00e676;
+  background:#1b1b1b;border:1px solid rgba(63,185,80,.45);
+  border-radius:12px;padding:3px 10px}
 
 /* ── next stop card (right, under the dial) ────────────────────────────── */
 body.cockpit .nsc{position:absolute!important;right:14px!important;left:auto!important;
   top:auto!important;bottom:86px!important;width:304px!important;
   background:var(--ck-card);border:1px solid var(--ck-line);border-left:1px solid var(--ck-line);
-  border-radius:18px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.55);
-  backdrop-filter:blur(14px);z-index:1200}
-body.cockpit .nsc-head{font-size:11px;letter-spacing:1.4px;color:var(--ck-blue);font-weight:800}
+  border-radius:12px;padding:14px 16px;box-shadow:none;z-index:1200}
+body.cockpit .nsc-head{font-size:13px;letter-spacing:1.4px;color:var(--ck-blue);font-weight:800}
 body.cockpit .nsc-name{font-size:21px;font-weight:800;color:#fff;margin:3px 0 8px}
 body.cockpit .nsc-photo{height:196px!important;border-radius:12px;margin:0 0 10px;display:block}
 body.cockpit .nsc-dist{font-size:34px;color:#fff!important;font-weight:800;line-height:1}
@@ -734,34 +755,38 @@ body.cockpit .nsc-eta{font-family:var(--mono);color:var(--ck-blue);font-weight:7
 body.cockpit .nsc-events{gap:14px;justify-content:space-around;margin:8px 0 0;
   padding-top:10px;border-top:1px solid var(--ck-line)}
 body.cockpit .nsc-events .evt-chip{flex-direction:column;gap:4px;border:none;background:none;
-  padding:0;font-size:10px;letter-spacing:.3px}
+  padding:0;font-size:13px;letter-spacing:.3px}
 body.cockpit .nsc-events .evt-chip svg{width:26px;height:26px}
 /* each event keeps its own colour so it reads without being read */
-body.cockpit .evt-chip[title="Open Door"]{color:#3fb950}
-body.cockpit .evt-chip[title="Kneeling"]{color:#4c9dff}
-body.cockpit .evt-chip[title="Hand Brake"]{color:#f85149}
+body.cockpit .evt-chip[title="Open Door"]{color:#00e676}
+body.cockpit .evt-chip[title="Kneeling"]{color:#00b0ff}
+body.cockpit .evt-chip[title="Hand Brake"]{color:#ff1744}
 body.cockpit .nsc.atstop{border-color:rgba(63,185,80,.55)}
 
 /* ── status pill + orientation button ─────────────────────────────────── */
 body.cockpit .ck-status{position:absolute;left:16px;top:14px;display:flex;align-items:center;
-  gap:10px;z-index:1200;font-family:var(--mono);font-size:13px;color:#e8eef6}
-body.cockpit .ck-gps{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  gap:10px;z-index:1200;font-family:var(--mono);font-size:13px;color:#f5f5f5}
+body.cockpit .ck-gps{display:inline-flex;align-items:center;gap:5px;font-size:13px;
   background:rgba(16,20,28,.9);border:1px solid var(--ck-line);border-radius:12px;padding:3px 9px}
-body.cockpit .ck-gps i{width:7px;height:7px;border-radius:50%;background:#3fb950;display:block}
-body.cockpit .ck-gps.weak i{background:#f0a500}
-body.cockpit .ck-gps.bad  i{background:#f85149}
+body.cockpit .ck-gps i{width:7px;height:7px;border-radius:50%;background:#00e676;display:block}
+body.cockpit .ck-gps.weak i{background:#ff6a00}
+body.cockpit .ck-gps.bad  i{background:#ff1744}
 body.cockpit .ck-orient{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;
   display:inline-flex;align-items:center;gap:8px;z-index:1200;cursor:pointer;
-  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:22px;
-  padding:9px 16px;color:#e8eef6;font-size:12px;font-weight:800;letter-spacing:1px;
-  box-shadow:0 10px 26px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+  background:var(--ck-card);border:1px solid var(--ck-line);border-radius:999px;
+  padding:9px 16px;color:#f5f5f5;font-size:14px;font-weight:800;letter-spacing:1px;
+  box-shadow:none;}
 body.cockpit .ck-orient-ico{display:inline-flex;width:20px;height:20px;align-items:center;
-  justify-content:center;border-radius:50%;background:rgba(255,255,255,.12);font-size:11px}
+  justify-content:center;border-radius:50%;background:rgba(255,255,255,.12);font-size:13px}
 body.cockpit .cockpit-exit{position:absolute!important;right:14px!important;top:12px!important;
   left:auto!important;bottom:auto!important;z-index:1300;
   width:44px;height:44px;border-radius:50%}
 body.cockpit .cockpit-speed{top:68px!important;right:14px!important;left:auto!important;bottom:auto!important}
-body.cockpit .cockpit-speed-target{top:110px!important;right:2px!important;left:auto!important}
+/* The target pill sits BELOW the dial. Inside it, a 121px pill against a
+   150px circle pokes through the curve — the bulge seen in the field
+   screenshots. Centred under the dial it reads as a caption to the number. */
+body.cockpit .cockpit-speed-target{top:156px!important;right:auto!important;
+  left:50%!important;transform:translateX(-50%)!important}
 body.cockpit #hud-voice{right:14px!important;top:216px!important;left:auto!important;
   bottom:auto!important;z-index:1200}
 body.cockpit .lap-badge{top:14px;left:50%;transform:translateX(-50%);z-index:1200}
@@ -773,11 +798,11 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
 /* ── narrow tablets in portrait ───────────────────────────────────────── */
 @media (max-width:820px){
   body.cockpit .hud-instr{width:min(74vw,290px);top:56px;left:10px;padding:14px 16px 12px}
-  body.cockpit .hud-instr-dist{font-size:46px}
+  body.cockpit .hud-instr-dist{font-size:56px}
   body.cockpit .hud-instr-icon svg{width:84px;height:84px}
   body.cockpit .hud-instr-action{font-size:17px}
-  body.cockpit .cockpit-speed{width:88px;height:88px;right:10px;top:56px}
-  body.cockpit .cockpit-speed-value{font-size:32px}
+  body.cockpit .cockpit-speed{width:118px;height:118px;right:10px;top:56px}
+  body.cockpit .cockpit-speed-value{font-size:64px}
   body.cockpit .nsc{width:min(52vw,230px);right:10px;bottom:78px}
   body.cockpit .nsc-photo{height:96px}
 }
@@ -788,27 +813,27 @@ body.cockpit.night  #map .leaflet-tile-pane{filter:brightness(.78) saturate(.85)
    in the summary row. No function is more than one tap away.             */
 .sheet-tabs{height:62px;align-items:stretch;gap:0;border-top:1px solid var(--border)}
 .stab{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;font-size:11px;letter-spacing:.4px;padding:6px 2px;min-height:56px;
+  gap:3px;font-size:13px;letter-spacing:.4px;padding:6px 2px;min-height:56px;
   color:var(--muted);border-top:none;position:relative}
 .stab svg{width:22px;height:22px;display:block}
 .stab.active{color:var(--accent);background:rgba(240,165,0,.08)}
 .stab.active::after{content:'';position:absolute;top:0;left:18%;right:18%;height:3px;
-  background:var(--accent);border-radius:0 0 3px 3px}
-.stab-badge{font-size:9px;margin-left:3px;color:var(--accent)}
+  background:var(--accent);border-radius:0 0 4px 4px}
+.stab-badge{font-size:12px;margin-left:3px;color:var(--accent)}
 .stab-chev{flex:0 0 44px;font-size:16px;justify-content:center}
 .lap-chip{flex-shrink:0;margin-left:10px;min-height:46px;min-width:52px;
-  background:var(--panel2,#161b22);color:var(--accent);border:1px solid var(--border);
+  background:var(--panel2,#1b1b1b);color:var(--accent);border:1px solid var(--border);
   border-radius:12px;font-weight:800;font-size:16px;cursor:pointer}
 .lap-chip:active{transform:scale(.95)}
-.big-start{flex-shrink:0;margin-left:10px;background:var(--green,#3fb950);color:#08110a;
+.big-start{flex-shrink:0;margin-left:10px;background:var(--green,#00e676);color:#000000;
   border:none;border-radius:12px;font-weight:800;font-size:15px;letter-spacing:.6px;
-  padding:12px 18px;min-height:46px;cursor:pointer;box-shadow:0 4px 14px rgba(63,185,80,.35)}
+  padding:12px 18px;min-height:46px;cursor:pointer;box-shadow:none}
 .big-start:active{transform:scale(.97)}
-.big-start.stopping{background:var(--red,#f85149);color:#fff;box-shadow:0 4px 14px rgba(248,81,73,.35)}
-.big-start.disabled{background:#2a3341;color:#748196;box-shadow:none}
+.big-start.stopping{background:var(--red,#ff1744);color:#fff;box-shadow:none}
+.big-start.disabled{background:#262626;color:#595959;box-shadow:none}
 .topbar .btn{min-height:44px}
 @media (max-width:820px){
-  .stab{font-size:10px}.stab svg{width:20px;height:20px}
+  .stab{font-size:13px}.stab svg{width:20px;height:20px}
   .big-start{font-size:13px;padding:10px 14px}
 }
 
@@ -838,7 +863,9 @@ body.cockpit #nsc .nsc-photo{height:180px!important;width:100%!important;display
 body.cockpit #nsc .nsc-leg{display:none!important}  /* dev pacing — not driver info */
 body.cockpit #cockpit-speed{position:absolute!important;right:14px!important;
   top:68px!important;left:auto!important;bottom:auto!important;
-  width:104px!important;height:104px!important}
+  /* The actual-speed numeral is the cockpit's dominant metric and is the
+     one element allowed off the type scale — the dial grows with it. */
+  width:150px!important;height:150px!important}
 body.cockpit #cockpit-exit{position:absolute!important;right:14px!important;
   top:12px!important;left:auto!important;bottom:auto!important;
   width:44px!important;height:44px!important;
@@ -864,33 +891,33 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
    A solid white puck now sits behind it and the bus body is a deeper blue
    with a heavier white outline — shape and value contrast, not hue alone. */
 .veh-puck{position:absolute;inset:-6px;border-radius:50%;background:#fff;
-  border:2px solid rgba(13,17,23,.35);box-shadow:0 3px 10px rgba(0,0,0,.45)}
+  border:2px solid rgba(7,7,7,.45);box-shadow:none}
 .veh-wrap .veh-halo{z-index:0}
 .veh-wrap .veh-puck{z-index:1}
 .veh-wrap .veh-bus{z-index:2}
 
 /* ── Cycle sequence (layer 4) ─────────────────────────────────────────── */
-.seq-bar{background:var(--panel2,#161b22);border:1px solid var(--border);
+.seq-bar{background:var(--panel2,#1b1b1b);border:1px solid var(--border);
   border-radius:12px;padding:10px 12px;margin:0 0 12px}
-.seq-head{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:800;
+.seq-head{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;
   letter-spacing:1.2px;color:var(--accent)}
 .seq-total{color:var(--muted);font-weight:600;letter-spacing:.3px;flex:1}
 .seq-clear{background:none;border:1px solid var(--border);border-radius:8px;
-  color:var(--muted);font-size:11px;padding:4px 10px;cursor:pointer}
+  color:var(--muted);font-size:13px;padding:4px 10px;cursor:pointer}
 .seq-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 4px;min-height:8px}
-.seq-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel,#0d1117);
-  border:1px solid var(--border);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--text)}
+.seq-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel,#070707);
+  border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:14px;color:var(--text)}
 .seq-chip b{color:var(--accent);cursor:pointer;font-size:13px;min-width:24px;text-align:center}
 .seq-chip i{font-style:normal;color:var(--muted);cursor:pointer;padding:0 2px}
-.seq-chip.cur{border-color:var(--green,#3fb950);box-shadow:0 0 0 1px rgba(63,185,80,.4)}
+.seq-chip.cur{border-color:var(--green,#00e676);box-shadow:0 0 0 1px rgba(63,185,80,.4)}
 .seq-chip.done{opacity:.45}
-.seq-arrow{color:var(--muted);font-size:12px}
-.seq-start{width:100%;margin-top:8px;background:var(--green,#3fb950);color:#08110a;border:none;
-  border-radius:10px;font-weight:800;font-size:13px;letter-spacing:.6px;padding:11px;cursor:pointer}
-.seq-resume{background:var(--accent,#f0a500)}
+.seq-arrow{color:var(--muted);font-size:14px}
+.seq-start{width:100%;margin-top:8px;background:var(--green,#00e676);color:#000000;border:none;
+  border-radius:8px;font-weight:800;font-size:13px;letter-spacing:.6px;padding:11px;cursor:pointer}
+.seq-resume{background:var(--accent,#ff6a00)}
 .seq-badge{position:absolute;top:72px;left:50%;transform:translateX(-50%);z-index:1200;
-  background:rgba(16,20,28,.94);border:1px solid rgba(255,255,255,.12);border-radius:14px;
-  padding:5px 14px;font-family:var(--mono);font-size:12px;font-weight:700;color:#e8eef6;
+  background:#1b1b1b;border:1px solid rgba(255,255,255,.12);border-radius:12px;
+  padding:5px 14px;font-family:var(--mono);font-size:14px;font-weight:700;color:#f5f5f5;
   max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* sequence usability (16 Aug): the bar stays pinned while the list scrolls,
@@ -899,13 +926,13 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 .seq-bar.pulse{animation:seqPulse .9s ease}
 @keyframes seqPulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.7)}100%{box-shadow:0 0 0 14px rgba(63,185,80,0)}}
 .seq-chip .sq-step{font-style:normal;cursor:pointer;color:var(--accent);font-weight:800;
-  font-size:15px;padding:2px 6px;border:1px solid var(--border);border-radius:7px;min-width:26px;
+  font-size:15px;padding:2px 6px;border:1px solid var(--border);border-radius:8px;min-width:26px;
   text-align:center;user-select:none}
 .seq-chip .sq-x{font-style:normal;color:var(--muted);cursor:pointer;padding:0 2px;margin-left:2px}
 .seq-chip b{cursor:default;min-width:30px}
-.btn.seq-added{background:var(--green,#3fb950)!important;color:#08110a!important}
+.btn.seq-added{background:var(--green,#00e676)!important;color:#000000!important}
 .lap-chip{display:inline-flex;align-items:center;gap:0;margin-left:10px;
-  background:var(--panel2,#161b22);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  background:var(--panel2,#1b1b1b);border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .lap-chip b{color:var(--accent);font-size:15px;font-weight:800;min-width:44px;text-align:center}
 .lap-step{background:none;border:none;color:var(--text);font-size:17px;font-weight:800;
   min-height:46px;min-width:40px;cursor:pointer}
@@ -913,10 +940,122 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 
 /* always-visible sequence pill (peek row) */
 .seq-peek{flex-shrink:0;margin-left:10px;min-height:46px;padding:0 14px;
-  background:#1f6feb;color:#fff;border:none;border-radius:12px;font-weight:800;
+  background:var(--accent);color:var(--on-accent);border:none;border-radius:12px;font-weight:800;
   font-size:13px;letter-spacing:.4px;cursor:pointer;white-space:nowrap;
-  box-shadow:0 4px 14px rgba(31,111,235,.35)}
+  box-shadow:none}
 .seq-peek:active{transform:scale(.97)}
+
+/* ── TYPOGRAPHY: display face on the glanceable metrics (layer 4) ────────
+   Barlow Condensed carries anything the driver reads at a glance; IBM Plex
+   Mono keeps timers and data rows column-aligned. tabular-nums stops the
+   numerals shifting width as values change — the "visual jitter during
+   fast updates" the 8pt-grid rule is there to prevent.                  */
+.nsc-dist,.hud-instr-dist,.hud-spd-val,.cockpit-speed-value,
+.lcm-v,.sc-time-val,.peek-dist,.hud-sr-timer{
+  font-family:var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.nsc-dist{font-size:52px;font-weight:700;line-height:.9}
+.hud-spd-val{font-size:34px;font-weight:700}
+.peek-dist{font-size:20px;font-weight:600}
+.lcm-v{font-size:24px;font-weight:600}
+.sc-time-val{font-size:24px;font-weight:600}
+/* Section labels: IBM Plex Sans, wide tracking, never competing with data */
+.nsc-head,.hud-icon-lbl,.hud-tgt,.cockpit-speed-unit,.cockpit-speed-target,
+.rec-label,.tstat-l,.sb-lbl{font-family:var(--sans);letter-spacing:1.2px}
+
+/* Sequence chips: the order arrow belongs to the chip, never to the gap —
+   a free-standing separator dangles at the end of a wrapped row. */
+.seq-chip:not(:last-child)::after{content:'\2192';color:var(--muted);
+  margin-left:2px;font-size:13px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHELL v7 — RAIL + DRAWER  (replaces the draggable bottom sheet, 22 Sep)
+
+   Field report: the sheet was "horrível de se mexer", it stuck, and
+   scrolling the recordings list dragged the whole sheet up instead of
+   scrolling. Root cause: one draggable container wrapped a scrollable list,
+   so every touch was ambiguous — the shell and the list both wanted it.
+
+   The fix is structural, not a tuning of thresholds: the shell no longer
+   has a drag gesture at all. Navigation is a rail of tap targets; content
+   lives in a panel that only ever scrolls. A touch can now belong to
+   exactly one thing, so the two can never fight.
+   ══════════════════════════════════════════════════════════════════════ */
+:root{--rail-w:92px;--ab-h:76px;--bar-h:53px}
+
+.rail{position:fixed;left:0;top:var(--bar-h);bottom:calc(var(--ab-h) + var(--safe-b));
+  width:var(--rail-w);z-index:1200;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:var(--s-sm) 0;gap:var(--s-xs);
+  overflow:hidden;touch-action:manipulation}
+.rail-item{flex:1;min-height:76px;max-height:120px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;background:none;border:none;
+  border-left:3px solid transparent;color:var(--muted);cursor:pointer;
+  font-family:var(--sans);padding:0 2px;position:relative}
+.rail-item svg{width:28px;height:28px;flex-shrink:0}
+.rail-lbl{font-size:14px;font-weight:600;letter-spacing:.8px;line-height:1}
+.rail-item.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-dim)}
+.rail-item:active{background:var(--panel2)}
+/* Count badge rides on the icon, not inside the word — "REC 3" read as
+   one label. */
+.rail-item{position:relative}
+.rail-badge{position:absolute;top:12px;right:18px;min-width:20px;height:20px;padding:0 5px;
+  border-radius:999px;background:var(--accent);color:var(--on-accent);
+  font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.rail-badge:empty{display:none}
+
+/* Panel — slides out of the rail, over the map. Scrolls, never drags. */
+.drawer{position:fixed;left:var(--rail-w);top:var(--bar-h);
+  bottom:calc(var(--ab-h) + var(--safe-b));width:min(430px,calc(100vw - var(--rail-w)));
+  z-index:1150;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(-102%);transition:transform .22s ease;will-change:transform}
+.drawer.open{transform:translateX(0)}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;
+  padding:var(--s-md) var(--s-md) var(--s-sm) var(--s-lg);flex-shrink:0;
+  border-bottom:1px solid var(--border)}
+.drawer-title{font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:1.6px;
+  color:var(--accent)}
+.drawer-close{width:44px;height:44px;border-radius:8px;background:var(--panel2);
+  border:1px solid var(--border);color:var(--text);font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+
+/* Fixed action bar — carries START. It cannot be dragged. */
+.actionbar{position:fixed;left:0;right:0;bottom:0;height:calc(var(--ab-h) + var(--safe-b));
+  padding:0 var(--s-md) var(--safe-b);z-index:1300;background:var(--panel);
+  border-top:1px solid var(--border);display:flex;align-items:center;gap:var(--s-md)}
+.ab-icon{font-size:24px;flex-shrink:0}
+
+/* The old sheet chrome is gone — neutralise anything still keyed to it. */
+.sheet-handle,.sheet-tabs,.stab{display:none!important}
+
+@media (max-width:640px){
+  :root{--rail-w:80px}
+  .drawer{width:calc(100vw - var(--rail-w))}
+  .rail-lbl{font-size:13px}
+}
+
+/* A flex child defaults to min-height:auto, so a pane grows to fit its
+   content instead of scrolling — the list then has nowhere to scroll and
+   the touch goes looking for something else to move. This one line is what
+   makes "scroll the list" a real, self-contained gesture. */
+.drawer .pane{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;padding-bottom:var(--s-xl)}
+
+/* The inner lists are the only scrollers in the shell. overscroll-behavior
+   stops a fling at the end of a list from chaining out to the map, which is
+   the other way a touch used to "escape" the list it started in. */
+.drawer .rec-list,.drawer .stops-list,.drawer .nav-section{
+  min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+
+/* Recording card actions — two tiers instead of six cryptic chips.
+   "os comandos nao sao claros" (field, 22 Sep): ＋Seq / JSON / SIM / ✕ gave
+   the driver no idea what they did, and a bare ✕ sat one slip away from
+   deleting a cycle. Now the two actions actually used are full-width and
+   spelled out, and the utilities are a separate, smaller row with words. */
+.rec-card-btns{display:flex;gap:var(--s-sm);margin-top:var(--s-sm);flex-wrap:wrap}
+.rec-card-btns .rc-main{flex:1 1 0;min-width:0;white-space:nowrap;min-height:48px;font-size:14px;font-weight:600}
+.rec-card-btns.rc-utils{margin-top:var(--s-xs)}
+.rc-utils .btn{flex:1 1 40%;min-height:42px;font-size:13px}
+.rc-utils .rc-del{flex:1 1 40%}
 </style>
 </head>
 <body>
@@ -924,7 +1063,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="logo">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>GPX <span style="font-size:9px;background:#a371f7;color:#fff;padding:1px 5px;border-radius:6px;font-weight:800;letter-spacing:.5px;vertical-align:2px">DEV</span>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>GPX <span style="font-size:9px;background:#ffc400;color:#fff;padding:1px 5px;border-radius:6px;font-weight:800;letter-spacing:.5px;vertical-align:2px">DEV</span>
   </div>
   <div class="top-stats">
     <div class="tstat"><span class="tstat-l">Route</span><span class="tstat-v" id="h-dist">—</span></div>
@@ -1142,41 +1281,32 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
     </div>
   </div>
 
-  <!-- BOTTOM SHEET -->
-  <div class="sheet peek" id="sheet"
-    ontouchstart="shTS(event)" ontouchmove="shTM(event)" ontouchend="shTE(event)">
-    <div class="sheet-handle" onclick="toggleSheetCollapse()"></div>
-    <div class="peek" onclick="toggleSheet()">
-      <span id="peek-icon" style="font-size:22px;flex-shrink:0">🗺️</span>
-      <div class="peek-left">
-        <div class="peek-name" id="peek-name">Load a GPX file</div>
-        <div class="peek-sub"  id="peek-sub">Tap 📂 to open a file</div>
-      </div>
-      <div class="peek-dist" id="peek-dist"></div>
-      <button class="seq-peek" id="seq-peek" onclick="seqPeekTap(event)"
-        style="display:none" title="Start the playback sequence"></button>
-      <span class="lap-chip" id="lap-chip" title="Repetitions">
-        <button class="lap-step" onclick="lapChipStep(event,-1)">−</button>
-        <b id="lap-chip-val">1×</b>
-        <button class="lap-step" onclick="lapChipStep(event,1)">＋</button>
-      </span>
-      <button class="big-start" id="big-start" onclick="bigStartTap(event)">▶ START</button>
-    </div>
+  <!-- ═══ LEFT RAIL — the only way to navigate ════════════════════════════
+     Replaces the draggable bottom sheet (field report 22 Sep: dragging
+     fought the map, and scrolling a list pulled the whole sheet up).
+     Every target here is a TAP. There is no drag gesture anywhere in the
+     shell any more, so nothing can compete with list scrolling. -->
+  <nav class="rail" id="rail" role="tablist" aria-label="Sections">
+    <button class="rail-item active" id="stab-rota" role="tab"
+      aria-label="ROUTE" onclick="switchTab('rota',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5-2V6l5 2 6-3 5 2v12l-5-2-6 3z"/><path d="M9 8v12M15 5v12"/></svg>
+      <span class="rail-lbl">ROUTE</span></button>
+    <button class="rail-item" id="stab-nav" role="tab"
+      aria-label="GPS" onclick="switchTab('nav',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      <span class="rail-lbl">GPS</span></button>
+    <button class="rail-item" id="stab-paradas" role="tab"
+      aria-label="STOPS" onclick="switchTab('paradas',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+      <span class="rail-lbl">STOPS<span id="stops-badge" class="rail-badge"></span></span></button>
+    <button class="rail-item" id="stab-gravadas" role="tab"
+      aria-label="REC" onclick="switchTab('gravadas',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>
+      <span class="rail-lbl">REC<span id="rec-badge" class="rail-badge"></span></span></button>
+  </nav>
 
-    <div class="sheet-tabs" role="tablist">
-      <div class="stab active" id="stab-rota" role="tab" onclick="switchTab('rota',true)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5-2V6l5 2 6-3 5 2v12l-5-2-6 3z"/><path d="M9 8v12M15 5v12"/></svg>
-        <span>Route</span></div>
-      <div class="stab" id="stab-nav" role="tab" onclick="switchTab('nav',true)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-        <span>GPS</span></div>
-      <div class="stab" id="stab-paradas" role="tab" onclick="switchTab('paradas',true)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
-        <span>Stops<span id="stops-badge" class="stab-badge"></span></span></div>
-      <div class="stab" id="stab-gravadas" role="tab" onclick="switchTab('gravadas',true)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>
-        <span>Recordings<span id="rec-badge" class="stab-badge"></span></span></div>
-      <div class="stab stab-chev" id="sheet-chev" onclick="toggleSheetCollapse()" title="Expand / collapse">⌃</div>
+  <!-- Panel: slides over the map from the rail. Scrolls on its own. -->
+  <aside class="drawer" id="sheet" aria-label="Panel">
+    <div class="drawer-head">
+      <span class="drawer-title" id="drawer-title">ROUTE</span>
+      <button class="drawer-close" id="sheet-chev" onclick="toggleSheetCollapse()"
+        aria-label="Close panel" title="Close panel">✕</button>
     </div>
 
     <!-- ROTA PANE -->
@@ -1238,7 +1368,7 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
           <input type="range" min="1" max="20" value="5" id="rng-sim" oninput="el('val-sim').textContent=this.value+'x'">
           <span class="val" id="val-sim">5x</span>
         </div>
-        <button class="btn" id="btn-simstop" style="display:none;width:100%;margin:4px 0 10px;border-color:#a371f7;color:#a371f7" onclick="stopSim()">■ Stop simulation</button>
+        <button class="btn" id="btn-simstop" style="display:none;width:100%;margin:4px 0 10px;border-color:#ffc400;color:#ffc400" onclick="stopSim()">■ Stop simulation</button>
         <div class="nav-field"><label>Rec stop min. duration (s)</label>
           <input type="range" min="3" max="60" value="5"  id="rng-recdur" oninput="el('val-recdur').textContent=this.value+'s'">
           <span class="val" id="val-recdur">5s</span></div>
@@ -1321,6 +1451,26 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
         <input type="file" id="json-file" accept=".json,application/json" style="display:none" onchange="importRecsJSON(this)">
       </div>
     </div>
+  </div>
+
+  <!-- ═══ ACTION BAR — fixed, never draggable ══════════════════════════
+       Carries what the old peek row carried. It does not move, so it can
+       never be dragged by accident while reaching for START. -->
+  <div class="actionbar" id="actionbar">
+    <span id="peek-icon" class="ab-icon">🗺️</span>
+    <div class="peek-left">
+      <div class="peek-name" id="peek-name">Load a GPX file</div>
+      <div class="peek-sub"  id="peek-sub">Tap the folder to open a file</div>
+    </div>
+    <div class="peek-dist" id="peek-dist"></div>
+    <button class="seq-peek" id="seq-peek" onclick="seqPeekTap(event)"
+      style="display:none" title="Start the playback sequence"></button>
+    <span class="lap-chip" id="lap-chip" title="Repetitions">
+      <button class="lap-step" onclick="lapChipStep(event,-1)" aria-label="Fewer laps">−</button>
+      <b id="lap-chip-val">1×</b>
+      <button class="lap-step" onclick="lapChipStep(event,1)" aria-label="More laps">＋</button>
+    </span>
+    <button class="big-start" id="big-start" onclick="bigStartTap(event)">▶ START</button>
   </div>
 </div>
 
@@ -1934,23 +2084,18 @@ let shState='peek',tsY=0;
 function toggleSheet(){shState=shState==='expanded'?'mid':'expanded';applySheet()}
 function toggleSheetCollapse(){shState=(shState==='peek'||shState==='hidden')?'mid':'peek';applySheet()}
 function applySheet(){
-  const s=el('sheet');
-  s.classList.remove('expanded','mid','hidden','peek');
-  s.classList.add(shState);
-  const ch=el('sheet-chev');
-  if(ch)ch.textContent=(shState==='peek'||shState==='hidden')?'⌃':'⌄';
+  // shState is kept as the panel's state so every existing caller still
+  // works: 'peek'/'hidden' = panel closed, 'mid'/'expanded' = panel open.
+  const s=el('sheet'); if(!s)return;
+  const open=(shState==='mid'||shState==='expanded');
+  s.classList.toggle('open',open);
+  const r=el('rail'); if(r)r.classList.toggle('panel-open',open);
+  const t=el('drawer-title');
+  if(t){const cur=['rota','nav','paradas','gravadas'].find(x=>{
+      const b=el('stab-'+x);return b&&b.classList&&b.classList.contains('active');});
+    t.textContent={rota:'ROUTE',nav:'GPS',paradas:'STOPS',gravadas:'RECORDINGS'}[cur]||'ROUTE';}
   setTimeout(()=>{try{map.invalidateSize();}catch(e){}},320);
 }
-function shTS(e){tsY=e.touches[0]?.clientY||0}
-function shTM(e){if(e.target.closest('.stops-list,.rec-list,.nav-section')&&shState==='expanded')return;e.preventDefault()}
-function shTE(e){
-  const dy=(e.changedTouches[0]?.clientY||tsY)-tsY;
-  if(Math.abs(dy)<25)return;
-  if(dy>0) shState=(shState==='expanded')?'mid':'peek';   // swipe down: expanded→mid→peek
-  else     shState=(shState==='peek'||shState==='hidden')?'mid':'expanded'; // swipe up
-  applySheet();
-}
-
 function switchTab(n,fromUser){
   // Tapping the already-active tab collapses the sheet — aux panes must not
   // block the map. Programmatic calls (fromUser undefined) never collapse.
@@ -2210,19 +2355,19 @@ function parseGPX(xml,filename){
   // Casing first (under), then the main line: a 7-8 px stroke inside an
   // 11-12 px dark outline stays readable on light tiles, dark tiles and over
   // motorways, which a single fat stroke does not.
-  routeLayer    =L.polyline(ll,{color:'rgba(240,165,0,.1)',weight:5}).addTo(map);
-  routeDoneCasingLayer =L.polyline([],{color:'#12161c',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
-  routeRemainCasingLayer=L.polyline([],{color:'#12161c',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
-  routeAheadCasingLayer =L.polyline(ll,{color:'#12161c',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
-  routeDoneLayer =L.polyline([],{color:'#6b737d',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
-  routeRemainLayer=L.polyline([],{color:'rgba(240,165,0,.55)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
-  routeAheadLayer=L.polyline(ll,{color:'#ffb524',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeLayer    =L.polyline(ll,{color:'rgba(255,106,0,.14)',weight:5}).addTo(map);
+  routeDoneCasingLayer =L.polyline([],{color:'#070707',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeRemainCasingLayer=L.polyline([],{color:'#070707',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeAheadCasingLayer =L.polyline(ll,{color:'#070707',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeDoneLayer =L.polyline([],{color:'#595959',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
+  routeRemainLayer=L.polyline([],{color:'rgba(255,138,51,.5)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
+  routeAheadLayer=L.polyline(ll,{color:'#ff6a00',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
   fitRouteBounds(routeLayer.getBounds());
 
   // Start / end markers
   const dot=c=>L.divIcon({html:`<div style="background:${c};width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px ${c}"></div>`,className:'',iconAnchor:[7,7]});
-  extraMarkers.push(L.marker(ll[0],{icon:dot('#3fb950')}).addTo(map).bindTooltip('Start'));
-  extraMarkers.push(L.marker(ll[ll.length-1],{icon:dot('#f85149')}).addTo(map).bindTooltip('End'));
+  extraMarkers.push(L.marker(ll[0],{icon:dot('#00e676')}).addTo(map).bindTooltip('Start'));
+  extraMarkers.push(L.marker(ll[ll.length-1],{icon:dot('#ff1744')}).addTo(map).bindTooltip('End'));
 
   // Waypoints → stops
   doc.querySelectorAll('wpt').forEach((w,i)=>{
@@ -2285,8 +2430,8 @@ function parseGPX(xml,filename){
 // Bigger 10"-readable pins. The NEXT pending stop pulses amber, the stop the
 // vehicle is currently at pulses green — the driver sees the target at a glance.
 function mkStopIcon(id,state,isNext){
-  const colors={waiting:'#f0a500',current:'#3fb950',done:'#555'};
-  const lbl=state==='done'?'✓':id;const c=colors[state]||'#f0a500';
+  const colors={waiting:'#ff6a00',current:'#00e676',done:'#555'};
+  const lbl=state==='done'?'✓':id;const c=colors[state]||'#ff6a00';
   const SZ=state==='done'?30:(isNext||state==='current'?46:38);
   const cls=state==='current'?'mk-pulse-g':(isNext?'mk-pulse-a':'');
   return L.divIcon({
@@ -2617,7 +2762,7 @@ function renderSeqBar(){
       `<i class="sq-step" onclick="Sequence.setLaps(${i},1)" title="More repetitions">＋</i>`+
       ` ${nm}`+
       `<i class="sq-x" onclick="Sequence.remove(${i})" title="Remove">✕</i></span>`;
-  }).join('<span class="seq-arrow">→</span>');
+  }).join('');
   const st=el('seq-start'), rs=el('seq-resume');
   if(st)st.style.display=Sequence.items.length&&!Sequence.active?'':'none';
   if(rs)rs.style.display=Sequence._resumable?'':'none';
@@ -2742,15 +2887,15 @@ function busSvg(){
     <g stroke-linejoin="round" stroke-linecap="round">
       <!-- body: front (windscreen) at the top -->
       <rect x="11" y="5.5" width="18" height="29" rx="4.5"
-            fill="#1a6ef5" stroke="#fff" stroke-width="3.2"/>
+            fill="#00b0ff" stroke="#fff" stroke-width="3.2"/>
       <!-- windscreen marks the front unambiguously -->
       <path d="M13.6 11.2c2-1.6 10.8-1.6 12.8 0v3.4H13.6z" fill="#fff" opacity=".95"/>
       <!-- side windows -->
       <rect x="13.4" y="17.2" width="4.6" height="5.2" rx="1" fill="#fff" opacity=".65"/>
       <rect x="22" y="17.2" width="4.6" height="5.2" rx="1" fill="#fff" opacity=".65"/>
       <!-- wheels -->
-      <rect x="9.4" y="19.5" width="2.6" height="6" rx="1.2" fill="#0d1117" opacity=".75"/>
-      <rect x="28" y="19.5" width="2.6" height="6" rx="1.2" fill="#0d1117" opacity=".75"/>
+      <rect x="9.4" y="19.5" width="2.6" height="6" rx="1.2" fill="#070707" opacity=".75"/>
+      <rect x="28" y="19.5" width="2.6" height="6" rx="1.2" fill="#070707" opacity=".75"/>
       <!-- direction nose -->
       <path d="M20 1.6 24.2 6h-8.4z" fill="#fff"/>
     </g>
@@ -3195,7 +3340,7 @@ function computeGuidance(routeM,speedKmh){
 /* Arrow SVG. Shape carries the meaning (§8: no emojis, no system fonts):
    straight shaft, swept shaft, or an L-shaped junction arrow.             */
 function guidanceArrowSvg(kind,dir,size=54){
-  const S=size, stroke='#0d1117';
+  const S=size, stroke='#070707';
   const body={
     STRAIGHT:'<path d="M27 8 L27 46 M27 8 L18 20 M27 8 L36 20"/>',
     CURVE_right:'<path d="M22 46 C22 30 28 20 38 14 M38 14 L28 13 M38 14 L34 23"/>',
@@ -3207,7 +3352,7 @@ function guidanceArrowSvg(kind,dir,size=54){
   const d=body[key]||body.STRAIGHT;
   return `<svg viewBox="0 0 54 54" width="${S}" height="${S}" aria-hidden="true">
     <g fill="none" stroke="${stroke}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".55">${d}</g>
-    <g fill="none" stroke="var(--accent,#f0a500)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">${d}</g>
+    <g fill="none" stroke="var(--accent,#ff6a00)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">${d}</g>
   </svg>`;
 }
 
@@ -3405,7 +3550,7 @@ function onGPS(pos){
   else{posMarker.setLatLng([lat,lng]);posMarker.setIcon(icon)}
 
   if(accCircle)map.removeLayer(accCircle);
-  accCircle=L.circle([lat,lng],{radius:accuracy,color:'#58a6ff',fillColor:'#58a6ff',fillOpacity:.07,weight:1,opacity:.3}).addTo(map);
+  accCircle=L.circle([lat,lng],{radius:accuracy,color:'#00b0ff',fillColor:'#00b0ff',fillOpacity:.07,weight:1,opacity:.3}).addTo(map);
   if(accCircle.bringToBack)accCircle.bringToBack();   // never over the vehicle
   if(posMarker.setZIndexOffset)posMarker.setZIndexOffset(5000);
 
@@ -3564,8 +3709,8 @@ function onGPS(pos){
           const sNum=recStops.length;
           const stopIcon=L.divIcon({
             html:`<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-              <div style="background:#f85149;color:#fff;font-size:11px;font-weight:700;font-family:monospace;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6)">⏸ P${sNum}</div>
-              <div style="width:12px;height:12px;background:#f85149;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px #f85149"></div>
+              <div style="background:#ff1744;color:#fff;font-size:11px;font-weight:700;font-family:monospace;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6)">⏸ P${sNum}</div>
+              <div style="width:12px;height:12px;background:#ff1744;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px #ff1744"></div>
             </div>`,
             className:'',iconAnchor:[24,20]
           });
@@ -3619,7 +3764,7 @@ function onGPS(pos){
     if(!lastRP||movedM>=3||Date.now()-lastRP.t>=10000){
       recPoints.push({lat,lng,t:Date.now(),speed:speed,alt:altitude});
       // Draw live track
-      if(!recLayer){recLayer=L.polyline([[lat,lng]],{color:'#58a6ff',weight:3,opacity:.85}).addTo(map)}
+      if(!recLayer){recLayer=L.polyline([[lat,lng]],{color:'#00b0ff',weight:3,opacity:.85}).addTo(map)}
       else recLayer.addLatLng([lat,lng]);
     }
     const recDist=calcDistRaw(recPoints);
@@ -4722,12 +4867,18 @@ function renderRecCard(rec,idx){
       </div>
     </div>
     <div class="rec-card-btns">
-      <button class="btn go"      style="flex:1;font-size:11px;padding:8px 4px" onclick="loadRec(${idx})">📂 Load</button>
-      <button class="btn seq-add" style="flex:1;font-size:11px;padding:8px 4px" onclick="seqAdd(${idx},this)" title="Add to playback sequence">＋ Seq</button>
-      <button class="btn primary" style="flex:1;font-size:11px;padding:8px 4px" onclick="dlRecGPX(${idx})">↓ GPX</button>
-      <button class="btn"         style="flex:1;font-size:11px;padding:8px 4px;border-color:var(--blue);color:var(--blue)" onclick="shareRec(${idx})">📤 JSON</button>
-      <button class="btn"         style="font-size:11px;padding:8px 6px;border-color:#a371f7;color:#a371f7" title="Replay this cycle as live GPS (dev)" onclick="startSim(${idx})">▶ SIM</button>
-      <button class="btn"         style="font-size:11px;padding:8px 8px;border-color:var(--red);color:var(--red)" onclick="delRec(${idx})">✕</button>
+      <button class="btn go rc-main"  onclick="loadRec(${idx})">📂 LOAD</button>
+      <button class="btn seq-add rc-main" onclick="seqAdd(${idx},this)"
+        title="Add this cycle to the playback sequence">＋ SEQUENCE</button>
+    </div>
+    <div class="rec-card-btns rc-utils">
+      <button class="btn primary" onclick="dlRecGPX(${idx})">↓ GPX file</button>
+      <button class="btn" style="border-color:var(--blue);color:var(--blue)"
+        onclick="shareRec(${idx})">↑ Share JSON</button>
+      <button class="btn" style="border-color:var(--warn);color:var(--warn)"
+        title="Replay this cycle as live GPS (dev)" onclick="startSim(${idx})">▶ Simulate</button>
+      <button class="btn rc-del" style="border-color:var(--red);color:var(--red)"
+        onclick="delRec(${idx})">🗑 Delete</button>
     </div>`;
   list.insertBefore(card,list.firstChild);
 }
@@ -4755,13 +4906,13 @@ function loadRec(idx){
     lastRouteIdx=0;
 
     const ll=pts.map(p=>[p.lat,p.lon]);
-    routeLayer    =L.polyline(ll,{color:'rgba(88,166,255,.18)',weight:5}).addTo(map);
-    routeDoneCasingLayer =L.polyline([],{color:'#12161c',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
-    routeRemainCasingLayer=L.polyline([],{color:'#12161c',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
-    routeAheadCasingLayer =L.polyline(ll,{color:'#12161c',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
-    routeDoneLayer =L.polyline([],{color:'#6b737d',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
-    routeRemainLayer=L.polyline([],{color:'rgba(88,166,255,.55)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
-    routeAheadLayer=L.polyline(ll,{color:'#7cc4ff',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeLayer    =L.polyline(ll,{color:'rgba(255,106,0,.14)',weight:5}).addTo(map);
+    routeDoneCasingLayer =L.polyline([],{color:'#070707',weight:8, opacity:.45,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeRemainCasingLayer=L.polyline([],{color:'#070707',weight:7, opacity:.40,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeAheadCasingLayer =L.polyline(ll,{color:'#070707',weight:12,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeDoneLayer =L.polyline([],{color:'#595959',weight:5,opacity:.75,lineCap:'round',lineJoin:'round'}).addTo(map);
+    routeRemainLayer=L.polyline([],{color:'rgba(255,138,51,.5)',weight:4,opacity:.8,dashArray:'10 8',lineCap:'butt'}).addTo(map);
+    routeAheadLayer=L.polyline(ll,{color:'#ff6a00',weight:8,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(map);
 
     // ── Stops ─────────────────────────────────────────
     stops=[];insideStop.clear();stopMarkers={};
@@ -4802,11 +4953,11 @@ function loadRec(idx){
       const lbl=hasPhoto?`📷 P${id}`:`⏸ P${id}`;
       const icon=L.divIcon({
         html:`<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-          <div style="background:#f85149;color:#fff;font-size:11px;font-weight:700;
+          <div style="background:#ff1744;color:#fff;font-size:11px;font-weight:700;
             font-family:monospace;padding:2px 7px;border-radius:10px;
             white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.6)">${lbl}</div>
-          <div style="width:12px;height:12px;background:#f85149;border:2px solid #fff;
-            border-radius:50%;box-shadow:0 0 6px #f85149"></div></div>`,
+          <div style="width:12px;height:12px;background:#ff1744;border:2px solid #fff;
+            border-radius:50%;box-shadow:0 0 6px #ff1744"></div></div>`,
         className:'',iconAnchor:[24,20]
       });
       const m=L.marker([+s.lat,+s.lng],{icon,zIndexOffset:900}).addTo(map);

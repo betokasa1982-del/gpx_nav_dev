@@ -246,20 +246,20 @@ console.log('18. tab retract/expand OK');
 
 console.log('ALL v7 TESTS PASSED');
 
-// ══ TEST 19: sheet collapse behavior ══
+// ══ TEST 19: panel open/close ══
+// SPEC CHANGE (22 Sep, field report): the swipe-to-drag sheet was removed.
+// A draggable container wrapping a scrollable list made every touch
+// ambiguous — "o scroll quase sempre puxa a barra principal". The shell now
+// has NO drag gesture; the swipe assertions below were replaced by the
+// close-button behaviour that took over the same job.
 shState='peek';
 toggleSheetCollapse();
-console.assert(shState==='mid','chevron expand FAIL: '+shState);
+console.assert(shState==='mid','panel open FAIL: '+shState);
 toggleSheetCollapse();
-console.assert(shState==='peek','chevron collapse FAIL: '+shState);
-// swipe down from mid → peek (was stuck at mid before)
-shState='mid'; tsY=100;
-shTE({changedTouches:[{clientY:200}]});
-console.assert(shState==='peek','swipe-down collapse FAIL: '+shState);
-// swipe up from peek → mid
-tsY=200; shTE({changedTouches:[{clientY:100}]});
-console.assert(shState==='mid','swipe-up open FAIL: '+shState);
-console.log('19. sheet collapse/expand OK');
+console.assert(shState==='peek','panel close FAIL: '+shState);
+console.assert(typeof globalThis.shTE==='undefined'&&typeof globalThis.shTM==='undefined',
+  '19: a sheet drag handler came back — the scroll conflict returns with it');
+console.log('19. panel open/close, no drag handlers OK');
 
 console.log('ALL v8 TESTS PASSED');
 
@@ -2212,9 +2212,17 @@ function ckDrive(){
   console.assert(el('nsc-photo').style.display==='block','CK-6: photo missing from the dock');
   console.assert((el('nsc-events').innerHTML.match(/<svg/g)||[]).length===3,'CK-6: three events not shown');
   const css=ckCss();
-  console.assert(/body\.cockpit \.evt-chip\[title="Open Door"\]\{color:#3fb950/.test(css),'CK-6: door not green');
-  console.assert(/body\.cockpit \.evt-chip\[title="Kneeling"\]\{color:#4c9dff/.test(css),'CK-6: kneeling not blue');
-  console.assert(/body\.cockpit \.evt-chip\[title="Hand Brake"\]\{color:#f85149/.test(css),'CK-6: brake not red');
+  // RETHEME (21 Sep): these asserted the pre-ApexCycle hex literals. What
+  // matters is the SEMANTIC coding, so they now assert the palette's own
+  // success/info/error tokens AND that the three stay mutually distinct —
+  // a stricter check than three fixed strings ever was.
+  const chip=t=>(new RegExp('body\\.cockpit \\.evt-chip\\[title="'+t+'"\\]\\{color:(#[0-9a-f]{6})')
+    .exec(css)||[])[1];
+  const cDoor=chip('Open Door'), cKnee=chip('Kneeling'), cBrake=chip('Hand Brake');
+  console.assert(cDoor==='#00e676','CK-6: door not the palette success colour: '+cDoor);
+  console.assert(cKnee==='#00b0ff','CK-6: kneeling not the palette info colour: '+cKnee);
+  console.assert(cBrake==='#ff1744','CK-6: brake not the palette error colour: '+cBrake);
+  console.assert(new Set([cDoor,cKnee,cBrake]).size===3,'CK-6: event colours not mutually distinct');
   console.assert(/body\.cockpit \.nsc\{[^}]*bottom:86px/.test(css),'CK-6: dock not anchored bottom-right');
   console.log('CK-6. stop dock: photo + 3 colour-coded events, bottom-right OK');
 })();
@@ -2299,22 +2307,29 @@ const shCss=()=>document.__cssText||'';
   console.log('SH-3. exit 12px · dial 64px · voice 212px — separate slots OK');
 })();
 
-// ── SH-4: app bar — four areas, icons, ≥56px targets ──
+// ── SH-4: rail — four areas, icons, oversized no-look targets ──
 (function(){
+  // SPEC CHANGE (22 Sep): the bottom tab bar became a left rail. Same four
+  // areas and the same ids, but the targets grew (56px → 76px) because the
+  // driver operates this without looking, and the labels grew with them.
   const css=shCss();
-  console.assert(/\.stab\{[^}]*min-height:56px/.test(css),'SH-4: tab targets below 56px');
-  console.assert(/\.sheet-tabs\{height:62px/.test(css),'SH-4: app bar not 62px');
+  console.assert(/\.rail-item\{[^}]*min-height:76px/.test(css),'SH-4: rail targets below 76px');
+  console.assert(/\.rail\{[^}]*width:var\(--rail-w\)/.test(css),'SH-4: rail has no fixed width');
   const fs=require('fs'),path=require('path');
   const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
     .find(p=>fs.existsSync(p));
   const h=fs.readFileSync(f,'utf8');
-  const bar=h.slice(h.indexOf('class="sheet-tabs"'),h.indexOf('<!-- ROTA PANE -->'));
+  const bar=h.slice(h.indexOf('<nav class="rail"'),h.indexOf('<aside class="drawer"'));
+  console.assert(bar.length>200,'SH-4: rail markup missing from the DOM');
   ['stab-rota','stab-nav','stab-paradas','stab-gravadas'].forEach(id=>{
-    const seg=bar.slice(bar.indexOf(id),bar.indexOf(id)+520);
-    console.assert(/<svg/.test(seg),'SH-4: tab '+id+' has no icon');
+    const seg=bar.slice(bar.indexOf(id),bar.indexOf(id)+620);
+    console.assert(/<svg/.test(seg),'SH-4: rail item '+id+' has no icon');
+    console.assert(/class="rail-lbl"/.test(seg),'SH-4: rail item '+id+' has no text label');
   });
   console.assert(/role="tablist"/.test(bar),'SH-4: tablist role missing');
-  console.log('SH-4. app bar: 4 areas with icons, 56px+ targets OK');
+  // the shell must carry no drag gesture anywhere — that was the bug
+  console.assert(!/ontouch(start|move|end)=/.test(h),'SH-4: a touch-drag handler is back in the shell');
+  console.log('SH-4. rail: 4 labelled icon targets ≥76px, zero drag handlers OK');
 })();
 
 // ── SH-5: switching areas still works after the redesign ──
@@ -2538,7 +2553,18 @@ const f2Css=()=>document.__cssText||'';
   console.assert(/veh-puck/.test(html),'F2-4: no puck behind the bus');
   console.assert(html.indexOf('veh-puck')<html.indexOf('veh-bus'),
     'F2-4: puck drawn over the bus, not under');
-  console.assert(/fill="#1a6ef5"/.test(html),'F2-4: bus body still the pale route blue');
+  // RETHEME (21 Sep): the original assertion pinned the bus to one hex. The
+  // real requirement is that the bus never camouflages against the route it
+  // is driving on — now that the route ahead is brand orange, that is what
+  // gets asserted, plus the palette colour the bus actually uses.
+  const busFill=(/fill="(#[0-9a-f]{6})"/.exec(html)||[])[1];
+  const f2fs=require('fs'),f2p=require('path');
+  const f2file=[f2p.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>f2fs.existsSync(p));
+  const aheadCol=(/routeAheadLayer=L\.polyline\([\s\S]*?color:'(#[0-9a-f]{6})'/
+    .exec(f2fs.readFileSync(f2file,'utf8'))||[])[1];
+  console.assert(busFill==='#00b0ff','F2-4: bus body is not the palette info colour: '+busFill);
+  console.assert(busFill!==aheadCol,'F2-4: bus camouflages against the route-ahead colour');
   console.assert(/stroke-width="3.2"/.test(html),'F2-4: bus outline not thickened');
   const css=f2Css();
   console.assert(/\.veh-puck\{[^}]*background:#fff/.test(css),'F2-4: puck is not solid white');
@@ -3479,3 +3505,156 @@ function cgConnector(rec,fixes){
 speakText=_realSpeakCg;
 console.log('ALL CYCLE-REARM TESTS PASSED');
 __group('Cycle re-arm tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  DESIGN SYSTEM — ApexCycle "Dark-First Utility" must not drift
+//  The palette, type and rules come from the design_guidelines.json that
+//  shipped with the visual redesign; these lock them into the build the way
+//  the CSS-hygiene suite locks the cascade layers.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── design system ──');
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const css=document.__cssText||'';
+  const strip=s=>s.replace(/\/\*[\s\S]*?\*\//g,'');
+
+  // DS-1: every colour in the build belongs to the palette
+  const PALETTE=new Set(['#070707','#1b1b1b','#262626','#0e0e0e','#1a1a1a',
+    '#333333','#595959','#a3a3a3','#e0e0e0','#f5f5f5','#000000','#ffffff',
+    '#ff6a00','#ff8a33','#4d2600','#00e676','#ff1744','#00b0ff','#ffc400']);
+  const stray=[...new Set((html.match(/#[0-9a-fA-F]{6}\b/g)||[]).map(c=>c.toLowerCase()))]
+    .filter(c=>!PALETTE.has(c));
+  console.assert(stray.length===0,'DS-1: off-palette colours: '+stray.join(', '));
+  console.log('DS-1. every colour is an ApexCycle token OK');
+
+  // DS-2: glassmorphism is an explicit "dont" — telemetry needs clarity
+  console.assert(!/backdrop-filter/.test(css),'DS-2: glassmorphism returned');
+  const rgbaTok=(strip(css).match(/--[a-z0-9-]+:\s*rgba\([^)]*\)/g)||[]);
+  console.assert(rgbaTok.length===0,'DS-2: translucent surface token(s): '+rgbaTok.join(' | '));
+  console.log('DS-2. no blur, no translucent surface tokens OK');
+
+  // DS-3: shadow_tier 0 — elevation shadows out; marker glow/inset stays,
+  // because that is contrast against an arbitrary basemap, not elevation
+  const elev=(strip(css).match(/box-shadow:\s*([^;}]+)/g)||[])
+    .map(s=>s.replace(/box-shadow:\s*/,'').trim())
+    .filter(v=>!(v.startsWith('inset')||/^0 0 \d/.test(v)||v==='none'));
+  console.assert(elev.length===0,'DS-3: elevation shadows: '+elev.slice(0,2).join(' | '));
+  console.log('DS-3. shadow tier 0 held OK');
+
+  // DS-4: radius scale 4 / 8 / 12 / pill (2px hairlines and 50% circles ok)
+  const OK=new Set(['4px','8px','12px','999px','2px','50%','0']);
+  const bad=[...new Set((strip(css).match(/border-radius:\s*([^;}]+)/g)||[])
+    .map(s=>s.replace(/border-radius:\s*/,'').trim()))]
+    .filter(v=>!v.split(/\s+/).every(t=>OK.has(t)));
+  console.assert(bad.length===0,'DS-4: off-scale radii: '+bad.join(', '));
+  console.log('DS-4. radius scale respected OK');
+
+  // DS-5: the glanceable metrics use the display face, data rows the mono
+  ['.nsc-dist','.hud-instr-dist','.cockpit-speed-value','.hud-spd-val'].forEach(s=>{
+    const re=new RegExp(s.replace('.','\\.')+'[^{]*\\{[^}]*var\\(--display\\)');
+    console.assert(re.test(strip(css)),'DS-5: '+s+' is not on the display face');
+  });
+  console.assert(/--display:'Barlow Condensed'/.test(css),'DS-5: display face is not Barlow Condensed');
+  console.assert(/--sans:'IBM Plex Sans'/.test(css),'DS-5: text face is not IBM Plex Sans');
+  console.log('DS-5. Barlow Condensed on metrics, IBM Plex on text OK');
+
+  // DS-6: the actual-speed numeral is the one element allowed off the type
+  // scale ("do not restrict to the 24pt maximum … e.g. 96pt")
+  const sp=/body\.cockpit \.cockpit-speed-value\{[^}]*font-size:(\d+)px/.exec(strip(css));
+  console.assert(sp&&+sp[1]>=64,'DS-6: speed numeral only '+(sp&&sp[1])+'px — not a cockpit metric');
+  const dial=/body\.cockpit #cockpit-speed\{[^}]*width:(\d+)px/.exec(strip(css));
+  console.assert(dial&&+dial[1]>=+sp[1]+40,'DS-6: dial too small for its numeral');
+  console.log('DS-6. speed numeral '+sp[1]+'px in a '+dial[1]+'px dial OK');
+
+  // DS-7: one brand-coloured primary action per card; utilities ghosted, so
+  // an export never shouts as loudly as the action the driver wants
+  console.assert(/\.btn\.go\{background:var\(--accent\)/.test(strip(css)),'DS-7: primary action not brand');
+  console.assert(/\.btn\.primary\{background:transparent/.test(strip(css)),'DS-7: utility button not ghosted');
+  console.log('DS-7. action hierarchy: brand primary, ghosted utilities OK');
+
+  // DS-8: the webfonts must have offline fallbacks — the tablet runs with
+  // internet off and Roboto Condensed ships on Android
+  console.assert(/--display:'Barlow Condensed','Roboto Condensed'/.test(css),
+    'DS-8: display face has no system fallback for offline use');
+  console.assert(/fonts\.googleapis\.com[^"]*Barlow\+Condensed/.test(html),'DS-8: font not requested');
+  console.log('DS-8. offline font fallbacks present OK');
+})();
+console.log('ALL DESIGN-SYSTEM TESTS PASSED');
+__group('Design system tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SHELL v7 — rail + drawer. Locks the fixes for the 22 Sep field report:
+//  the sheet that fought the scroll, the tiny type, the cryptic commands.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── shell v7 (rail) ──');
+(function(){
+  const fs=require('fs'),path=require('path');
+  const f=[path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html']
+    .find(p=>fs.existsSync(p));
+  const html=fs.readFileSync(f,'utf8');
+  const css=document.__cssText||'';
+  const strip=s=>s.replace(/\/\*[\s\S]*?\*\//g,'');
+
+  // UX-1: the shell carries no drag gesture — the root cause of the conflict
+  console.assert(!/ontouch(start|move|end)\s*=/.test(html),'UX-1: a touch-drag handler is back');
+  ['shTS','shTM','shTE'].forEach(fn=>
+    console.assert(!new RegExp('function\\s+'+fn+'\\b').test(html),'UX-1: '+fn+' came back'));
+  console.log('UX-1. zero drag handlers in the shell OK');
+
+  // UX-2: exactly one scroller per panel, and it cannot chain out to the map
+  console.assert(/\.drawer \.pane\{[^}]*min-height:0/.test(strip(css)),
+    'UX-2: panes can grow instead of scrolling — the list loses its gesture');
+  console.assert(/\.drawer \.rec-list[^{]*\{[^}]*overscroll-behavior:contain/.test(strip(css)),
+    'UX-2: list scroll can chain out to the map');
+  console.assert(/\.drawer\{[^}]*overflow:hidden/.test(strip(css)),'UX-2: drawer does not clip its content');
+  console.log('UX-2. one bounded scroller per panel, contained OK');
+
+  // UX-3: legibility floor — nothing under 12px anywhere in the build
+  const tiny=[...new Set((strip(css).match(/font-size:\s*(\d+)px/g)||[])
+    .map(s=>+s.replace(/\D/g,'')))].filter(v=>v<12);
+  console.assert(tiny.length===0,'UX-3: type below the 12px floor: '+tiny.join(', ')+'px');
+  console.log('UX-3. no type below 12px OK');
+
+  // UX-4: no-look touch targets
+  const min=(sel,px)=>{
+    const m=new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\{[^}]*min-height:(\\d+)px')
+      .exec(strip(css));
+    console.assert(m&&+m[1]>=px,'UX-4: '+sel+' target '+(m?m[1]:'?')+'px, need '+px);
+  };
+  min('.rail-item',76); min('.rec-card-btns .rc-main',48); min('.rc-utils .btn',42);
+  console.log('UX-4. rail 76px, card actions 48px, utilities 42px OK');
+
+  // UX-5: every recording action says what it does — no bare glyphs
+  const row=html.slice(html.indexOf('<div class="rec-card-btns">'),
+                       html.indexOf('list.insertBefore(card'));
+  // labels are title-case in the markup and uppercased by CSS
+  ['LOAD','SEQUENCE','GPX','JSON','SIMULATE','DELETE'].forEach(w=>
+    console.assert(row.toUpperCase().includes(w),'UX-5: card action "'+w+'" lost its word label'));
+  console.assert(!/>\s*✕\s*<\/button>/.test(row),'UX-5: bare ✕ delete is back next to LOAD');
+  console.log('UX-5. all six card actions carry words OK');
+
+  // UX-6: START lives on a fixed bar that cannot be dragged
+  console.assert(/\.actionbar\{[^}]*position:fixed/.test(strip(css)),'UX-6: action bar is not fixed');
+  console.assert(html.indexOf('id="big-start"')>html.indexOf('id="actionbar"'),
+    'UX-6: START is not inside the fixed action bar');
+  console.log('UX-6. START on a fixed, undraggable bar OK');
+
+  // UX-7: rail ↔ panel state, through the same calls the UI makes
+  shState='peek';
+  switchTab('gravadas',true);
+  console.assert(shState==='mid','UX-7: rail tap did not open the panel');
+  console.assert(el('stab-gravadas').classList.contains('active'),'UX-7: rail item not active');
+  console.assert(el('sheet').classList.contains('open'),'UX-7: drawer has no open class');
+  console.assert(el('drawer-title').textContent==='RECORDINGS','UX-7: panel title wrong: '+el('drawer-title').textContent);
+  switchTab('gravadas',true);
+  console.assert(shState==='peek'&&!el('sheet').classList.contains('open'),
+    'UX-7: tapping the active rail item did not close the panel');
+  switchTab('rota',true);
+  console.assert(el('drawer-title').textContent==='ROUTE','UX-7: title did not follow the section');
+  console.log('UX-7. rail opens/closes the panel, title follows OK');
+})();
+console.log('ALL SHELL-V7 TESTS PASSED');
+__group('Shell v7 tests');

@@ -1,6 +1,6 @@
 // GPX Navigator Pro — Service Worker
 // Versão do cache: incrementar ao atualizar os arquivos
-const CACHE = "gpx-nav-v50-cycle-rearm";
+const CACHE = "gpx-nav-v52-rail-shell";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,7 +9,7 @@ const ASSETS = [
   "./icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
   "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js",
-  "https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+  "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
 ];
 
 // Instalação: pré-cachear recursos essenciais
