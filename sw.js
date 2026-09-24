@@ -1,6 +1,6 @@
 // GPX Navigator Pro — Service Worker
 // Versão do cache: incrementar ao atualizar os arquivos
-const CACHE = "gpx-nav-v63-synth-cycle";
+const CACHE = "gpx-nav-v64-synth-v2";
 const ASSETS = [
   "./",
   "./index.html",

@@ -4833,166 +4833,441 @@ console.log('ALL FIELD 22/09-C TESTS PASSED');
 __group('Field 22/09-C tests');
 
 // ══════════════════════════════════════════════════════════════════════════
-//  SYNTHETIC TRAPEZOID CYCLE — two buses, one identical cycle
-//  Rates + cruise distance define each segment; the engine must place the
-//  stop mark at the same distance for every bus, measure the rates the
-//  driver actually achieved, and keep its hands off the navigation engine.
+//  SYNTHETIC CYCLE v2 — drive-cycle execution, guidance and logging
+//  Test IDs map to the Drive Cycle Test specification (§ numbers) in
+//  SYNTH_CYCLE.md. Simulated runs are deterministic (seeded RNG).
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n── synthetic cycle ──');
+console.log('\n── synthetic cycle v2 ──');
 (function(){
-  const near=(a,b,tol)=>a!==null&&Math.abs(a-b)<=tol;
-  const CY={name:'T',a:1.0,d:0.8,dwell:10,laps:1,startDelay:5,
-    segs:[{v:20,cruise:100},{v:36,cruise:200},{v:50,cruise:300,a:0.8,d:0.7}]};
+  const near=(a,b,tol)=>a!==null&&a!==undefined&&Math.abs(a-b)<=tol;
+  const fs=require('fs'),path=require('path');
+  const html=fs.readFileSync([path.join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html'].find(p=>fs.existsSync(p)),'utf8');
+  const SPEC=synthCycle({name:'Spec',refMode:'time',laps:1,startDelay:5,segs:[
+    synSeg(30,'rate',0.5,10,'s'),synSeg(50,'time',10,20,'s'),synSeg(30,'rate',0.6,10,'s'),synSeg(0,'rate',0.6,20,'s')]});
+  const C=SYN_C;
 
-  // ── SYN-1: plan geometry from rates and distances ──
-  const P=synthPlan(CY);
-  const s1=P.segs[0],v1=20/3.6;
-  console.assert(P.segs.length===3,'SYN-1: 3 segments expected');
-  console.assert(near(s1.dA,v1*v1/2,1e-9)&&near(s1.dD,v1*v1/1.6,1e-9),'SYN-1: accel/decel distance wrong');
-  console.assert(near(s1.L,s1.dA+100+s1.dD,1e-9),'SYN-1: segment length ≠ dA+cruise+dD');
-  console.assert(P.segs[2].a===0.8&&P.segs[2].d===0.7,'SYN-1: per-segment rate override ignored');
-  console.assert(P.segs[2].dwell===0&&P.segs[0].dwell===10,'SYN-1: last segment must not wait, others use default');
-  console.assert(near(P.totalM,P.segs.reduce((a,s)=>a+s.L,0),1e-6),'SYN-1: total distance');
-  const P2=synthPlan({...CY,laps:2});
-  console.assert(P2.segs.length===6&&P2.segs[3].lap===1&&P2.segs[2].dwell===10,'SYN-1: laps expand, mid-cycle last seg waits');
-  console.log('SYN-1. trapezoid plan from rates + distances OK');
+  // ── SYN-REF-1 (§8, §22): calculation examples and reference math ──
+  let c=synthCycle({name:'x',segs:[synSeg(50,'rate',0.5,0,'s')]});
+  console.assert(near(synthCompile(c).phases[0].T,27.78,0.01),'REF-1: 0→50 @0.5 m/s² ≠ 27.8 s');
+  c=synthCycle({name:'x',segs:[synSeg(50,'time',20,0,'s')]});
+  console.assert(near(synthCompile(c).phases[0].a,0.694,0.001),'REF-1: 0→50 in 20 s ≠ 0.694 m/s²');
+  c=synthCycle({name:'x',segs:[synSeg(50,'rate',1,5,'s'),synSeg(20,'time',15,0,'s')]});
+  console.assert(near(synthCompile(c).phases[2].a,-0.556,0.001),'REF-1: 50→20 in 15 s ≠ −0.556 m/s²');
+  console.assert(near(synMs(36),10,1e-12)&&near(synKmh(10),36,1e-12),'REF-1: km/h ↔ m/s');
+  const d1=synthSegDerived(SPEC,1);
+  console.assert(d1.v0===30&&d1.type==='ACCEL'&&near(d1.a,20/3.6/10,1e-9),'REF-1: start speed not inherited / derived accel wrong');
+  const P=synthCompile(SPEC);
+  console.assert(P.phases.map(p=>p.type).join()==='ACCEL,CONST,ACCEL,CONST,DECEL,CONST,DECEL,PAUSE','REF-1: phase sequence (end hold kept) '+P.phases.map(p=>p.type));
+  console.assert(P.phases.every((p,i)=>i===0||(near(p.t0,P.phases[i-1].t0+P.phases[i-1].T,1e-9)&&near(p.v0,P.phases[i-1].v1,1e-12))),'REF-1: timeline not continuous');
+  const R1=synthRefAt(P,10);console.assert(near(R1.v,5,1e-9)&&R1.a===0.5&&near(R1.s,25,1e-9),'REF-1: v_ref(10 s)');
+  const Rend=synthRefAt(P,P.T+5);console.assert(Rend.type==='END'&&Rend.v===0,'REF-1: after the end');
+  console.assert(synthRefAt(P,-2).type==='PRE','REF-1: before GO');
+  console.log('SYN-REF-1. spec examples 27.8 s / +0.694 / −0.556, inheritance, continuity OK');
 
-  // ── SYN-2: the cycle ID ignores the name, catches any driven change ──
-  const h=synthHash(CY);
-  console.assert(/^[0-9A-F]{4}-[0-9A-F]{4}$/.test(h),'SYN-2: ID format '+h);
-  console.assert(synthHash({...CY,name:'renamed',startDelay:30})===h,'SYN-2: name/countdown changed the ID');
-  console.assert(synthHash({...CY,segs:[{v:20,cruise:101},...CY.segs.slice(1)]})!==h,'SYN-2: cruise change kept the ID');
-  console.assert(synthHash({...CY,d:0.9})!==h,'SYN-2: default decel change kept the ID');
-  console.assert(synthHash(JSON.parse(JSON.stringify(synthNormalize(CY))))===h,'SYN-2: round-trip (share → import) changed the ID');
-  console.log('SYN-2. cycle ID stable across tablets OK');
+  // ── SYN-VAL-1 (§9): invalid input is reported, never compiled ──
+  const bad=[
+    ['negative time',{segs:[synSeg(30,'time',-5,0)]},'time'],['zero duration',{segs:[synSeg(30,'time',0,0)]},'time'],
+    ['zero accel',{segs:[synSeg(30,'rate',0,0)]},'rate'],['NaN',{segs:[{v:NaN,def:'rate',rate:1,hold:0}]},'v'],
+    ['Infinity',{segs:[synSeg(30,'rate',Infinity,0)]},'rate'],['text',{segs:[synSeg('abc','rate',1,0)]},'v'],
+    ['speed > 120',{segs:[synSeg(200,'rate',1,0)]},'v'],['negative speed',{segs:[synSeg(-5,'rate',1,0)]},'v'],
+    ['too short',{segs:[synSeg(5,'rate',3,0)]},'rate'],['too long',{segs:[synSeg(120,'rate',0.05,0)]},'rate'],
+    ['accel via time > 3',{segs:[synSeg(80,'time',2,0)]},'time'],['hold m at 0',{segs:[synSeg(30,'rate',1,10),synSeg(0,'rate',1,50,'m')]},'hold'],
+    ['negative hold',{segs:[synSeg(30,'rate',1,-3)]},'hold'],['laps end ≠ 0',{laps:2,segs:[synSeg(30,'rate',1,10)]},'laps'],
+    ['laps 0',{laps:0,segs:[synSeg(30,'rate',1,10),synSeg(0,'rate',1,0)]},'laps'],['no motion',{segs:[synSeg(0,'rate',1,10)]},'segs'],
+    ['no segments',{segs:[]},'segs'],['empty name',{name:'  ',segs:[synSeg(30,'rate',1,10)]},'name']];
+  bad.forEach(([n,src,f])=>{
+    let e;try{e=synthValidate(synthCycle(Object.assign({name:'x',refMode:'time'},src)));}catch(err){e=null;}
+    console.assert(e&&e.length>0&&e.some(x=>x.f===f),'VAL-1: '+n+' not reported on '+f+': '+JSON.stringify(e));
+    console.assert(e&&e.every(x=>synT(x.k,x.p)!==x.k),'VAL-1: '+n+' has no user-facing message');
+  });
+  console.assert(synthValidate(SPEC).length===0,'VAL-1: valid spec cycle rejected');
+  console.assert(synthValidate(synthCycle({name:'c',segs:[synSeg('30,5','rate','0,5',10)]})).length===0,'VAL-1: decimal comma rejected');
+  console.log('SYN-VAL-1. '+bad.length+' invalid cases reported with messages OK');
 
-  // ── SYN-3: target — ramp in time, brake curve in distance ──
-  let T=synthTarget(s1,0,null);console.assert(T.vt===0&&T.phase==='GO','SYN-3: before launch');
-  T=synthTarget(s1,3,2);console.assert(near(T.vt,2.0,1e-9)&&T.phase==='ACCEL','SYN-3: ramp a·t');
-  T=synthTarget(s1,s1.dA+50,20);console.assert(near(T.vt,v1,1e-9)&&T.phase==='CRUISE','SYN-3: cruise');
-  T=synthTarget(s1,s1.L-5,30);console.assert(near(T.vt,Math.sqrt(2*0.8*5),1e-9)&&T.phase==='DECEL','SYN-3: brake curve');
-  T=synthTarget(s1,s1.L+3,40);console.assert(T.vt===0,'SYN-3: past the mark target is 0');
-  console.log('SYN-3. target speed law OK');
-
-  // Ideal-driver harness: 10 Hz physics, 1 Hz fixes, engine ticked at 10 Hz.
-  // sT = true distance since the last stop.
-  function drive(cy,o){
-    o=o||{};const S=Synth;S.sim=null;let t=1.8e12;
-    const r=S.startRun(cy,{bus:'TEST',band:2},t);
-    let v=0,sT=0,key='',launchAt=null,holdUntil=null,unplannedDone=false,guard=0;
-    const aF=o.aFactor||1;
-    while(r.state!=='DONE'&&r.state!=='ABORTED'&&guard++<30000){
-      for(let k=0;k<10;k++){
-        t+=100;
-        const kk=r.state+r.segIdx;
-        if(kk!==key){key=kk;
-          if(r.state==='DWELL'||r.state==='COUNTDOWN')sT=0;
-          if(r.state==='DRIVE')launchAt=v>0?t:null;}
-        if(r.state==='DRIVE'){
-          const seg=r.plan.segs[r.segIdx];
-          if(launchAt===null)launchAt=t+(o.launchMs??1000);
-          if(o.unplannedSeg===r.segIdx&&!unplannedDone&&sT>=seg.dA+20){holdUntil=t+12000;unplannedDone=true;}
-          const holding=holdUntil&&t<holdUntil;
-          let want;
-          if(holding||t<launchAt)want=0;
-          else if(sT>=seg.L-v*v/(2*seg.d)-0.05||(v===0&&sT>seg.L-2))want=0;
-          else want=seg.vms;
-          if(want>v)v=Math.min(want,v+seg.a*aF*0.1);
-          else if(want<v)v=Math.max(0,v-(holding?2.5:seg.d)*0.1);
-        }else if(r.state==='DWELL'&&o.earlySeg===r.segIdx&&r.dwellEnd-t<4000){
-          v=Math.min(1.5,v+0.1);
-        }else v=0;
-        sT+=v*0.1;
-        if(t%1000===0){
-          const stale=o.staleStops&&r.state==='DRIVE'&&v===0&&r.seg[r.segIdx].tLaunch!=null;
-          if(!stale)S.onFix({t,lat:null,lon:null,v,acc:4});
-        }
-        S.tick(t);
-      }
+  // ── SYN-FUZZ-1 (§40 property/fuzz): no crash, no NaN/Infinity, monotonic ──
+  const rnd=synRng(12345);let nValid=0,nInvalid=0;
+  const pick=a=>a[Math.floor(rnd()*a.length)];
+  for(let k=0;k<500;k++){
+    const n=1+Math.floor(rnd()*12),segs=[],clean=rnd()<0.6;
+    if(clean){                                              // plausible cycles, edge values included
+      for(let i=0;i<n;i++)segs.push(synSeg(pick([0,5,20,30,50,80,120,0.5]),pick(['rate','time']),
+        pick([0.05,0.3,0.5,1,2,3,rnd()*2.9+0.1]),pick([0,0,2,10,30,rnd()*60]),pick(['s','s','m'])));
+      segs.forEach(g=>{if(g.def==='time')g.time=pick([0.5,3,10,60,rnd()*100+1]);});
+      segs.push(synSeg(0,'rate',pick([0.4,0.8,1.5]),0,'s'));
+      const cy=synthCycle({name:'c'+k,refMode:pick(['time','position']),laps:pick([1,1,2,3]),startDelay:5,segs});
+      segs.forEach(g=>{if(g.holdUnit==='m'&&(+g.v)===0)g.holdUnit='s';});
+      checkCycle(cy,k);continue;
     }
-    return r;
+    for(let i=0;i<n;i++){
+      const v=pick([0,0,10,20,30,40,50,60,90,rnd()*130-5,'x',NaN,Infinity,'',-0]);
+      segs.push({v,def:pick(['rate','time','bogus']),rate:pick([0.3,0.5,1,2.9,rnd()*4-0.5,0,NaN,'1,2']),
+        time:pick([1,5,10,30,rnd()*700-10,0,Infinity]),hold:pick([0,0,5,20,rnd()*100,-1,'']),holdUnit:pick(['s','m'])});
+    }
+    const cy=synthCycle({name:'f'+k,refMode:pick(['time','position']),laps:pick([1,1,2,3,0,1.5]),startDelay:pick([5,10,2,70]),segs});
+    checkCycle(cy,k);
   }
+  function checkCycle(cy,k){
+    let e;try{e=synthValidate(cy);}catch(err){console.assert(false,'FUZZ-1: validate threw '+err.message);return;}
+    if(e.length){nInvalid++;return;}
+    nValid++;
+    const p=synthCompile(cy);
+    let ok=Number.isFinite(p.T)&&Number.isFinite(p.S)&&p.T>0&&p.S>0;
+    p.phases.forEach((q,i)=>{
+      ok=ok&&[q.v0,q.v1,q.a,q.t0,q.T,q.s0,q.S].every(Number.isFinite)&&q.T>0&&q.v0>=0&&q.v1>=0;
+      if(i)ok=ok&&near(q.t0,p.phases[i-1].t0+p.phases[i-1].T,1e-6)&&near(q.v0,p.phases[i-1].v1,1e-9);
+    });
+    for(let j=0;j<20;j++){const R=synthRefAt(p,rnd()*p.T*1.1);ok=ok&&[R.v,R.a,R.s].every(Number.isFinite)&&R.v>=-1e-9;}
+    p.sections.filter(s=>s.kind==='move').forEach(sec=>{for(let j=0;j<10;j++){const R=synthRefAtDist(sec,rnd()*sec.S*1.1);ok=ok&&Number.isFinite(R.v)&&Number.isFinite(R.tl);}});
+    console.assert(ok,'FUZZ-1: compiled cycle '+k+' has non-finite or discontinuous values');
+  }
+  console.assert(nValid>40&&nInvalid>40,'FUZZ-1: fuzz mix too narrow '+nValid+'/'+nInvalid);
+  console.log(`SYN-FUZZ-1. 500 random cycles (${nValid} valid, ${nInvalid} rejected) — finite, monotonic, continuous OK`);
 
-  // ── SYN-4: an ideal driver completes a VALID run, stops on the marks ──
-  let r=drive(CY);
-  console.assert(r.state==='DONE','SYN-4: run did not complete: '+r.state);
-  const st=r.stats;
-  console.assert(st.length===3&&st.every(Boolean),'SYN-4: stats for every segment');
-  console.assert(st.every(s=>Math.abs(s.stopErr)<3),'SYN-4: stop error > 3 m: '+st.map(s=>s.stopErr&&s.stopErr.toFixed(2)));
-  console.assert(st.every(s=>s.aMeas&&Math.abs(s.aMeas-s.a)/s.a<0.12),'SYN-4: measured accel off: '+st.map(s=>s.aMeas&&s.aMeas.toFixed(2)));
-  console.assert(st.every(s=>s.dMeas&&Math.abs(s.dMeas-s.d)/s.d<0.15),'SYN-4: measured decel off: '+st.map(s=>s.dMeas&&s.dMeas.toFixed(2)));
-  console.assert(st.every(s=>near(s.cMean,s.v,0.6)),'SYN-4: cruise mean off');
-  console.assert(r.summary.verdict==='VALID','SYN-4: ideal run not VALID: '+r.summary.verdict+' '+st.map(s=>s.why).join('|'));
-  console.assert(near(r.summary.actualM,P.totalM,6),'SYN-4: driven distance ≠ plan');
+  // ── SYN-ID-1 (§33): cycle identity across tablets ──
+  const h=synthHash(SPEC);
+  console.assert(/^[0-9A-F]{4}-[0-9A-F]{4}$/.test(h),'ID-1: format');
+  console.assert(synthHash(Object.assign({},SPEC,{name:'renamed',startDelay:30}))===h,'ID-1: name/countdown changed the ID');
+  console.assert(synthHash(Object.assign({},SPEC,{refMode:'position'}))!==h,'ID-1: reference mode kept the ID');
+  console.assert(synthHash(synthCycle(JSON.parse(JSON.stringify(SPEC))))===h,'ID-1: share/import round trip changed the ID');
+  const S2=JSON.parse(JSON.stringify(SPEC));S2.segs[1].time=10.5;console.assert(synthHash(S2)!==h,'ID-1: time change kept the ID');
+  console.log('SYN-ID-1. cycle ID OK');
+
+  // ── SYN-GUIDE-1 (§14–16): commands from speed and acceleration error ──
+  const G=Object.assign({},SYNTH_CFG.guide);
+  const run=(mode,ev,ea,ms)=>{const st=synthGuideNew();let cmd;for(let t=0;t<=(ms||3000);t+=100)cmd=synthGuideStep(st,{t,mode,ev,ea,moving:true,phaseKey:'k'},G);return cmd;};
+  console.assert(run('ACCEL',0.3/3.6*3.6,0.22)==='ACC_MORE','GUIDE-1: §14 example (speed +0.3, accel low by 0.22) → '+run('ACCEL',0.3,0.22));
+  console.assert(run('ACCEL',0,0.03)==='ACC','GUIDE-1: accel close → ACCELERATE');
+  console.assert(run('DECEL',0,-0.6-(-0.57))==='BRAKE','GUIDE-1: −0.57 vs −0.60 → BRAKE');
+  console.assert(run('DECEL',0,-0.6-(-0.35))==='BRAKE_MORE','GUIDE-1: −0.35 vs −0.60 → BRAKE MORE');
+  console.assert(run('DECEL',0,-0.6-(-0.85))==='REDUCE','GUIDE-1: −0.85 vs −0.60 → REDUCE BRAKING');
+  console.assert(run('CONST',0.5,0)==='HOLD','GUIDE-1: on speed → HOLD');
+  console.assert(run('CONST',1.5,0)==='ACC','GUIDE-1: 1.5 below → ACCELERATE');
+  console.assert(run('CONST',2.6,0)==='ACC_MORE','GUIDE-1: 2.6 below → ACCELERATE MORE');
+  console.assert(run('CONST',-1.5,0)==='RELEASE','GUIDE-1: 1.5 above → RELEASE THROTTLE');
+  console.assert(run('CONST',-2.6,0)==='BRAKE','GUIDE-1: 2.6 above → BRAKE');
+    {const st=synthGuideNew();const w=synthGuideStep(st,{t:0,mode:'PAUSE',ev:null,ea:null,moving:false,phaseKey:'p'},G);
+   console.assert(w==='WAIT'&&run('PAUSE',null,null)==='STOP'&&run('GO',null,null)==='GO'&&run('NOGPS',null,null)==='NOGPS','GUIDE-1: standstill / stop / go / no GPS');}
+  // settling window: at a phase change the default command shows for graceMs
+  {const st=synthGuideNew();const c0=synthGuideStep(st,{t:0,mode:'DECEL',ev:0,ea:0.5,moving:true,phaseKey:'a'},G);
+   console.assert(c0==='BRAKE','GUIDE-1: settling window ignored');}
+  console.log('SYN-GUIDE-1. all 7 commands from e_v and e_a OK');
+
+  // ── SYN-HYST-1 (§17, scenario F): no flicker around thresholds ──
+  {const st=synthGuideNew();const seq=[];
+   const feed=(ea,t)=>seq.push(synthGuideStep(st,{t,mode:'ACCEL',ev:0,ea,moving:true,phaseKey:'p'},G));
+   let t=0;for(;t<1500;t+=100)feed(0.0,t);                // past the settling window
+   for(let i=0;i<10;i++,t+=100)feed(0.21,t);                // enter (> 0.20)
+   const entered=seq[seq.length-1];
+   for(let i=0;i<30;i++,t+=100)feed(i%2?0.16:0.19,t);       // noise above the 0.15 exit
+   const held=seq.slice(-30).every(x=>x===entered);
+   for(let i=0;i<10;i++,t+=100)feed(0.14,t);                // below exit, but still class 1 → ACC_MORE
+   for(let i=0;i<10;i++,t+=100)feed(0.07,t);                // below 0.075 → good
+   console.assert(entered==='ACC_MORE'&&held,'HYST-1: accel command flickered in the 0.15–0.20 band');
+   console.assert(seq[seq.length-1]==='ACC','HYST-1: did not leave ACCELERATE MORE once the error fell');
+   const st2=synthGuideNew(),r2=synRng(7),cmds=[];
+   for(let t=0;t<30000;t+=100)cmds.push(synthGuideStep(st2,{t,mode:'CONST',ev:1+(r2()-0.5)*0.4,ea:0,moving:true,phaseKey:'c'},G));
+   const changes=cmds.filter((x,i)=>i&&x!==cmds[i-1]).length;
+   console.assert(changes<=2,'HYST-1: '+changes+' command changes for noise around 1 km/h');
+   const st3=synthGuideNew();for(let t=0;t<2000;t+=100)synthGuideStep(st3,{t,mode:'CONST',ev:0,ea:0,moving:true,phaseKey:'c'},G);
+   synthGuideStep(st3,{t:2000,mode:'CONST',ev:3,ea:0,moving:true,phaseKey:'c'},G);
+   const spike=synthGuideStep(st3,{t:2200,mode:'CONST',ev:3,ea:0,moving:true,phaseKey:'c'},G);
+   const after=synthGuideStep(st3,{t:2300,mode:'CONST',ev:0,ea:0,moving:true,phaseKey:'c'},G);
+   console.assert(spike==='HOLD'&&after==='HOLD','HYST-1: a 200 ms spike changed the displayed command');
+   console.log('SYN-HYST-1. hysteresis 0.20/0.15 + stable period, '+changes+' change(s) under noise OK');}
+
+  // ── simulated runs (§38–39) ──
+  const sim=(cy,sc,seed)=>{Synth.run=null;return Synth.simulate(cy,sc,{seed:seed||1,t0:1.8e12});};
+  const inPh=(r,ph)=>r.rows.filter(x=>x[C.Phase]===ph);
+
+  // SYN-SCN-A perfect following
+  let r=sim(SPEC,'perfect');
+  console.assert(r.state==='DONE','SCN-A: run did not complete: '+r.state);
+  console.assert(r.summary.pctV>97&&r.summary.rmseV<0.5,'SCN-A: speed error not near zero: '+r.summary.pctV+'% '+r.summary.rmseV);
+  console.assert(r.summary.pctA===null||r.summary.pctA>85,'SCN-A: accel error not near zero: '+r.summary.pctA);
+  console.assert(r.summary.verdict==='VALID','SCN-A: verdict '+r.summary.verdict+' '+r.summary.segs.map(s=>s.why).join('|'));
+  const el0=r.rows.map(x=>x[C.Elapsed_Time_s]);
+  console.assert(el0.every((x,i)=>i===0||x>el0[i-1]),'TIME-1: elapsed not strictly monotonic');
+  console.assert(r.rows.every(x=>near(x[C.UTC_Time_ms]-r.t0,x[C.Elapsed_Time_s]*1000,1)),'TIME-1: UTC and elapsed disagree');
+  console.assert(r.rows.length>=(P.T+5)*10-2&&r.rows.length<=(P.T+5)*10+40,'TIME-1: log rate not 10 Hz (plus ≤4 s end tail): '+r.rows.length);
+  console.assert(r.rows.every(x=>x.length===SYN_COLS.length),'LOG-1: row width ≠ column count');
   const ev=t=>r.events.filter(e=>e.type===t).length;
-  console.assert(ev('GO')===3&&ev('STOP')===3&&ev('LAUNCH')===3&&ev('RUN_END')===1,'SYN-4: event log incomplete');
-  console.assert(st.slice(0,2).every(s=>near(s.dwellActual,10,1.2)),'SYN-4: dwell not respected: '+st.map(s=>s.dwellActual));
-  console.assert(st.every(s=>near(s.launchDelay,1,1.05)),'SYN-4: launch delay not measured');
-  console.log('SYN-4. ideal driver → VALID, stops within 3 m, rates measured OK');
+  console.assert(ev('RUN_START')===1&&ev('GO')>=1&&ev('RUN_END')===1&&ev('PHASE')===P.phases.length,'LOG-1: events incomplete');
+  // the reference never waits (§2): reference at elapsed t equals v_ref(t − countdown)
+  console.assert(r.rows.filter(x=>x[C.Phase]!=='PRE').every(x=>near(x[C.Reference_Speed_kmh],synthRefAt(P,x[C.Elapsed_Time_s]-5).v*3.6,0.05)),'REF-2: reference moved');
+  console.log(`SYN-SCN-A. perfect: ${r.summary.pctV.toFixed(1)}% in ±1 km/h, RMSE ${r.summary.rmseV.toFixed(2)} km/h, VALID OK`);
 
-  // ── SYN-5: exports carry what CAN alignment needs ──
-  const sc=Synth.samplesCSV(r.samples).split('\n');
-  console.assert(sc[0].startsWith('utc_iso,epoch_ms,t_run_s')&&sc.length===r.samples.length+1,'SYN-5: samples CSV');
-  console.assert(/^\d{4}-\d\d-\d\dT/.test(sc[1])&&sc[1].split(',').length===sc[0].split(',').length,'SYN-5: samples row shape');
-  const ec=Synth.eventsCSV(r.events,r.t0).split('\n');
-  console.assert(ec.some(l=>/,GO,/.test(l))&&ec.some(l=>/,STOP,/.test(l)),'SYN-5: GO/STOP markers missing from events CSV');
-  const gc=Synth.segmentsCSV(r.stats).split('\n');
-  console.assert(gc.length===4&&gc[0].split(',').length===gc[1].split(',').length,'SYN-5: segments CSV');
-  console.log('SYN-5. samples / events / segments CSV OK');
+  // SYN-SCN-A2 late driver: reference still does not move (§2, §22)
+  r=sim(SPEC,'typical');
+  console.assert(r.rows.filter(x=>x[C.Phase]!=='PRE').every(x=>near(x[C.Reference_Speed_kmh],synthRefAt(P,x[C.Elapsed_Time_s]-5).v*3.6,0.05)),'REF-2: reference stretched for a lagging driver');
+  const imuRows=r.rows.filter(x=>x[C.Acceleration_Source]==='IMU').length/r.rows.length;
+  console.assert(r.events.some(e=>e.type==='IMU_CALIBRATED')&&imuRows>0.6,'IMU-1: IMU not calibrated / not used ('+(imuRows*100).toFixed(0)+'%)');
+  const accRows=inPh(r,'ACCEL').concat(inPh(r,'DECEL')).filter(x=>x[C.Acceleration_Source]==='IMU');
+  const accErr=accRows.map(x=>x[C.Longitudinal_Acceleration_Filtered]-x[C.Reference_Acceleration]);
+  const accMean=accErr.reduce((a,b)=>a+b,0)/accErr.length;
+  console.assert(Math.abs(accMean)<0.15,'IMU-1: IMU longitudinal accel biased vs reference: '+accMean.toFixed(3));
+  console.log(`SYN-IMU-1. mounted 25° off-axis: forward axis found, IMU used ${(imuRows*100).toFixed(0)}% of rows, mean accel offset ${accMean.toFixed(3)} m/s² OK`);
 
-  // ── SYN-6: Android stops sending fixes to a parked bus — stop still registers ──
-  r=drive(CY,{staleStops:true});
-  console.assert(r.state==='DONE','SYN-6: run stalled when fixes stopped at standstill');
-  console.assert(r.stats.every(s=>s.stopErr!==null),'SYN-6: stale stop not recorded');
-  console.log('SYN-6. stop registers without fixes OK');
+  // SYN-SCN-B constant 2 km/h low
+  r=sim(SPEC,'slow2');
+  const cB=inPh(r,'CONST').filter(x=>x[C.Speed_Error_kmh]!==null);
+  const accCmd=cB.filter(x=>x[C.Driver_Command]==='ACC'||x[C.Driver_Command]==='ACC_MORE').length/cB.length;
+  console.assert(accCmd>0.7,'SCN-B: 2 km/h low at constant speed did not ask to accelerate ('+(accCmd*100).toFixed(0)+'%)');
+  console.log(`SYN-SCN-B. 2 km/h low → ACCELERATE on ${(accCmd*100).toFixed(0)}% of constant-speed rows OK`);
 
-  // ── SYN-7: unplanned stop mid-cruise → HOLD, relaunch, flagged ──
-  r=drive(CY,{unplannedSeg:1});
-  console.assert(r.state==='DONE','SYN-7: run did not complete after an unplanned stop');
-  console.assert(r.stats[1].unplanned===1&&r.stats[1].verdict==='CHECK','SYN-7: unplanned stop not flagged');
-  console.assert(Math.abs(r.stats[1].stopErr)<4,'SYN-7: stop mark lost after the hold: '+r.stats[1].stopErr);
-  console.assert(r.events.some(e=>e.type==='RELAUNCH'),'SYN-7: relaunch not logged');
-  console.log('SYN-7. unplanned stop handled OK');
+  // SYN-SCN-C correct speed, insufficient acceleration: the 30→50 transition
+  // starts on speed (after 10 s at 30 km/h) with a bus that only gives 60 %
+  r=sim(SPEC,'weakAcc');
+  const firstMore=inPh(r,'ACCEL').filter(x=>x[C.Segment_ID]===2).find(x=>x[C.Driver_Command]==='ACC_MORE');
+  console.assert(firstMore&&Math.abs(firstMore[C.Speed_Error_kmh])<SYNTH_CFG.guide.tolV2,'SCN-C: ACCELERATE MORE came only after a large speed error: '+(firstMore&&firstMore[C.Speed_Error_kmh]));
+  console.assert(r.summary.segs[0].aMeas<0.4,'SCN-C: weak launch not measured: '+r.summary.segs[0].aMeas);
+  console.log(`SYN-SCN-C. weak acceleration → ACCELERATE MORE at speed error ${firstMore[C.Speed_Error_kmh].toFixed(2)} km/h OK`);
 
-  // ── SYN-8: a sluggish bus (60 % of the rate) is caught by the accel check ──
-  r=drive(CY,{aFactor:0.6});
-  console.assert(r.stats.every(s=>s.aMeas<s.a*0.75),'SYN-8: slow launch not measured');
-  console.assert(r.stats.some(s=>/ACCEL/.test(s.why)),'SYN-8: slow launch not flagged');
-  console.assert(r.stats.every(s=>Math.abs(s.stopErr)<3),'SYN-8: slow launch moved the stop mark');
-  console.log('SYN-8. rate deviation detected, stop mark unchanged OK');
+  // SYN-SCN-D retardation too weak / E too strong
+  r=sim(SPEC,'weakBrake');
+  let dRows=inPh(r,'DECEL').filter(x=>x[C.Driver_Command]);
+  const more=dRows.filter(x=>x[C.Driver_Command]==='BRAKE_MORE').length/dRows.length;
+  console.assert(more>0.4,'SCN-D: weak braking → BRAKE MORE only on '+(more*100).toFixed(0)+'%');
+  r=sim(SPEC,'strongBrake');
+  dRows=inPh(r,'DECEL').filter(x=>x[C.Driver_Command]);
+  const less=dRows.filter(x=>x[C.Driver_Command]==='REDUCE').length/dRows.length;
+  console.assert(less>0.25,'SCN-E: strong braking → REDUCE BRAKING only on '+(less*100).toFixed(0)+'%');
+  console.log(`SYN-SCN-D/E. BRAKE MORE ${(more*100).toFixed(0)}% / REDUCE BRAKING ${(less*100).toFixed(0)}% of deceleration rows OK`);
 
-  // ── SYN-9: early departure from a stop starts the next segment ──
-  r=drive(CY,{earlySeg:0});
-  console.assert(r.state==='DONE','SYN-9: run did not complete after early start');
-  console.assert(r.events.some(e=>e.type==='EARLY_START'),'SYN-9: early start not logged');
-  console.assert(r.stats[1].early===true,'SYN-9: early flag missing on the segment');
-  console.assert(Math.abs(r.stats[1].stopErr)<4,'SYN-9: early start lost distance: '+r.stats[1].stopErr);
-  console.log('SYN-9. early start accounted OK');
+  // SYN-SCN-G GNSS dropout: degraded state, nothing fabricated
+  const LONG=synthCycle({name:'long',refMode:'time',startDelay:5,segs:[synSeg(40,'rate',0.6,60,'s'),synSeg(0,'rate',0.7,0,'s')]});
+  r=sim(LONG,'dropout');
+  console.assert(r.state==='DONE','SCN-G: run did not complete through dropouts');
+  const lost=r.rows.filter(x=>x[C.Phase]!=='PRE'&&String(x[C.Quality_Flags]).includes('GPS_LOST'));
+  console.assert(lost.length>20,'SCN-G: dropout never flagged GPS_LOST ('+lost.length+')');
+  console.assert(lost.every(x=>x[C.Actual_Speed_kmh]===null&&x[C.Speed_Error_kmh]===null&&x[C.Driver_Command]==='NOGPS'),'SCN-G: speed fabricated during GPS loss');
+  console.assert(lost.every(x=>x[C.GPS_Data_Age_s]>SYNTH_CFG.gpsLostMs/1000),'SCN-G: data age not reported');
+  console.assert(r.rows.filter(x=>String(x[C.Quality_Flags]).includes('GPS_STALE')).length>0,'SCN-G: stale state skipped');
+  console.assert(r.events.some(e=>e.type==='GPS_LOST')&&r.events.some(e=>e.type==='GPS_OK'),'SCN-G: loss/recovery events missing');
+  const numCols=SYN_COLS.filter(n=>!['Acceleration_Source','Cycle_ID','Phase','Driver_Command','Next_Phase','Quality_Flags'].includes(n)).map(n=>C[n]);
+  console.assert(r.rows.every(x=>numCols.every(i=>x[i]===null||Number.isFinite(x[i]))),'SCN-G: NaN/Infinity in the log');
+  console.log(`SYN-SCN-G. GNSS dropout: ${lost.length} rows flagged, no fabricated speed, run completes OK`);
 
-  // ── SYN-10: isolation — one GPS watch, navigation engine untouched ──
-  const html=require('fs').readFileSync([require('path').join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html'].find(p=>require('fs').existsSync(p)),'utf8');
-  const code=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).reduce((a,b)=>b.length>a.length?b:a);
-  const synBlock=code.slice(code.indexOf('SYNTHETIC TRAPEZOID CYCLE'),code.indexOf('// Drag & drop'));
-  console.assert(!/navigator\.geolocation/.test(synBlock),'SYN-10: Synth opened its own geolocation access');
-  console.assert(!/\b(routeProgressM|matchState|lastRouteIdx|stops)\s*=[^=]/.test(synBlock),'SYN-10: Synth writes navigation state');
+  // SYN-SCN-N noisy sensors + IMU bias: completes, no NaN
+  r=sim(SPEC,'noisy',3);
+  console.assert(r.state==='DONE'&&r.rows.every(x=>numCols.every(i=>x[i]===null||Number.isFinite(x[i]))),'SCN-N: noisy run failed');
+  console.log('SYN-SCN-N. noisy sensors + IMU bias complete without invalid values OK');
+
+  // ── SYN-POS-1: position-locked stop-to-stop (v1 behaviour kept) ──
+  const LAD=synthCycle(SYNTH_PRESETS[1]);
+  r=sim(LAD,'perfect');
+  const stops=Object.values(r.stops).map(s=>s.err).filter(x=>x!==null&&x!==undefined);
+  console.assert(r.state==='DONE'&&stops.length===4,'POS-1: position run incomplete ('+stops.length+' stops)');
+  console.assert(stops.every(e=>Math.abs(e)<3),'POS-1: stop error > 3 m: '+stops.map(e=>e.toFixed(2)));
+  console.assert(near(r.summary.distanceM,synthCompile(LAD).S,8),'POS-1: driven distance ≠ plan: '+r.summary.distanceM);
+  const waits=r.events.filter(e=>e.type==='GO').map(e=>e.t),stopT=r.events.filter(e=>e.type==='STOP').map(e=>e.t);
+  console.assert(stopT.slice(0,3).every((t,i)=>near((waits[i+1]-t)/1000,20,0.2)),'POS-1: waits not timed from the actual stop');
+  console.log('SYN-POS-1. position-locked: 4 stops within 3 m, waits from actual stop OK');
+
+  // ── SYN-POS-2: unplanned stop, early start, parked tablet stops sending fixes ──
+  function driveDirect(cy,o){
+    o=o||{};const S=Synth;S.sim=null;S.run=null;let t=1.9e12;
+    const rr=S.startRun(cy,{vehicle:'T'},t);
+    let v=0,key='',launchAt=null,hold=null,hDone=false,guard=0,sT=0;
+    while(rr.state!=='DONE'&&rr.state!=='ABORTED'&&guard++<60000){
+      t+=100;
+      const P2=rr.pos,it=rr.plan.sections[P2.item],k=rr.state+P2.item;
+      if(k!==key){key=k;launchAt=(it&&it.kind==='move'&&v>0)?t:null;if(it&&it.kind==='pause')sT=0;}
+      if(rr.state==='ACTIVE'&&it&&it.kind==='move'){
+        const last=it.ph[it.ph.length-1],d=Math.abs(last.a),a=it.ph[0].a;
+        if(launchAt===null)launchAt=t+1000;
+        if(o.unplanned&&P2.item===2&&!hDone&&sT>60){hold=t+12000;hDone=true;}
+        const holding=hold&&t<hold;let want;
+        if(holding||t<launchAt)want=0;else if(sT>=it.S-v*v/(2*d)-0.05||(v===0&&sT>it.S-2))want=0;else want=it.ph[1]?it.ph[1].v1:it.ph[0].v1;
+        if(want>v)v=Math.min(want,v+a*0.1);else if(want<v)v=Math.max(0,v-(holding?2.5:d)*0.1);
+      }else if(rr.state==='ACTIVE'&&it&&it.kind==='pause'&&o.early&&P2.item===1&&P2.dwellEnd-t<4000)v=Math.min(1.5,v+0.1);
+      else v=0;
+      sT+=v*0.1;
+      if(t%1000===0){const stale=o.stale&&rr.state==='ACTIVE'&&v===0&&P2.tLaunch!==null;
+        if(!stale)S.gnss({t,lat:null,lon:null,v,acc:4});}
+      S.tick(t);
+    }
+    return rr;
+  }
+  r=driveDirect(LAD,{stale:true});
+  console.assert(r.state==='DONE'&&Object.values(r.stops).filter(s=>s.err!==null&&s.err!==undefined).length===4,'POS-2: stop not registered without fixes');
+  r=driveDirect(LAD,{unplanned:true});
+  console.assert(r.state==='DONE'&&r.events.some(e=>e.type==='UNPLANNED_STOP')&&r.events.some(e=>e.type==='RELAUNCH'),'POS-2: unplanned stop not handled');
+  console.assert(r.summary.segs.some(s=>/UNPLANNED/.test(s.why)),'POS-2: unplanned stop not flagged in results');
+  r=driveDirect(LAD,{early:true});
+  console.assert(r.state==='DONE'&&r.events.some(e=>e.type==='EARLY_START')&&r.summary.segs.some(s=>/EARLY/.test(s.why)),'POS-2: early start not handled');
+  const e2=Object.values(r.stops).map(s=>s.err).filter(x=>x!==null&&x!==undefined);
+  console.assert(e2.every(e=>Math.abs(e)<4),'POS-2: early start lost distance: '+e2);
+  console.log('SYN-POS-2. stale fixes, unplanned stop, early start OK');
+
+  // ── SYN-GNSS-1 (§19): speed=null, jitter, jumps, re-anchoring, out-of-order ──
+  const T0=3e12;
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'g',precheck:true},T0);
+  Synth.gnss({t:T0+1000,lat:57.7,lon:11.9,v:null,acc:5});
+  console.assert(r.gnss.last&&r.gnss.last.v===null&&r.gnss.n===1,'GNSS-1: first fix with speed=null discarded');
+  Synth.gnss({t:T0+2000,lat:57.70001,lon:11.9,v:null,acc:5});         // 1.1 m: jitter, not motion
+  console.assert(r.gnss.last.v===null&&r.gnss.last.t===T0+2000,'GNSS-1: jitter turned into speed: '+r.gnss.last.v);
+  Synth.gnss({t:T0+3000,lat:57.7001,lon:11.9,v:null,acc:5});          // 10 m in 1 s: real motion
+  console.assert(near(r.gnss.last.v,10.0,0.3),'GNSS-1: speed not derived from clear displacement: '+r.gnss.last.v);
+  Synth.gnss({t:T0+2500,lat:57.7,lon:11.9,v:3,acc:5});
+  console.assert(r.gnss.last.t===T0+3000,'GNSS-1: out-of-order fix accepted');
+  Synth.gnss({t:T0+4000,lat:57.8,lon:11.9,v:10,acc:5});
+  console.assert(/POS_JUMP/.test(r.raw.gnss[r.raw.gnss.length-1][8])&&r.raw.gnss[r.raw.gnss.length-1][2]===57.8,'GNSS-1: jump not flagged or raw position not kept');
+  Synth.gnss({t:T0+5000,lat:57.7002,lon:11.9,v:30,acc:5});
+  console.assert(/SPEED_JUMP/.test(r.raw.gnss[r.raw.gnss.length-1][8])&&r.gnss.last.v===10,'GNSS-1: impossible speed jump accepted');
+  // coarse first fix (±800 m) 556 m off: accepted within its accuracy, no lock
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'g',precheck:true},T0);
+  Synth.gnss({t:T0+1000,lat:57.705,lon:11.9,v:0,acc:800});
+  for(let i=2;i<=6;i++)Synth.gnss({t:T0+i*1000,lat:57.7,lon:11.9,v:0,acc:4});
+  console.assert(near(r.gnss.last.lat,57.7,1e-9)&&!r.raw.gnss.some(x=>/POS_JUMP/.test(x[8])),'GNSS-1: coarse first fix locked the position');
+  // a wrong fix that CLAIMS good accuracy: 2 jumps rejected, the 3rd consistent one re-anchors
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'g',precheck:true},T0);
+  Synth.gnss({t:T0+1000,lat:57.705,lon:11.9,v:0,acc:4});
+  for(let i=2;i<=5;i++)Synth.gnss({t:T0+i*1000,lat:57.7,lon:11.9,v:0,acc:4});
+  const fl=r.raw.gnss.map(x=>x[8]);
+  console.assert(/POS_JUMP/.test(fl[1])&&/POS_JUMP/.test(fl[2])&&/REANCHOR/.test(fl[3])&&near(r.gnss.last.lat,57.7,1e-9),'GNSS-1: re-anchor sequence '+JSON.stringify(fl));
+  // GO before the first fix (start without GPS fix): the first fix must still be accepted
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'g'},T0);
+  for(let t=T0;t<=T0+8000;t+=100)Synth.tick(t);
+  let threw=null;try{Synth.gnss({t:T0+8100,lat:57.7,lon:11.9,v:0,acc:4});Synth.gnss({t:T0+9100,lat:57.7,lon:11.9,v:0.5,acc:4});}catch(e){threw=e.message;}
+  console.assert(!threw&&r.gnss.last&&r.gnss.last.v===0.5&&r.events.some(e=>e.type==='GPS_OK'),'GNSS-1: GPS never accepted after a start without fix: '+threw);
+  Synth.tick(T0+9200);
+  console.assert(r.rows[r.rows.length-1][C.GPS_Speed_kmh]===1.8,'GNSS-1: logged GPS speed');
+  Synth.run=null;
+  console.log('SYN-GNSS-1. null speed, jitter, derived speed, jumps, re-anchor, start without fix OK');
+
+  // ── SYN-REG-1: regressions from the independent review ──
+  // adjacent standstills in position mode (p m p p m) must complete
+  const PP=synthCycle({name:'pp',refMode:'position',laps:2,startDelay:5,segs:[synSeg(0,'rate',1,10,'s'),synSeg(30,'rate',1,200,'m'),synSeg(0,'rate',0.8,20,'s')]});
+  console.assert(synthValidate(PP).length===0,'REG-1: pp cycle invalid');
+  const secs=synthCompile(PP).sections.map(x=>x.kind[0]).join('');
+  console.assert(!/pp/.test(secs),'REG-1: adjacent standstills not merged: '+secs);
+  r=sim(PP,'perfect');
+  console.assert(r.state==='DONE'&&Object.values(r.stops).filter(x=>x.err!==undefined&&x.err!==null).length===2,'REG-1: p-m-p-p-m cycle did not complete: '+r.state);
+  // a run without speed data is never VALID
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'x'},T0);
+  for(let t=T0;t<=T0+(P.T+6)*1000;t+=100)Synth.tick(t);
+  Synth.finish('COMPLETE',T0+(P.T+6)*1000);
+  console.assert(r.summary.verdict!=='VALID'&&r.summary.segs.every(x=>/NO DATA/.test(x.why)),'REG-1: run without GPS graded '+r.summary.verdict);
+  // long runs: no stack overflow in statistics
+  const big=[];for(let i=0;i<160000;i++){const x=new Array(SYN_COLS.length).fill(null);x[C.Elapsed_Time_s]=i/10;x[C.Phase]='CONST';x[C.Segment_ID]=1;x[C.Lap]=1;x[C.Speed_Error_kmh]=(i%7)/10;x[C.Acceleration_Error]=0.01;big.push(x);}
+  let so=null;try{synthRunStats(big,synthCompile(synthCycle({name:'b',segs:[synSeg(30,'rate',1,15000,'s'),synSeg(0,'rate',1,0)]})),{guide:SYNTH_CFG.guide,accept:SYNTH_CFG.accept,refMode:'time'});}catch(e){so=e.message;}
+  console.assert(!so,'REG-1: statistics overflow on 160k rows: '+so);
+  // constant speed within tolerance shows HOLD even with an acceleration error
+  console.assert(run('CONST',0.4,0.25)==='HOLD'&&run('CONST',0.4,-0.25)==='HOLD','REG-1: HOLD not shown within speed tolerance (§16)');
+  // the declared end hold is logged; after the reference ends, logging goes on until the bus stands
+  r=sim(SPEC,'perfect');
+  console.assert(r.rows.filter(x=>x[C.Phase]==='PAUSE').length>=190,'REG-1: declared end hold not logged');
+  r=sim(LONG,'weakBrake');
+  const lastRow=r.rows[r.rows.length-1];
+  console.assert(lastRow[C.Actual_Speed_kmh]!==null&&lastRow[C.Actual_Speed_kmh]<SYNTH_CFG.stopKmh+0.5,'REG-1: logging stopped while moving: '+lastRow[C.Actual_Speed_kmh]);
+  console.assert(r.rows.some(x=>x[C.Phase]==='END'&&x[C.Driver_Command]==='STOP'),'REG-1: END tail with STOP missing');
+  // CAN: missing values are "not available", never a fake 0
+  const nr=new Array(SYN_COLS.length).fill(null);nr[C.Phase]='ACCEL';nr[C.Driver_Command]='NOGPS';nr[C.Reference_Speed_kmh]=27.18;
+  const f0=synCanFrames(nr)[0].data;
+  console.assert(f0[0]===0xFF&&f0[1]===0xFF&&f0[4]===0x00&&f0[5]===0x80,'REG-1: null speed not encoded as not-available: '+Array.from(f0));
+  console.assert(/Not available/.test(synthDBC())&&/TimeToNextPhase : 40\|16@1\+ \(0\.1,0\)/.test(synthDBC())&&/DistanceError : 32\|16@1- \(0\.1,0\)/.test(synthDBC()),'REG-1: DBC ranges / NA note');
+  // GPS quality flags from the fix reach the log
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'q',precheck:true},T0);
+  Synth.gnss({t:T0+1000,lat:57.7,lon:11.9,v:5,acc:4});Synth.gnss({t:T0+2000,lat:57.7,lon:11.9,v:20,acc:4});
+  r.state='ACTIVE';r.tGo=T0;Synth.tick(T0+2100);
+  console.assert(/SPEED_JUMP/.test(r.rows[r.rows.length-1][C.Quality_Flags]),'REG-1: GPS flags not merged into the log');
+  // one summary definition: live and reloaded give the same numbers
+  r=sim(SPEC,'typical');
+  const s1=JSON.stringify(Synth.summarize(r)),s2=JSON.stringify(synthSummary({rows:r.rows,plan:synthCompile(r.cycle),guideCfg:r.guideCfg,acceptCfg:r.acceptCfg,mode:r.mode,stops:r.stops,state:r.state}));
+  console.assert(s1===s2,'REG-1: summary differs between live and reloaded run');
+  // review round 2: null-speed standstill in position mode, outlier re-anchor, merged waits
+  {const L2=synthCycle({name:'n',refMode:'position',startDelay:3,segs:[synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,5,'s'),synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,0,'s')]});
+   Synth.run=null;const rr=Synth.startRun(L2,{vehicle:'n'},T0);let v=0,sT=0,lat=57.7,t=T0,phase=0;
+   const it0=rr.plan.sections[0];
+   for(;t<T0+120000&&rr.pos.item===0;t+=100){
+     if(rr.state==='ACTIVE'){const d=it0.ph[it0.ph.length-1];const wantStop=sT>=it0.S-v*v/(2*Math.abs(d.a))-0.05;
+       v=wantStop?Math.max(0,v-Math.abs(d.a)*0.1):Math.min(it0.ph[0].v1,v+0.1);sT+=v*0.1;lat+=v*0.1/111320;}
+     if((t-T0)%1000===0)Synth.gnss({t,lat,lon:11.9,v:v>0?v:null,acc:6});        // device reports null at rest
+     Synth.tick(t);}
+   console.assert(rr.pos.item>=1&&rr.events.some(e=>e.type==='STOP'),'REG-2: stop never registered with speed=null at rest');}
+  Synth.run=null;r=Synth.startRun(SPEC,{vehicle:'o',precheck:true},T0);
+  Synth.gnss({t:T0+1000,lat:57.7,lon:11.9,v:0,acc:4});
+  [[57.704,11.9],[57.7,11.908],[57.696,11.9]].forEach(([la,lo],i)=>Synth.gnss({t:T0+2000+i*1000,lat:la,lon:lo,v:0,acc:4}));
+  console.assert(near(r.gnss.last.lat,57.7,1e-9)&&!r.events.some(e=>e.type==='GPS_REANCHOR'),'REG-2: re-anchored on scattered outliers');
+  {const MW=synthCycle({name:'mw',refMode:'position',startDelay:3,segs:[synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,5,'s'),synSeg(0,'rate',0.8,5,'s'),synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,0,'s')]});
+   const rr=sim(MW,'perfect');
+   console.assert(rr.state==='DONE'&&rr.summary.verdict==='VALID','REG-2: merged waits made the run '+rr.summary.verdict+' '+rr.summary.segs.map(x=>x.why).join('|'));}
+  Synth.run=null;
+  console.log('SYN-REG-1. review regressions (pauses, no-data, overflow, HOLD, end tail, CAN NA, flags, summary) OK');
+
+  // ── SYN-V1-1: v1 trapezoid cycles migrate into position mode ──
+  const v1=synthCycle({name:'old',a:1,d:0.8,dwell:20,laps:1,startDelay:10,segs:[{v:20,cruise:100},{v:30,cruise:200}]});
+  console.assert(v1.refMode==='position'&&v1.segs.length===4&&v1.segs[0].holdUnit==='m'&&v1.segs[0].hold===100&&synthValidate(v1).length===0,'V1-1: migration');
+  console.log('SYN-V1-1. v1 cycles migrate OK');
+
+  // ── SYN-EXP-1 (§27, §30–31): exports ──
+  Synth.run=null;r=Synth.simulate(SPEC,'typical',{seed:2,t0:1.8e12});
+  r.state='ACTIVE';Synth.run=r;r.sync=0;
+  const n1=Synth.syncMark();r.state='DONE';
+  console.assert(n1===1&&r.events.some(e=>e.type==='SYNC'&&e.detail==='EVENT_SYNC_01'),'EXP-1: SYNC marker');
+  const D={id:r.id,rows:r.rows,gnss:r.raw.gnss,imu:r.raw.imu,events:r.events,cycle:r.cycle,plan:r.plan,hash:r.hash,mode:r.mode,
+    meta:r.meta,guideCfg:r.guideCfg,acceptCfg:r.acceptCfg,stops:r.stops,t0:r.t0,tGo:r.tGo,tEnd:r.tEnd,state:r.state,summary:r.summary};
+  const csv=Synth.logCSV(D.rows).trim().split('\n');
+  console.assert(csv.length===D.rows.length+1&&csv[0].split(',').length===SYN_COLS.length+1,'EXP-1: log CSV shape');
+  console.assert(csv[0].startsWith('Elapsed_Time_s,UTC_Time,UTC_Time_ms,GPS_Speed_kmh')&&/,\d{4}-\d\d-\d\dT[\d:.]+Z,/.test(csv[1]),'EXP-1: CSV time columns');
+  console.assert(Synth.eventsCSV(D.events).includes(',EVENT_SYNC_01,1,'),'EXP-1: SYNC not in events CSV');
+  const raw=JSON.parse(Synth.rawJSON(D));
+  console.assert(raw.format==='DriveTest-RAW'&&raw.log.rows.length===D.rows.length&&raw.imu.rows.length>1000&&raw.gnss.rows.length>50,'EXP-1: RAW incomplete');
+  console.assert(Synth.logCSV(raw.log.rows)===Synth.logCSV(D.rows),'EXP-1: re-export from RAW differs');
+  const fr=Synth.canFrames(D);
+  console.assert(fr.filter(f=>f.id===SYNTH_CFG.can.base+5).length===D.events.length,'EXP-1: not every event became a DT_Event frame');
+  const asc=synthASC(fr,D.t0).trim().split('\n');
+  console.assert(asc.length===fr.length+6&&/^date /.test(asc[0])&&/End TriggerBlock/.test(asc[asc.length-1]),'EXP-1: ASC structure');
+  (async()=>{const b=await synthBLF(fr,D.t0,null);const dv=new DataView(b.buffer);
+    console.assert(String.fromCharCode(...b.slice(0,4))==='LOGG'&&dv.getUint32(32,true)===fr.length&&Number(dv.getBigUint64(16,true))===b.length,'EXP-1: BLF header');
+    fs.writeFileSync(path.join(require('os').tmpdir(),'synth_test.blf'),b);})();
+  fs.writeFileSync(path.join(require('os').tmpdir(),'synth_test.asc'),asc.join('\n')+'\n');
+  fs.writeFileSync(path.join(require('os').tmpdir(),'synth_test.dbc'),synthDBC());
+  fs.writeFileSync(path.join(require('os').tmpdir(),'synth_test_log.csv'),csv.join('\n')+'\n');
+  console.assert(/BO_ 1792 DT_Speed: 8 DriveTest/.test(synthDBC())&&/VAL_ 1794 Command/.test(synthDBC()),'EXP-1: DBC');
+  console.log(`SYN-EXP-1. CSV ${csv.length-1} rows, RAW round trip, ASC ${fr.length} frames, BLF, DBC OK`);
+
+  // ── SYN-I18N-1 (§32): Swedish and English complete, spec wording ──
+  const en=Object.keys(SYN_I18N.en),sv=Object.keys(SYN_I18N.sv);
+  console.assert(en.length===sv.length&&en.every(k=>sv.includes(k)),'I18N-1: key sets differ: '+en.filter(k=>!sv.includes(k)).concat(sv.filter(k=>!en.includes(k))));
+  const used=[...new Set([...code.matchAll(/synT\('([a-zA-Z0-9_.]+)'/g)].map(m=>m[1]))].filter(k=>!/^(cmd|ph|v|lang)\.$/.test(k));
+  const missing=used.filter(k=>!(k in SYN_I18N.en));
+  console.assert(missing.length===0,'I18N-1: strings used but not translated: '+missing);
+  const pairs={ACC_MORE:['GASA MER','ACCELERATE MORE'],ACC:['GASA','ACCELERATE'],HOLD:['HÅLL','HOLD'],RELEASE:['SLÄPP GAS','RELEASE THROTTLE'],
+    BRAKE:['BROMSA','BRAKE'],BRAKE_MORE:['BROMSA MER','BRAKE MORE'],REDUCE:['MINSKA BROMS','REDUCE BRAKING']};
+  Object.entries(pairs).forEach(([k,[s,e]])=>console.assert(SYN_I18N.sv['cmd.'+k]===s&&SYN_I18N.en['cmd.'+k]===e,'I18N-1: '+k));
+  console.assert(SYN_I18N.sv['ph.DECEL']==='Retardation'&&SYN_I18N.en['ph.DECEL']==='Deceleration'&&SYN_I18N.sv['ph.CONST']==='Konstant hastighet','I18N-1: phase terms (§3)');
+  console.assert(!/Ramp/.test(JSON.stringify(SYN_I18N)),'I18N-1: "Ramp" used in the UI (§3)');
+  _synLang='sv';console.assert(synT('cmd.BRAKE_MORE')==='BROMSA MER','I18N-1: switch');_synLang='en';
+  console.assert(!/Ramp|Retardation/.test(SYN_COLS.join()),'I18N-1: log names not English/stable');
+  console.log('SYN-I18N-1. sv/en complete ('+en.length+' strings), spec wording OK');
+
+  // ── SYN-ISO-1: one GPS watch, navigation engine untouched ──
+  const synBlock=code.slice(code.indexOf('SYNTHETIC CYCLE v2'),code.indexOf('// Drag & drop'));
+  console.assert(!/navigator\.geolocation/.test(synBlock),'ISO-1: Synth opened its own geolocation access');
+  console.assert(!/\b(routeProgressM|matchState|lastRouteIdx|currentPos)\s*=[^=]/.test(synBlock),'ISO-1: Synth writes navigation state');
   const cp=currentPos;Synth._ownWatch=true;let got=null;const keep=Synth._onPos;Synth._onPos=p=>{got=p};
   onGPS({coords:{latitude:1,longitude:2,accuracy:5,speed:3,heading:0},timestamp:Date.now()});
   Synth._onPos=keep;Synth._ownWatch=false;
-  console.assert(got&&currentPos===cp,'SYN-10: fix leaked into the navigation engine while Synth owned the watch');
+  console.assert(got&&currentPos===cp,'ISO-1: fix leaked into the navigation engine');
   const na=navActive;navActive=true;Synth.run=null;const al=global.alert;let msg='';global.alert=m=>{msg=m};
-  Synth.startTap(true);global.alert=al;navActive=na;
-  console.assert(Synth.run===null&&/navigation/i.test(msg),'SYN-10: Synth started over active navigation');
-  console.log('SYN-10. GPS ownership and nav isolation OK');
-
-  // ── SYN-11: rail tab + pane wired ──
+  Synth.startTap(false);global.alert=al;navActive=na;
+  console.assert(Synth.run===null&&/navigation/i.test(msg),'ISO-1: test started over active navigation');
   switchTab('synth');
-  console.assert(el('pane-synth').classList.contains('active')&&el('stab-synth').classList.contains('active'),'SYN-11: synth tab does not open its pane');
-  console.assert(/id="stab-synth"/.test(html)&&/id="syn-ck"/.test(html),'SYN-11: markup missing');
+  console.assert(el('pane-synth').classList.contains('active')&&el('stab-synth').classList.contains('active'),'ISO-1: SYNTH tab');
   switchTab('rota');
-  console.log('SYN-11. SYNTH tab wired OK');
+  console.log('SYN-ISO-1. GPS ownership, nav isolation, tab OK');
+
+  // ── SYN-SAFE-1 (§35): configuration locked during a test; abort needs a hold ──
+  Synth.run=null;Synth.startRun(SPEC,{vehicle:'x'},2e12);
+  const before=JSON.stringify(Synth.cur());Synth.addSeg();Synth.setField('name','changed');
+  console.assert(JSON.stringify(Synth.cur())===before,'SAFE-1: cycle editable during a test');
+  console.assert(/onpointerdown="Synth\.stopDown\(\)"/.test(code)&&/stopDown\(\)\{[\s\S]{0,200}setTimeout\([\s\S]{0,120}1000\)/.test(code),'SAFE-1: STOP is not hold-to-abort');
+  Synth.run=null;
+  console.log('SYN-SAFE-1. config locked, hold-to-abort OK');
 
   Synth.run=null;Synth.runs=[];Synth._full={};
-  ['synth-cycles-v1','synth-runs-v1','synth-prefs-v1'].forEach(k=>localStorage.removeItem(k));
+  Object.values(SYNTH_CFG.keys).forEach(k=>localStorage.removeItem(k));
 })();
-console.log('ALL SYNTHETIC CYCLE TESTS PASSED');
-__group('Synthetic cycle tests');
+console.log('ALL SYNTHETIC CYCLE v2 TESTS PASSED');
+__group('Synthetic cycle v2 tests');

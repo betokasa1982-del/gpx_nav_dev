@@ -1,0 +1,50 @@
+VERSION "DriveTest 1"
+
+NS_ :
+
+BS_:
+
+BU_: DriveTest
+
+BO_ 1792 DT_Speed: 8 DriveTest
+ SG_ ActualSpeed : 0|16@1+ (0.01,0) [0|655.35] "km/h" Vector__XXX
+ SG_ ReferenceSpeed : 16|16@1+ (0.01,0) [0|655.35] "km/h" Vector__XXX
+ SG_ SpeedError : 32|16@1- (0.01,0) [-327.68|327.67] "km/h" Vector__XXX
+ SG_ GpsSpeed : 48|16@1+ (0.01,0) [0|655.35] "km/h" Vector__XXX
+
+BO_ 1793 DT_Accel: 8 DriveTest
+ SG_ ActualAccel : 0|16@1- (0.001,0) [-32.768|32.767] "m/s2" Vector__XXX
+ SG_ ReferenceAccel : 16|16@1- (0.001,0) [-32.768|32.767] "m/s2" Vector__XXX
+ SG_ AccelError : 32|16@1- (0.001,0) [-32.768|32.767] "m/s2" Vector__XXX
+ SG_ LongAccelFiltered : 48|16@1- (0.001,0) [-32.768|32.767] "m/s2" Vector__XXX
+
+BO_ 1794 DT_State: 8 DriveTest
+ SG_ SegmentID : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ Lap : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Phase : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Command : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ TimeToNextPhase : 40|16@1+ (0.1,0) [0|6553.5] "s" Vector__XXX
+ SG_ QualityFlags : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 1795 DT_Distance: 8 DriveTest
+ SG_ ActualDistance : 0|32@1+ (0.01,0) [0|42949672.95] "m" Vector__XXX
+ SG_ DistanceError : 32|16@1- (0.1,0) [-3276.8|3276.7] "m" Vector__XXX
+ SG_ GpsDataAge : 48|8@1+ (0.05,0) [0|12.75] "s" Vector__XXX
+ SG_ GpsAccuracy : 56|8@1+ (0.5,0) [0|127.5] "m" Vector__XXX
+
+BO_ 1796 DT_Position: 8 DriveTest
+ SG_ Latitude : 0|32@1- (1e-7,0) [-214.7483648|214.7483647] "deg" Vector__XXX
+ SG_ Longitude : 32|32@1- (1e-7,0) [-214.7483648|214.7483647] "deg" Vector__XXX
+
+BO_ 1797 DT_Event: 8 DriveTest
+ SG_ EventCode : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ EventNumber : 8|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ EventSegment : 24|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ EventValue : 40|16@1- (0.01,0) [-327.68|327.67] "" Vector__XXX
+
+CM_ "DriveTest synthetic drive-cycle signals (GPX Navigator SYNTH). Frames every log row (nominal 10 Hz); DT_Event on events. Standard 11-bit IDs, Intel byte order. Speed_Error = reference - actual; Acceleration_Error = reference - actual.";
+CM_ BU_ DriveTest "Not available: raw all-ones (unsigned) or most-negative (signed) means no value (empty cell in the CSV). Real values saturate one raw step inside the range.";
+CM_ SG_ 1794 QualityFlags "bit0 GPS_STALE, bit1 GPS_LOST, bit2 GPS_WEAK, bit3 SPEED_JUMP, bit4 POS_JUMP, bit5 IMU_CAL (IMU not calibrated), bit6 IMU_SUSPECT, bit7 SIM";
+VAL_ 1794 Phase 0 "PRE" 1 "ACCEL" 2 "CONST" 3 "DECEL" 4 "PAUSE" 5 "END" 6 "GO" 7 "HOLD" ;
+VAL_ 1794 Command 0 "NONE" 1 "ACC_MORE" 2 "ACC" 3 "HOLD" 4 "RELEASE" 5 "BRAKE" 6 "BRAKE_MORE" 7 "REDUCE" 8 "STOP" 9 "WAIT" 10 "GO" 11 "DONE" 12 "NOGPS" ;
+VAL_ 1797 EventCode 1 "SYNC" 2 "GO" 3 "STOP" 4 "PHASE" 5 "RUN_START" 6 "RUN_END" 7 "ABORT" 8 "LAUNCH" 9 "UNPLANNED_STOP" 10 "EARLY_START" 11 "GPS_LOST" 12 "GPS_OK" 15 "OTHER" ;
