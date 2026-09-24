@@ -1316,6 +1316,156 @@ body.cockpit #hud-voice{position:absolute!important;right:14px!important;
 body.off-route #hud-instr{border-color:var(--red)!important;
   box-shadow:0 0 0 2px rgba(255,23,68,.35)!important}
 body.off-route .hud-instr-action{color:var(--red)!important}
+
+/* ═══ SYNTHETIC CYCLE — drawer pane ═══════════════════════════════════ */
+.syn-wrap{display:flex;flex-direction:column;gap:var(--s-md);padding:var(--s-md)}
+.syn-sec{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:var(--s-md);display:flex;flex-direction:column;gap:var(--s-sm)}
+.syn-h{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1.6px;color:var(--accent);display:flex;align-items:center;gap:8px}
+.syn-cnt{background:var(--accent);color:var(--on-accent);border-radius:999px;padding:0 7px;font-size:12px;line-height:18px}
+.syn-cnt:empty{display:none}
+.syn-row{display:flex;gap:6px;align-items:center}
+.syn-sel{flex:1;min-width:0;min-height:44px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 8px;font-family:var(--sans);font-size:15px}
+.syn-name{min-height:44px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-family:var(--sans);font-size:17px;font-weight:600}
+.syn-in{width:100%;min-height:42px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 6px;font-family:var(--mono);font-size:15px;text-align:center}
+.syn-in::placeholder{color:var(--muted);opacity:.55}
+.syn-in::-webkit-inner-spin-button,.syn-in::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.syn-in[type=number]{-moz-appearance:textfield;appearance:textfield}
+.syn-tab .syn-in{padding:0 2px}
+.syn-in.wide{text-align:left;padding:0 10px;font-family:var(--sans)}
+.syn-in:focus,.syn-sel:focus,.syn-name:focus{outline:none;border-color:var(--accent)}
+.syn-in:disabled,.syn-sel:disabled,.syn-name:disabled{opacity:.45}
+.syn-id{display:flex;align-items:baseline;gap:10px;background:var(--panel2);border-radius:8px;padding:8px 10px}
+.syn-id span{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:1px}
+.syn-id b{font-family:var(--mono);font-size:22px;color:var(--text);letter-spacing:2px;white-space:nowrap}
+.syn-id span{white-space:nowrap}
+.syn-id em{font-style:normal;font-size:12px;color:var(--muted);margin-left:auto;text-align:right;min-width:0}
+.syn-prev{width:100%;height:110px;display:block}
+.syn-tot{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center}
+.syn-tot b{display:block;font-family:var(--display);font-size:26px;font-weight:700;line-height:1.05}
+.syn-tot span{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.syn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.syn-grid.two{grid-template-columns:1fr 1fr}
+.syn-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.syn-tab{width:100%;border-collapse:collapse;table-layout:fixed}
+.syn-tab th{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);text-align:center;padding:4px 2px}
+.syn-tab th:first-child{width:24px}.syn-tab th:last-child{width:70px}
+.syn-tab td{padding:2px}
+.syn-n{font-family:var(--mono);font-size:14px;color:var(--muted);text-align:center}
+.syn-ops{display:flex;gap:3px}
+.syn-ops button{flex:1;min-height:42px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:14px}
+.syn-ops button:disabled{opacity:.35}
+.syn-hintline{font-size:12px;color:var(--muted);line-height:1.4}
+.syn-start{min-height:60px;font-size:20px;letter-spacing:2px;width:100%}
+.syn-simbtn{width:100%;min-height:44px;font-size:13px;color:var(--muted)}
+.syn-empty{font-size:14px;color:var(--muted);padding:8px 2px;line-height:1.5}
+.syn-run{border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:4px;background:var(--panel)}
+.syn-run-h{display:flex;align-items:center;gap:8px;font-size:16px}
+.syn-run-m{font-size:13px;color:var(--muted);font-family:var(--mono)}
+.syn-run-k{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted)}
+.syn-run-k b{color:var(--text);font-family:var(--mono)}
+.syn-run-b{display:flex;gap:6px;margin-top:4px}
+.syn-run-b .btn:first-child{flex:1}
+.syn-simtag{font-size:12px;font-family:var(--mono);background:var(--blue);color:#000000;border-radius:4px;padding:1px 6px}
+.syn-v{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:1px;border-radius:4px;padding:2px 7px}
+.syn-v.ok{background:rgba(0,230,118,.15);color:var(--green)}
+.syn-v.warn{background:rgba(255,196,0,.15);color:var(--warn)}
+.syn-v.bad{background:rgba(255,23,68,.15);color:var(--red)}
+.syn-cmp{display:grid;grid-template-columns:1fr;gap:6px}
+.syn-cmp label{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:15px;font-weight:600;color:var(--muted)}
+.syn-cmp .syn-sel{min-width:0;font-size:14px}
+.syn-cmpbox{display:flex;flex-direction:column;gap:6px;border:1px solid var(--border);border-radius:8px;padding:8px}
+.syn-cmphead{font-family:var(--mono);font-size:13px;font-weight:600;padding:6px 8px;border-radius:8px}
+.syn-cmphead.ok{background:rgba(0,230,118,.12);color:var(--green)}
+.syn-cmphead.bad{background:rgba(255,23,68,.14);color:var(--red)}
+.syn-ctab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.syn-ctab th{color:var(--muted);font-weight:500;text-align:right;padding:3px 4px}
+.syn-ctab td{text-align:right;padding:4px;border-top:1px solid var(--divider);white-space:nowrap}
+.syn-ctab td i{color:var(--muted);font-style:normal;margin:0 2px}
+.syn-ctab td.ok{color:var(--green)}.syn-ctab td.warn{color:var(--warn)}
+
+/* ═══ SYNTHETIC CYCLE — driver cockpit (full screen) ══════════════════ */
+body.synth-on .rail,body.synth-on .drawer,body.synth-on .actionbar{visibility:hidden}
+.syn-ck{position:fixed;inset:0;z-index:6000;background:var(--bg);display:none;
+  grid-template-rows:auto 1fr;padding:calc(8px + var(--safe-t)) 14px calc(10px + var(--safe-b));gap:10px;color:var(--text)}
+.syn-ck.on{display:grid}
+.syn-top{display:flex;align-items:center;gap:12px;min-height:56px}
+.syn-seg{font-family:var(--display);font-size:30px;font-weight:700;letter-spacing:1px;white-space:nowrap}
+.syn-prog{flex:1;display:flex;gap:3px;height:14px;min-width:80px}
+.syn-prog i{display:block;height:100%;border-radius:2px;background:var(--panel2)}
+.syn-prog i.ok{background:var(--green)}.syn-prog i.chk{background:var(--warn)}
+.syn-prog i.cur{background:var(--accent);box-shadow:0 0 0 2px var(--accent-2)}
+.syn-gps{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:15px;color:var(--muted);white-space:nowrap}
+.syn-gps i{width:12px;height:12px;border-radius:50%;background:var(--muted)}
+.syn-gps.good i{background:var(--green)}.syn-gps.weak i{background:var(--warn)}.syn-gps.bad i{background:var(--red)}
+.syn-gps.bad{color:var(--red)}
+.syn-clock{font-family:var(--mono);font-size:18px;color:var(--muted)}
+.syn-tbtn{min-height:52px;min-width:56px;padding:0 14px;border-radius:8px;border:1px solid var(--border-strong);
+  background:var(--panel2);color:var(--text);font-family:var(--sans);font-size:15px;font-weight:700;letter-spacing:1px}
+.syn-tbtn.hit{background:var(--blue);color:#000;border-color:var(--blue)}
+.syn-x{font-size:22px}
+.syn-main{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:14px;min-height:0}
+.syn-left{display:flex;flex-direction:column;gap:10px;min-height:0}
+.syn-right{display:flex;flex-direction:column;gap:10px;min-height:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px}
+.syn-phase{font-family:var(--display);font-size:clamp(44px,7.2vh,76px);font-weight:700;letter-spacing:2px;line-height:1;
+  text-align:center;padding:14px 10px;border-radius:12px;background:var(--panel2);color:var(--text)}
+.syn-cue{font-family:var(--display);font-size:clamp(26px,4.4vh,42px);font-weight:600;text-align:center;min-height:1.2em;letter-spacing:1px}
+.syn-nums{display:grid;grid-template-columns:1.25fr 1fr;gap:10px;flex:1;min-height:0}
+.syn-act,.syn-tgt{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;background:var(--panel);border:1px solid var(--border);min-height:0}
+.syn-lbl{font-family:var(--mono);font-size:14px;color:var(--muted);letter-spacing:2px}
+.syn-big{font-family:var(--display);font-size:clamp(96px,22vh,190px);font-weight:700;line-height:.92;font-variant-numeric:tabular-nums}
+.syn-mid{font-family:var(--display);font-size:clamp(64px,14vh,120px);font-weight:700;line-height:.92;color:var(--accent);font-variant-numeric:tabular-nums}
+.syn-unit{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.syn-tape{position:relative;height:64px;border-radius:12px;background:var(--panel);border:1px solid var(--border);overflow:hidden;flex-shrink:0}
+.syn-bandbox{position:absolute;top:0;bottom:0;background:rgba(0,230,118,.18);border-left:2px solid rgba(0,230,118,.6);border-right:2px solid rgba(0,230,118,.6)}
+.syn-center{position:absolute;top:0;bottom:0;left:50%;width:3px;margin-left:-1.5px;background:var(--accent)}
+.syn-needle{position:absolute;top:8px;bottom:8px;width:16px;margin-left:-8px;border-radius:8px;background:var(--green);transition:left .12s linear}
+.syn-needle.warn{background:var(--warn)}.syn-needle.bad{background:var(--red)}.syn-needle.off{background:var(--border-strong)}
+.syn-tl{position:absolute;bottom:3px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.syn-tl.l{left:8px}.syn-tl.r{right:8px}.syn-tl.c{left:50%;transform:translateX(-50%);top:3px;bottom:auto}
+.syn-hint{font-family:var(--display);font-size:clamp(28px,4.6vh,44px);font-weight:700;text-align:center;letter-spacing:1px;min-height:1.15em;line-height:1.15}
+.syn-hint.ok{color:var(--green)}.syn-hint.warn{color:var(--warn)}.syn-hint.bad{color:var(--red)}
+.syn-chart{flex:1;width:100%;min-height:0;display:block}
+.syn-next{font-family:var(--mono);font-size:16px;color:var(--muted);text-align:center;min-height:1.3em}
+.syn-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.syn-kpis div{background:var(--bg);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column}
+.syn-kpis span{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:1px}
+.syn-kpis b{font-family:var(--display);font-size:26px;font-weight:700;line-height:1.1;white-space:nowrap}
+/* phase colours — one glance tells the driver what to do */
+.syn-ck.ph-wait .syn-phase{background:var(--panel2);color:var(--text)}
+.syn-ck.ph-ready .syn-phase{background:var(--warn);color:#000}
+.syn-ck.ph-go .syn-phase{background:var(--green);color:#000;animation:synPulse .8s infinite}
+.syn-ck.ph-accel .syn-phase{background:var(--blue);color:#000}
+.syn-ck.ph-cruise .syn-phase{background:rgba(0,230,118,.14);color:var(--green);box-shadow:inset 0 0 0 3px var(--green)}
+.syn-ck.ph-brake .syn-phase{background:var(--red);color:#fff}
+.syn-ck.ph-hold .syn-phase{background:var(--warn);color:#000}
+.syn-ck.ph-done .syn-phase{background:var(--panel2);color:var(--muted)}
+.syn-ck.ph-brake .syn-cue{color:var(--red)}
+.syn-ck.ph-wait .syn-cue,.syn-ck.ph-ready .syn-cue{color:var(--accent)}
+@keyframes synPulse{50%{opacity:.55}}
+@media (max-aspect-ratio:1/1){
+  .syn-main{grid-template-columns:1fr;grid-template-rows:auto minmax(260px,1fr)}
+  .syn-big{font-size:clamp(96px,14vh,190px)}.syn-mid{font-size:clamp(64px,9vh,120px)}
+}
+/* end-of-run card */
+.syn-end{position:absolute;inset:0;background:rgba(7,7,7,.92);display:none;align-items:center;justify-content:center;padding:16px;z-index:2}
+.syn-end.on{display:flex}
+.syn-endcard{width:min(920px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.syn-endt{font-family:var(--sans);font-size:14px;letter-spacing:2px;color:var(--muted);text-align:center}
+.syn-endv{font-family:var(--display);font-size:64px;font-weight:700;text-align:center;line-height:1}
+.syn-endv.ok{color:var(--green)}.syn-endv.warn{color:var(--warn)}.syn-endv.bad{color:var(--red)}
+.syn-endm{font-family:var(--mono);font-size:14px;color:var(--muted);text-align:center}
+.syn-endk{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.syn-endk div{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
+.syn-endk b{display:block;font-family:var(--display);font-size:34px;font-weight:700}
+.syn-endk span{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.syn-endtab{overflow:auto;max-height:36vh}
+.syn-endtab table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:14px}
+.syn-endtab th{color:var(--muted);font-weight:500;text-align:right;padding:4px 6px;position:sticky;top:0;background:var(--panel)}
+.syn-endtab td{text-align:right;padding:5px 6px;border-top:1px solid var(--divider)}
+.syn-endtab tr.chk td:last-child{color:var(--warn)}
+.syn-endtab small{display:block;font-size:12px;color:var(--muted)}
+.syn-endb{display:flex;gap:10px}
+.syn-endb .btn{flex:1;min-height:60px;font-size:18px}
 </style>
 </head>
 <body>
@@ -1626,6 +1776,9 @@ body.off-route .hud-instr-action{color:var(--red)!important}
     <button class="rail-item" id="stab-gravadas" role="tab"
       aria-label="REC" onclick="switchTab('gravadas',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>
       <span class="rail-lbl">REC<span id="rec-badge" class="rail-badge"></span></span></button>
+    <button class="rail-item" id="stab-synth" role="tab"
+      aria-label="SYNTH" onclick="switchTab('synth',true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 19h3l3-9h4l3 9h3l2-6"/><path d="M2 21h20" stroke-width="1.5"/></svg>
+      <span class="rail-lbl">SYNTH</span></button>
   </nav>
 
   <!-- Panel: slides over the map from the rail. Scrolls on its own. -->
@@ -1752,6 +1905,12 @@ body.off-route .hud-instr-action{color:var(--red)!important}
       </div>
     </div>
 
+    <!-- SYNTHETIC CYCLE PANE — trapezoid cycle editor, run setup, results -->
+    <div class="pane" id="pane-synth" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
+      <div class="syn-wrap" id="syn-pane"></div>
+      <input type="file" id="syn-import" accept=".json,application/json" style="display:none" onchange="Synth.importCycle(this)">
+    </div>
+
     <!-- GRAVADAS PANE -->
     <div class="pane" id="pane-gravadas" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
       <div class="seq-bar" id="seq-bar">
@@ -1799,6 +1958,45 @@ body.off-route .hud-instr-action{color:var(--red)!important}
     </span>
     <button class="big-start" id="big-start" onclick="bigStartTap(event)">▶ START</button>
   </div>
+</div>
+
+<!-- ═══ SYNTHETIC CYCLE DRIVER COCKPIT — full screen, above everything ═══ -->
+<div class="syn-ck" id="syn-ck" aria-hidden="true">
+  <div class="syn-top">
+    <div class="syn-seg" id="syn-seg">STOP –/–</div>
+    <div class="syn-prog" id="syn-prog"></div>
+    <div class="syn-gps" id="syn-gps"><i></i><span id="syn-gps-t">GPS</span></div>
+    <div class="syn-clock" id="syn-clock">--:--:--</div>
+    <button class="syn-tbtn" id="syn-markbtn" onclick="Synth.markTap()">⚑ MARK</button>
+    <button class="syn-tbtn syn-x" onclick="Synth.exitTap()" aria-label="Stop the cycle">✕</button>
+  </div>
+  <div class="syn-main">
+    <div class="syn-left">
+      <div class="syn-phase" id="syn-phase">READY</div>
+      <div class="syn-cue" id="syn-cue"></div>
+      <div class="syn-nums">
+        <div class="syn-act"><span class="syn-lbl">SPEED</span><span class="syn-big" id="syn-v">0</span><span class="syn-unit">km/h</span></div>
+        <div class="syn-tgt"><span class="syn-lbl">TARGET</span><span class="syn-mid" id="syn-vt">—</span><span class="syn-unit">km/h</span></div>
+      </div>
+      <div class="syn-tape"><div class="syn-bandbox" id="syn-bandbox"></div><div class="syn-center"></div>
+        <div class="syn-needle off" id="syn-needle"></div>
+        <span class="syn-tl l">−10 SLOW</span><span class="syn-tl r">FAST +10</span></div>
+      <div class="syn-hint" id="syn-hint"></div>
+    </div>
+    <div class="syn-right">
+      <canvas class="syn-chart" id="syn-chart"></canvas>
+      <div class="syn-next" id="syn-next"></div>
+      <div class="syn-kpis">
+        <div><span>DIST km</span><b id="syn-k-dist">—</b></div>
+        <div><span>TIME</span><b id="syn-k-time">—</b></div>
+        <div><span>IN BAND</span><b id="syn-k-band">—</b></div>
+        <div><span>RMSE km/h</span><b id="syn-k-rmse">—</b></div>
+        <div><span>LAST STOP</span><b id="syn-k-stop">—</b></div>
+        <div><span>ACCEL m/s²</span><b id="syn-k-acc">—</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="syn-end" id="syn-end"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -2768,9 +2966,9 @@ function applySheet(){
   s.classList.toggle('open',open);
   const r=el('rail'); if(r)r.classList.toggle('panel-open',open);
   const t=el('drawer-title');
-  if(t){const cur=['rota','nav','paradas','gravadas'].find(x=>{
+  if(t){const cur=['rota','nav','paradas','gravadas','synth'].find(x=>{
       const b=el('stab-'+x);return b&&b.classList&&b.classList.contains('active');});
-    t.textContent={rota:'ROUTE',nav:'GPS',paradas:'STOPS',gravadas:'RECORDINGS'}[cur]||'ROUTE';}
+    t.textContent={rota:'ROUTE',nav:'GPS',paradas:'STOPS',gravadas:'RECORDINGS',synth:'SYNTHETIC CYCLE'}[cur]||'ROUTE';}
   setTimeout(()=>{try{map.invalidateSize();}catch(e){}},320);
 }
 function switchTab(n,fromUser){
@@ -2779,7 +2977,7 @@ function switchTab(n,fromUser){
   if(fromUser&&el('stab-'+n).classList.contains('active')&&(shState==='mid'||shState==='expanded')){
     shState='peek';applySheet();return;
   }
-  ['rota','nav','paradas','gravadas'].forEach(t=>{
+  ['rota','nav','paradas','gravadas','synth'].forEach(t=>{
     el('stab-'+t).classList.toggle('active',t===n);
     el('pane-'+t).classList.toggle('active',t===n);
   });
@@ -4331,6 +4529,9 @@ const CycleGate={
   reset(){this.state='ARMED';this._n=0;},
 };
 function onGPS(pos){
+  // Synthetic cycle owns the single GPS watch while its run is live; the
+  // navigation engine never sees those fixes (the two cannot run together).
+  if(Synth._ownWatch){Synth._onPos(pos);return;}
   /* A simulation replays a recorded cycle; a real fix arriving mid-replay
      belongs to a different place entirely. Only the simulator may feed the
      engine while one is running — this holds even if a watch leaks again. */
@@ -4614,6 +4815,7 @@ function onGPS(pos){
   }
 }
 function onGPSErr(err){
+  if(Synth._ownWatch){Synth._onPosErr(err);return;}
   const m={1:'Permission denied',2:'Position unavailable',3:'GPS timeout'};
   setGPS('error',m[err.code]||'Erro GPS');
 }
@@ -6324,6 +6526,1058 @@ function fmtTime(s){if(!s||isNaN(s))return'00:00:00';s=Math.max(0,Math.floor(s))
 function fmtDurMs(ms){return fmtTime(Math.floor(ms/1000))}
 function el(id){return document.getElementById(id)}
 function setGPS(state,msg){el('gps-dot').className='gps-dot '+state;el('gps-text').textContent=msg}
+
+
+/* ═══ SYNTHETIC TRAPEZOID CYCLE (SYNTH) ═══════════════════════════════════
+   Driver mode for back-to-back energy-efficiency comparison of two buses on
+   a test track. The cycle is defined by rates and distances, not by a
+   recorded route. Every segment is one trapezoid:
+       launch → accelerate at a → hold v for `cruise` m → brake at d to a
+       stop exactly at the segment end → wait `dwell` s → next segment
+   Launch guidance is in the TIME domain (target ramps at a from the moment
+   the bus actually moves). Braking guidance is in the DISTANCE domain (the
+   stop mark is a fixed distance from the previous stop, whatever happened
+   before). Both buses therefore cover identical segment distances at
+   identical peak speeds with the same nominal rates.
+
+   Isolation: own geolocation watch, own clock, own full-screen overlay.
+   The navigation engine, playback, recording and their state are never
+   read or written; the mode refuses to start while any of them runs.     */
+const SYNTH_CFG={
+  stopKmh:1.0,          // below this the bus is stationary
+  moveKmh:3.0,          // above this (2 fixes) during a wait = early start
+  stopHoldMs:1000,      // stationary this long = stop registered
+  staleMs:2500,         // no fix this long at standstill = still stopped
+  zeroMs:0.2,           // Doppler speeds below this (m/s) are noise
+  bandKmh:2,            // default green band ±
+  warnKmh:5,            // amber up to this, red beyond
+  brakeLatencyS:0.8,    // cue "BRAKE" this early (GPS + reaction latency)
+  prepBrakeS:4,         // "prepare to brake" this long before the point
+  stopZoneM:25,         // a stop this far before the nominal braking point still counts
+  maxIntegrateMs:3000,  // longer fix gaps use position delta, not speed
+  extrapolateMs:1200,   // display extrapolation between fixes
+  weakAccM:25,          // GPS accuracy worse than this = weak
+  autosaveMs:15000,
+  valid:{rmseKmh:3,stopErrM:10,accelPct:20,decelPct:25},
+  limits:{v:[3,100],cruise:[0,5000],a:[0.1,3],d:[0.1,3],dwell:[0,600],
+          laps:[1,50],startDelay:[3,120]},
+  keyCycles:'synth-cycles-v1',keyRuns:'synth-runs-v1',keyPrefs:'synth-prefs-v1',
+  maxRuns:60
+};
+const SYNTH_PRESETS=[
+  {name:'Speed ladder 20–50',a:1.0,d:0.8,dwell:20,laps:1,startDelay:10,
+   segs:[[20,100],[30,200],[40,300],[50,400]]},
+  {name:'Urban stop-go 30',a:1.0,d:0.8,dwell:15,laps:1,startDelay:10,
+   segs:[[30,150],[30,150],[30,150],[30,150],[30,150],[30,150]]},
+  {name:'Suburban 50',a:0.8,d:0.7,dwell:20,laps:1,startDelay:10,
+   segs:[[50,500],[50,500],[50,500]]},
+  {name:'Mixed city',a:1.0,d:0.8,dwell:20,laps:1,startDelay:10,
+   segs:[[20,80],[30,150],[40,250],[30,150],[20,80],[50,400]]}
+];
+
+function synClamp(x,lo,hi){return Math.min(hi,Math.max(lo,x))}
+function synNum(x,def){
+  if(x===null||x===undefined||x==='')return def;
+  const n=parseFloat(String(x).replace(',','.'));return isFinite(n)?n:def;
+}
+function synEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function synCsv(v){
+  if(v===null||v===undefined)return '';
+  const s=typeof v==='number'?(isFinite(v)?String(+v.toFixed(4)):''):String(v);
+  return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function synFix(v,n){return (v===null||v===undefined||!isFinite(v))?'—':v.toFixed(n)}
+function synStamp(ms){
+  const d=new Date(ms),p=x=>String(x).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+function synClock(ms){
+  const d=new Date(ms),p=x=>String(x).padStart(2,'0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function synMMSS(s){s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+
+/* Normalise a cycle definition: every value clamped to its limit, blanks
+   in a segment mean "use the cycle default". */
+function synthNormalize(cy){
+  const L=SYNTH_CFG.limits;
+  const out={
+    id:cy.id||('C'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+    name:String(cy.name||'Synthetic cycle').slice(0,60),
+    a:synClamp(synNum(cy.a,1.0),...L.a),
+    d:synClamp(synNum(cy.d,0.8),...L.d),
+    dwell:synClamp(synNum(cy.dwell,20),...L.dwell),
+    laps:Math.round(synClamp(synNum(cy.laps,1),...L.laps)),
+    startDelay:Math.round(synClamp(synNum(cy.startDelay,10),...L.startDelay)),
+    segs:[]
+  };
+  (Array.isArray(cy.segs)?cy.segs:[]).forEach(g=>{
+    if(Array.isArray(g))g={v:g[0],cruise:g[1]};
+    out.segs.push({
+      v:synClamp(synNum(g.v,30),...L.v),
+      cruise:synClamp(synNum(g.cruise,100),...L.cruise),
+      a:(g.a===null||g.a===undefined||g.a==='')?null:synClamp(synNum(g.a,out.a),...L.a),
+      d:(g.d===null||g.d===undefined||g.d==='')?null:synClamp(synNum(g.d,out.d),...L.d),
+      dwell:(g.dwell===null||g.dwell===undefined||g.dwell==='')?null:synClamp(synNum(g.dwell,out.dwell),...L.dwell)
+    });
+  });
+  if(!out.segs.length)out.segs.push({v:30,cruise:200,a:null,d:null,dwell:null});
+  return out;
+}
+
+/* Fingerprint of what the buses actually drive: effective per-segment
+   values and laps. Name and start countdown are excluded, so a renamed
+   copy on the second tablet still shows the same ID. */
+function synthHash(cy){
+  const c=synthNormalize(cy);
+  const canon=c.laps+'|'+c.segs.map(g=>[
+    g.v.toFixed(2),g.cruise.toFixed(1),(g.a??c.a).toFixed(3),(g.d??c.d).toFixed(3),(g.dwell??c.dwell).toFixed(1)
+  ].join(',')).join(';');
+  let h=0x811c9dc5;
+  for(let i=0;i<canon.length;i++){h^=canon.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  const x=h.toString(16).toUpperCase().padStart(8,'0');
+  return x.slice(0,4)+'-'+x.slice(4);
+}
+
+function synthPlan(cy){
+  const c=synthNormalize(cy);
+  const segs=[];let s0=0,t0=0,drive=0;const n=c.segs.length;
+  for(let lap=0;lap<c.laps;lap++){
+    c.segs.forEach((g,k)=>{
+      const v=g.v,vms=v/3.6,a=g.a??c.a,d=g.d??c.d;
+      const last=(lap===c.laps-1&&k===n-1);
+      const dwell=last?0:(g.dwell??c.dwell);
+      const dA=vms*vms/(2*a),dD=vms*vms/(2*d),L=dA+g.cruise+dD;
+      const tA=vms/a,tC=g.cruise/vms,tD=vms/d;
+      segs.push({idx:segs.length,lap,k,v,vms,cruise:g.cruise,a,d,dwell,dA,dD,L,
+        tA,tC,tD,drive:tA+tC+tD,s0,t0,last});
+      s0+=L;t0+=tA+tC+tD+dwell;drive+=tA+tC+tD;
+    });
+  }
+  return {cycle:c,segs,perLap:n,laps:c.laps,totalM:s0,totalS:t0,driveS:drive,
+    avgKmh:t0>0?s0/t0*3.6:0,driveKmh:drive>0?s0/drive*3.6:0,
+    vmax:Math.max(...segs.map(s=>s.v)),hash:synthHash(c)};
+}
+
+/* Target at distance s into the segment, tl seconds after launch
+   (null = not moving yet). */
+function synthTarget(seg,s,tl){
+  if(tl===null||tl===undefined)return {vt:0,phase:'GO'};
+  const rem=Math.max(0,seg.L-s);
+  const vRamp=seg.a*Math.max(0,tl);
+  const vBrake=Math.sqrt(2*seg.d*rem);
+  const vt=Math.min(seg.vms,vRamp,vBrake);
+  const phase=s>=seg.dA+seg.cruise?'DECEL':(vRamp<seg.vms?'ACCEL':'CRUISE');
+  return {vt,phase};
+}
+/* Nominal profile in the distance domain (preview / chart) */
+function synthProfileAt(seg,s){
+  if(s<=0||s>=seg.L)return 0;
+  return Math.min(seg.vms,Math.sqrt(2*seg.a*s),Math.sqrt(2*seg.d*(seg.L-s)));
+}
+
+/* crossing time of `level` between samples p→q (linear) */
+function _synCross(p,q,level){
+  if(!p)return q.t;
+  const dv=q.v-p.v;if(Math.abs(dv)<1e-9)return q.t;
+  return p.t+(level-p.v)/dv*(q.t-p.t);
+}
+
+/* Per-segment statistics from the logged samples */
+function synthSegStats(seg,rt,samples,band){
+  const S=samples.filter(x=>x.i===seg.idx&&rt.tLaunch1!=null&&x.t>=rt.tLaunch1-1&&(rt.tStop==null||x.t<=rt.tStop+1));
+  const G=S.filter(x=>x.ph==='ACCEL'||x.ph==='CRUISE'||x.ph==='DECEL');
+  const errs=G.map(x=>x.v-x.vt);
+  const rmse=errs.length?Math.sqrt(errs.reduce((a,e)=>a+e*e,0)/errs.length):null;
+  const inBand=errs.length?errs.filter(e=>Math.abs(e)<=band).length/errs.length*100:null;
+  const C=S.filter(x=>x.ph==='CRUISE').map(x=>x.v);
+  const cMean=C.length?C.reduce((a,b)=>a+b,0)/C.length:null;
+  const cStd=C.length>1?Math.sqrt(C.reduce((a,b)=>a+(b-cMean)**2,0)/(C.length-1)):null;
+  const vmax=S.length?Math.max(...S.map(x=>x.v)):null;
+  const V=seg.v,lo=0.1*V,hi=0.9*V;
+  let aMeas=null,dMeas=null;
+  if(vmax!==null&&vmax>=hi){
+    let i10=-1,i90=-1;
+    for(let i=0;i<S.length;i++){if(i10<0&&S[i].v>=lo)i10=i;if(S[i].v>=hi){i90=i;break;}}
+    if(i10>=0&&i90>=0){
+      const t10=_synCross(S[i10-1],S[i10],lo),t90=_synCross(S[i90-1],S[i90],hi);
+      if(t90>t10)aMeas=(0.8*V/3.6)/((t90-t10)/1000);
+    }
+    let j=-1;for(let i=S.length-1;i>=0;i--){if(S[i].v>=hi){j=i;break;}}
+    if(j>=0&&j<S.length-1){
+      const t90=_synCross(S[j],S[j+1],hi);
+      let k=-1;for(let i=j+1;i<S.length;i++){if(S[i].v<=lo){k=i;break;}}
+      if(k>0){const t10=_synCross(S[k-1],S[k],lo);if(t10>t90)dMeas=(0.8*V/3.6)/((t10-t90)/1000);}
+    }
+  }
+  const stopErr=rt.sStop!=null?rt.sStop-seg.L:null;
+  const V2=SYNTH_CFG.valid,why=[];
+  if(rmse!==null&&rmse>V2.rmseKmh)why.push('RMSE');
+  if(stopErr!==null&&Math.abs(stopErr)>V2.stopErrM)why.push('STOP');
+  if(aMeas!==null&&Math.abs(aMeas-seg.a)/seg.a*100>V2.accelPct)why.push('ACCEL');
+  if(dMeas!==null&&Math.abs(dMeas-seg.d)/seg.d*100>V2.decelPct)why.push('DECEL');
+  if(rt.unplanned)why.push('UNPLANNED STOP');
+  if(rt.early)why.push('EARLY START');
+  if(rt.tStop==null)why.push('INCOMPLETE');
+  return {idx:seg.idx,lap:seg.lap+1,k:seg.k+1,v:seg.v,cruise:seg.cruise,L:seg.L,
+    actualM:rt.sStop,stopErr,a:seg.a,aMeas,d:seg.d,dMeas,cMean,cStd,vmax,rmse,inBand,
+    n:errs.length,launchDelay:(rt.tLaunch1!=null&&rt.tGo!=null)?(rt.tLaunch1-rt.tGo)/1000:null,
+    driveS:(rt.tStop!=null&&rt.tLaunch1!=null)?(rt.tStop-rt.tLaunch1)/1000:null,
+    dwellTarget:seg.dwell,dwellActual:rt.dwellActual??null,early:!!rt.early,earlyByS:rt.earlyByS||0,
+    unplanned:rt.unplanned||0,tGo:rt.tGo,tStop:rt.tStop,
+    verdict:why.length?'CHECK':'OK',why:why.join(' · ')};
+}
+
+/* IndexedDB store for full run data (samples + events). A drive of an hour
+   is ~3600 samples; localStorage (shared with the recordings) cannot hold
+   that safely, so only the small summaries live there. */
+const SynthDB={
+  _p:null,
+  open(){
+    if(this._p)return this._p;
+    this._p=new Promise(res=>{
+      try{
+        if(typeof indexedDB==='undefined'||!indexedDB)return res(null);
+        const q=indexedDB.open('gpx-synth',1);
+        q.onupgradeneeded=()=>{try{q.result.createObjectStore('runs',{keyPath:'id'})}catch(e){}};
+        q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);q.onblocked=()=>res(null);
+      }catch(e){res(null)}
+    });
+    return this._p;
+  },
+  async _tx(mode,fn){
+    const db=await this.open();if(!db)return null;
+    return new Promise(res=>{
+      try{const tx=db.transaction('runs',mode),st=tx.objectStore('runs');const r=fn(st);
+        tx.oncomplete=()=>res(r&&'result' in r?r.result:true);tx.onerror=()=>res(null);tx.onabort=()=>res(null);}
+      catch(e){res(null)}
+    });
+  },
+  put(o){return this._tx('readwrite',st=>st.put(o))},
+  get(id){return this._tx('readonly',st=>st.get(id))},
+  del(id){return this._tx('readwrite',st=>st.delete(id))}
+};
+
+const Synth={
+  cycles:[],runs:[],curId:null,run:null,sim:null,_full:{},
+  prefs:{bus:'',driver:'',band:2,simMult:5,cmpA:'',cmpB:''},
+  _ownWatch:false,_loopId:null,_audio:null,_lastRender:0,
+
+  /* ── storage ───────────────────────────────────────────────────── */
+  init(){
+    try{const c=JSON.parse(localStorage.getItem(SYNTH_CFG.keyCycles)||'null');
+      if(Array.isArray(c))this.cycles=c.map(synthNormalize);}catch(e){this.cycles=[];}
+    try{const r=JSON.parse(localStorage.getItem(SYNTH_CFG.keyRuns)||'null');
+      if(Array.isArray(r))this.runs=r.filter(x=>x&&x.id);}catch(e){this.runs=[];}
+    try{Object.assign(this.prefs,JSON.parse(localStorage.getItem(SYNTH_CFG.keyPrefs)||'{}')||{});}catch(e){}
+    // a run still marked RUNNING was cut off (app killed / tablet rebooted);
+    // its data up to the last autosave is in IndexedDB and stays exportable
+    let fixed=false;
+    this.runs.forEach(r=>{if(r.state==='RUNNING'){r.state='INTERRUPTED';fixed=true;}});
+    if(fixed)this._saveRuns();
+    // default cycle lives in memory until the user edits it — nothing is
+    // written to storage at boot
+    if(!this.cycles.length)this.cycles=[this._fromPreset(0)];
+    if(!this.cycles.find(c=>c.id===this.prefs.curId))this.prefs.curId=this.cycles[0].id;
+    this.curId=this.prefs.curId;
+    this.renderPane();
+  },
+  _fromPreset(i){
+    const p=SYNTH_PRESETS[i]||SYNTH_PRESETS[0];
+    return synthNormalize({...p,id:null,segs:p.segs.map(s=>({v:s[0],cruise:s[1]}))});
+  },
+  _saveCycles(){try{localStorage.setItem(SYNTH_CFG.keyCycles,JSON.stringify(this.cycles));}catch(e){alert('Could not save cycles: storage full.');}},
+  _saveRuns(){
+    if(this.runs.length>SYNTH_CFG.maxRuns)this.runs.length=SYNTH_CFG.maxRuns;
+    try{localStorage.setItem(SYNTH_CFG.keyRuns,JSON.stringify(this.runs));}catch(e){console.warn('[Synth] run list not saved',e);}
+  },
+  _savePrefs(){try{localStorage.setItem(SYNTH_CFG.keyPrefs,JSON.stringify(this.prefs));}catch(e){}},
+  cur(){return this.cycles.find(c=>c.id===this.curId)||this.cycles[0]},
+
+  /* ── cycle editing ─────────────────────────────────────────────── */
+  _edit(fn){
+    if(this.run&&this.run.state!=='DONE'&&this.run.state!=='ABORTED')return;
+    const c=this.cur();if(!c)return;fn(c);
+    Object.assign(c,synthNormalize(c));
+    this._saveCycles();this.renderPane();
+  },
+  setField(k,v){this._edit(c=>{c[k]=k==='name'?String(v):v;})},
+  setSeg(i,k,v){this._edit(c=>{if(c.segs[i])c.segs[i][k]=(v===''&&k!=='v'&&k!=='cruise')?null:v;})},
+  addSeg(){this._edit(c=>{const l=c.segs[c.segs.length-1]||{v:30,cruise:200};c.segs.push({...l});})},
+  delSeg(i){this._edit(c=>{if(c.segs.length>1)c.segs.splice(i,1);})},
+  moveSeg(i,dir){this._edit(c=>{const j=i+dir;if(j<0||j>=c.segs.length)return;[c.segs[i],c.segs[j]]=[c.segs[j],c.segs[i]];})},
+  selectCycle(id){this.curId=id;this.prefs.curId=id;this._savePrefs();this.renderPane();},
+  newCycle(presetIdx){
+    const c=this._fromPreset(+presetIdx||0);
+    if(this.cycles.some(x=>x.name===c.name))c.name+=' ('+(this.cycles.length+1)+')';
+    this.cycles.push(c);this._saveCycles();this.selectCycle(c.id);
+  },
+  copyCycle(){
+    const s=this.cur();if(!s)return;
+    const c=synthNormalize({...JSON.parse(JSON.stringify(s)),id:null,name:s.name+' copy'});
+    this.cycles.push(c);this._saveCycles();this.selectCycle(c.id);
+  },
+  delCycle(){
+    const c=this.cur();if(!c)return;
+    if(this.cycles.length<=1){alert('Keep at least one cycle.');return;}
+    if(!confirm(`Delete cycle "${c.name}"? Runs already driven keep their own copy.`))return;
+    this.cycles=this.cycles.filter(x=>x.id!==c.id);this._saveCycles();this.selectCycle(this.cycles[0].id);
+  },
+  async shareCycle(){
+    const c=this.cur();if(!c)return;
+    const body=JSON.stringify({type:'gpx-synth-cycle',version:1,hash:synthHash(c),cycle:c},null,1);
+    await this._deliver([{name:'SYNTH_'+c.name.replace(/[^a-z0-9]+/gi,'_')+'_'+synthHash(c)+'.json',body,type:'application/json'}],c.name);
+  },
+  importCycle(input){
+    const f=input.files&&input.files[0];if(!f)return;
+    const fr=new FileReader();
+    fr.onload=()=>{
+      try{
+        const j=JSON.parse(fr.result);const src=j.cycle||j;
+        if(!src||!Array.isArray(src.segs))throw new Error('no segments');
+        const c=synthNormalize({...src,id:null});const h=synthHash(c);
+        const dup=this.cycles.find(x=>synthHash(x)===h);
+        if(dup){alert(`This cycle is already here as "${dup.name}" (ID ${h}).`);this.selectCycle(dup.id);return;}
+        this.cycles.push(c);this._saveCycles();this.selectCycle(c.id);
+        alert(`Imported "${c.name}" — cycle ID ${h}.`);
+      }catch(e){alert('Not a synthetic cycle file: '+e.message);}
+      input.value='';
+    };
+    fr.readAsText(f);
+  },
+  setPref(k,v){
+    if(k==='band'||k==='simMult')v=+v;
+    this.prefs[k]=v;this._savePrefs();
+    if(k==='cmpA'||k==='cmpB')this.renderPane();
+  },
+
+  /* ── run engine ────────────────────────────────────────────────── */
+  clock(){return this.sim?this.sim.now:Date.now()},
+  startRun(cy,opts,now){
+    const plan=synthPlan(cy);
+    const r={id:'R'+now.toString(36)+Math.random().toString(36).slice(2,5),
+      cycle:plan.cycle,cycleName:plan.cycle.name,hash:plan.hash,
+      bus:(opts.bus||'').trim()||'Bus',driver:(opts.driver||'').trim(),
+      band:opts.band||SYNTH_CFG.bandKmh,sim:!!opts.sim,plan,
+      startEpoch:now,t0:now,tEnd:null,state:'COUNTDOWN',
+      countdownEnd:now+plan.cycle.startDelay*1000,dwellEnd:null,
+      segIdx:0,s:0,sTot:0,pendS:0,moveN:0,v:0,acc:0,accM:null,lastFix:null,
+      stopCand:null,phase:'WAIT',vt:0,
+      seg:plan.segs.map(()=>({tGo:null,tLaunch:null,tLaunch1:null,tStop:null,sStop:null,
+        early:false,earlyByS:0,unplanned:0,dwellActual:null,cues:{}})),
+      stats:[],samples:[],events:[],beeped:{},_lastSave:now,
+      trace:[]};
+    this.run=r;
+    this._ev('RUN_START',now,plan.segs.length,`${r.bus}|${r.cycleName}|${r.hash}`);
+    this._ev('COUNTDOWN',now,plan.cycle.startDelay,'');
+    return r;
+  },
+  _ev(type,t,value,detail){
+    const r=this.run;if(!r)return;
+    const seg=r.plan.segs[r.segIdx];
+    r.events.push({t:Math.round(t),type,lap:seg?seg.lap+1:'',seg:seg?seg.idx+1:'',
+      value:value??'',detail:detail??'',sTot:r.sTot});
+  },
+  onFix(fix){
+    const r=this.run;if(!r||r.state==='DONE'||r.state==='ABORTED')return;
+    const lf=r.lastFix;
+    let v=(fix.v===null||fix.v===undefined||!(fix.v>=0))?null:+fix.v;
+    let dt=lf?(fix.t-lf.t)/1000:0;
+    if(lf&&dt<=0)return;                          // duplicate / out of order
+    if(v===null){
+      v=(lf&&dt>0&&fix.lat!=null&&lf.lat!=null)?haversine(lf.lat,lf.lon,fix.lat,fix.lon)*1000/dt:0;
+    }
+    if(v<SYNTH_CFG.zeroMs)v=0;
+    let ds=0;
+    if(lf){
+      if(dt*1000<=SYNTH_CFG.maxIntegrateMs)ds=(v+lf.v)/2*dt;
+      else if(fix.lat!=null&&lf.lat!=null&&(v>0||lf.v>0))ds=haversine(lf.lat,lf.lon,fix.lat,fix.lon)*1000;
+      r.acc=0.5*r.acc+0.5*((v-lf.v)/dt);
+    }
+    r.v=v;r.sTot+=ds;r.accM=fix.acc??null;
+    if(r.state==='DRIVE'){r.s+=ds;this._drive(fix.t,v,lf);}
+    else if(r.state==='DWELL'||r.state==='COUNTDOWN')this._waitFix(fix.t,v,ds);
+    r.lastFix={t:fix.t,lat:fix.lat,lon:fix.lon,v};
+    const seg=r.plan.segs[r.segIdx];
+    r.samples.push({t:Math.round(fix.t),i:seg.idx,lap:seg.lap+1,k:seg.k+1,
+      ph:r.state==='DRIVE'?r.phase:(r.state==='DONE'||r.state==='ABORTED'?'END':'WAIT'),
+      vt:r.state==='DRIVE'?r.vt*3.6:0,v:v*3.6,a:r.acc,s:r.state==='DRIVE'?r.s:(r.state==='DONE'?r.s:0),
+      sTot:r.sTot,lat:fix.lat,lon:fix.lon,accM:fix.acc??null});
+    if(r.state==='DRIVE')r.trace.push([r.s,v*3.6]);
+  },
+  _tl(rt,t){return rt.tLaunch==null?null:(t-rt.tLaunch)/1000},
+  _drive(t,v,lf){
+    const r=this.run,seg=r.plan.segs[r.segIdx],rt=r.seg[r.segIdx],kmh=v*3.6;
+    if(rt.tLaunch==null&&kmh>=SYNTH_CFG.stopKmh){
+      // back-date the launch to where the bus left 0 at the nominal rate,
+      // never before the previous (stationary) fix
+      rt.tLaunch=Math.max(lf?lf.t:t-1000,t-v/seg.a*1000,rt.tGo??-Infinity);
+      if(rt.tLaunch1==null){rt.tLaunch1=rt.tLaunch;this._ev('LAUNCH',rt.tLaunch,rt.tGo!=null?((rt.tLaunch-rt.tGo)/1000).toFixed(2):'','');}
+      else this._ev('RELAUNCH',rt.tLaunch,'','');
+    }
+    const T=synthTarget(seg,r.s,this._tl(rt,t));
+    if(T.phase==='DECEL'&&!rt.cues.decel){rt.cues.decel=1;this._ev('DECEL_ZONE',t,r.s.toFixed(1),'');}
+    r.vt=T.vt;r.phase=rt.tLaunch==null?(rt.unplanned?'HOLD':'GO'):T.phase;
+    if(!rt.cues.cruise&&kmh>=seg.v-r.band){rt.cues.cruise=1;this._ev('CRUISE_REACHED',t,kmh.toFixed(1),'');}
+    // brake cues — the braking point moves with the actual speed
+    if(rt.tLaunch!=null&&T.phase!=='DECEL'&&v>1){
+      const tb=(seg.L-v*v/(2*seg.d)-r.s)/v;
+      if(!rt.cues.prep&&tb<=SYNTH_CFG.prepBrakeS&&tb>SYNTH_CFG.brakeLatencyS+1.5&&seg.cruise>=30){
+        rt.cues.prep=1;this._say('Prepare to brake.');
+      }
+      if(!rt.cues.brake&&tb<=SYNTH_CFG.brakeLatencyS){
+        rt.cues.brake=1;this._beep(660,120);setTimeout(()=>this._beep(660,120),180);
+        this._say('Brake.',true);this._ev('BRAKE_CUE',t,r.s.toFixed(1),'');
+      }
+    }else if(T.phase==='DECEL'&&!rt.cues.brake){
+      rt.cues.brake=1;this._beep(660,120);this._say('Brake.',true);this._ev('BRAKE_CUE',t,r.s.toFixed(1),'late');
+    }
+    // stop detection
+    if(rt.tLaunch!=null&&kmh<SYNTH_CFG.stopKmh){
+      if(r.stopCand==null)r.stopCand=t;
+      if(t-r.stopCand>=SYNTH_CFG.stopHoldMs)this._stopped(r.stopCand);
+    }else if(kmh>=SYNTH_CFG.stopKmh)r.stopCand=null;
+  },
+  _stopped(tStop){
+    const r=this.run,seg=r.plan.segs[r.segIdx],rt=r.seg[r.segIdx];
+    r.stopCand=null;
+    const zone=Math.max(0.5*seg.L,seg.dA+seg.cruise-SYNTH_CFG.stopZoneM);
+    if(r.s<zone){
+      rt.unplanned++;rt.tLaunch=null;r.phase='HOLD';r.vt=0;
+      this._ev('UNPLANNED_STOP',tStop,r.s.toFixed(1),`${(seg.L-r.s).toFixed(0)} m before mark`);
+      this._say('Unplanned stop. Continue when ready.',true);
+      return;
+    }
+    rt.tStop=tStop;rt.sStop=r.s;
+    const err=r.s-seg.L;
+    this._ev('STOP',tStop,err.toFixed(2),'stop error m (+ past mark)');
+    r.stats[seg.idx]=synthSegStats(seg,rt,r.samples,r.band);
+    if(seg.last){this.finish('COMPLETE',tStop);return;}
+    r.state='DWELL';r.phase='WAIT';r.vt=0;r.dwellEnd=tStop+seg.dwell*1000;
+    r.pendS=0;r.moveN=0;r.beeped={};
+    this._say(seg.dwell>0?`Stop. Wait ${Math.round(seg.dwell)} seconds.`:'Stop.',true);
+  },
+  _waitFix(t,v,ds){
+    const r=this.run;
+    if(v*3.6>=SYNTH_CFG.moveKmh){r.moveN++;r.pendS+=ds;}else{r.moveN=0;r.pendS=0;}
+    if(r.moveN>=2)this._go(t,true);
+  },
+  _go(t,early){
+    const r=this.run;
+    const from=r.state;
+    if(from==='DWELL'){
+      const prev=r.seg[r.segIdx];prev.dwellActual=(t-prev.tStop)/1000;
+      if(r.stats[r.segIdx])r.stats[r.segIdx].dwellActual=prev.dwellActual;
+      r.segIdx++;
+    }
+    const seg=r.plan.segs[r.segIdx],rt=r.seg[r.segIdx];
+    const due=from==='DWELL'?r.dwellEnd:r.countdownEnd;
+    rt.tGo=early?due:t;rt.cues={};r.trace=[];
+    r.state='DRIVE';r.s=0;r.stopCand=null;r.phase='GO';r.vt=0;
+    if(early){
+      rt.early=true;rt.earlyByS=Math.max(0,(due-t)/1000);
+      r.s=r.pendS;
+      rt.tLaunch=rt.tLaunch1=t-r.v/seg.a*1000;
+      this._ev('EARLY_START',t,rt.earlyByS.toFixed(1),'s before GO');
+      this._ev('LAUNCH',rt.tLaunch,((rt.tLaunch-rt.tGo)/1000).toFixed(2),'early');
+      this._say('Early start.',true);
+    }else{
+      this._ev('GO',t,seg.v,`cruise ${seg.cruise} m`);
+      this._beep(1320,420);
+      this._say(`Go. ${Math.round(seg.v)} kilometres per hour.`,true);
+    }
+    r.pendS=0;r.moveN=0;
+  },
+  tick(now){
+    const r=this.run;if(!r)return;
+    if(r.state==='COUNTDOWN'||r.state==='DWELL'){
+      const end=r.state==='COUNTDOWN'?r.countdownEnd:r.dwellEnd;
+      const rem=(end-now)/1000;
+      const n=Math.ceil(rem);
+      if(n>=1&&n<=3&&!r.beeped[r.state+r.segIdx+'_'+n]){r.beeped[r.state+r.segIdx+'_'+n]=1;this._beep(880,130);}
+      if(rem<=0)this._go(end,false);
+    }else if(r.state==='DRIVE'){
+      // Android stops delivering fixes to a stationary device: a stop must
+      // still register, or the dwell countdown would never start
+      // (the last fix before the silence often still reads a crawl, so a
+      // slow last fix while braking counts too; the creep to rest is added)
+      const rt=r.seg[r.segIdx],lf=r.lastFix,seg=r.plan.segs[r.segIdx];
+      if(rt.tLaunch!=null&&lf&&now-lf.t>SYNTH_CFG.staleMs&&
+         (lf.v*3.6<SYNTH_CFG.stopKmh||(lf.v*3.6<SYNTH_CFG.moveKmh&&r.phase==='DECEL'))){
+        if(lf.v>0){const creep=lf.v*lf.v/(2*seg.d);r.s+=creep;r.sTot+=creep;r.v=0;}
+        this._stopped(r.stopCand??(lf.t+(lf.v>0?lf.v/seg.d*1000:0)));
+      }
+    }
+    if(r.state!=='DONE'&&r.state!=='ABORTED'&&now-r._lastSave>SYNTH_CFG.autosaveMs){
+      r._lastSave=now;this._persist(false);
+    }
+  },
+  mark(label){
+    const r=this.run;if(!r)return;
+    const t=this.clock();this._ev('MARK',t,(r.events.filter(e=>e.type==='MARK').length+1),label||'');
+  },
+  finish(reason,t){
+    const r=this.run;if(!r||r.state==='DONE'||r.state==='ABORTED')return;
+    t=t??this.clock();
+    if(reason!=='COMPLETE'){
+      const seg=r.plan.segs[r.segIdx],rt=r.seg[r.segIdx];
+      if(rt.tLaunch1!=null&&rt.tStop==null)r.stats[seg.idx]=synthSegStats(seg,rt,r.samples,r.band);
+    }
+    r.state=reason==='COMPLETE'?'DONE':'ABORTED';r.tEnd=t;r.phase='END';
+    this._ev(reason==='COMPLETE'?'RUN_END':'ABORT',t,'',reason);
+    r.summary=this.summarize(r);
+    this._persist(true);
+    if(reason==='COMPLETE')this._say('Cycle complete.',true);
+    this._stopSensors();
+  },
+  summarize(r){
+    const st=r.stats.filter(Boolean),done=st.filter(s=>s.stopErr!==null);
+    const G=r.samples.filter(x=>x.ph==='ACCEL'||x.ph==='CRUISE'||x.ph==='DECEL');
+    const errs=G.map(x=>x.v-x.vt);
+    const rmse=errs.length?Math.sqrt(errs.reduce((a,e)=>a+e*e,0)/errs.length):null;
+    const inBand=errs.length?errs.filter(e=>Math.abs(e)<=r.band).length/errs.length*100:null;
+    const se=done.map(s=>Math.abs(s.stopErr));
+    const plannedM=done.reduce((a,s)=>a+s.L,0),actualM=done.reduce((a,s)=>a+s.actualM,0);
+    const complete=r.state==='DONE';
+    const ok=st.filter(s=>s.verdict==='OK').length;
+    return {segsPlanned:r.plan.segs.length,segsDone:done.length,segsOK:ok,rmse,inBand,
+      meanAbsStopErr:se.length?se.reduce((a,b)=>a+b,0)/se.length:null,
+      maxAbsStopErr:se.length?Math.max(...se):null,plannedM,actualM,
+      totalS:(r.tEnd??this.clock())-r.t0>0?((r.tEnd??this.clock())-r.t0)/1000:0,
+      distTotM:r.sTot,
+      verdict:!complete?'INCOMPLETE':(ok===r.plan.segs.length?'VALID':'CHECK')};
+  },
+  _record(r){
+    return {id:r.id,date:r.startEpoch,bus:r.bus,driver:r.driver,cycleName:r.cycleName,hash:r.hash,
+      band:r.band,sim:r.sim,state:r.state==='DONE'?'DONE':(r.state==='ABORTED'?'ABORTED':'RUNNING'),
+      cycle:r.cycle,summary:r.summary||this.summarize(r),stats:r.stats.filter(Boolean),
+      planTotals:{totalM:r.plan.totalM,totalS:r.plan.totalS,segs:r.plan.segs.length}};
+  },
+  _persist(final){
+    const r=this.run;if(!r)return;
+    const rec=this._record(r);
+    const i=this.runs.findIndex(x=>x.id===r.id);
+    if(i>=0)this.runs[i]=rec;else this.runs.unshift(rec);
+    this._saveRuns();
+    this._full[r.id]={samples:r.samples,events:r.events};
+    SynthDB.put({id:r.id,samples:r.samples,events:r.events});
+    if(final)this.renderPane();
+  },
+
+  /* ── sensors / loop ───────────────────────────────────────────── */
+  _startSensors(sim){
+    if(sim){
+      const now=Date.now(),c=(typeof map!=='undefined'&&map.getCenter)?map.getCenter():{lat:57.7089,lng:11.9746};
+      this.sim={now,mult:Math.max(1,+this.prefs.simMult||5),v:0,lat:c.lat,lon:c.lng,brg:90,
+        nextFix:now+1000,bias:1,launchAt:null,realT:performance.now?performance.now():Date.now()};
+    }else{
+      // the app's single watch (startWatch) — onGPS hands fixes to Synth
+      // while _ownWatch is set
+      this._ownWatch=true;
+      if(startWatch()===null){this._gpsState='bad';this._gpsMsg='No GPS on this device';}
+    }
+    clearInterval(this._loopId);
+    this._loopId=setInterval(()=>this._loop(),100);
+    try{requestWakeLock();}catch(e){}
+  },
+  _stopSensors(){
+    if(this._ownWatch){this._ownWatch=false;stopWatch();}
+    this.sim=null;
+    // keep the loop alive one more render so the end card paints
+    setTimeout(()=>{if(!this.run||this.run.state==='DONE'||this.run.state==='ABORTED'){clearInterval(this._loopId);this._loopId=null;}},400);
+    try{if(!navActive&&!isRec)releaseWakeLock();}catch(e){}
+    this.renderCockpit(this.clock(),true);
+  },
+  _onPos(p){
+    if(this.sim)return;
+    const now=Date.now();let t=+p.timestamp;
+    if(!(Math.abs(t-now)<3000))t=now;
+    const c=p.coords;
+    this._gpsState=c.accuracy>SYNTH_CFG.weakAccM?'weak':'good';
+    this.onFix({t,lat:c.latitude,lon:c.longitude,v:c.speed,acc:c.accuracy});
+  },
+  _onPosErr(e){this._gpsState='bad';this._gpsMsg={1:'GPS permission denied',2:'GPS unavailable',3:'GPS timeout'}[e.code]||'GPS error';},
+  _loop(){
+    const nowReal=performance.now?performance.now():Date.now();
+    if(this.sim){
+      const S=this.sim,dReal=Math.min(500,nowReal-S.realT);S.realT=nowReal;
+      let left=dReal*S.mult;
+      while(left>0){const h=Math.min(100,left);this._simStep(h);left-=h;}
+    }
+    const now=this.clock();
+    this.tick(now);
+    this.renderCockpit(now);
+  },
+  /* bench simulator: a driver who reacts with lag, launches ~1.2 s after
+     GO, follows the target within a few km/h and brakes on the curve */
+  _simStep(hMs){
+    const S=this.sim,r=this.run;if(!S||!r)return;
+    const h=hMs/1000;S.now+=hMs;
+    let want=0,aMax=1.2,dMax=1.2;
+    if(r.state==='DRIVE'){
+      const seg=r.plan.segs[r.segIdx],rt=r.seg[r.segIdx];
+      aMax=seg.a*1.05*S.bias;dMax=seg.d*1.25;
+      if(rt.tLaunch==null){
+        if(S.launchAt==null)S.launchAt=S.now+900+Math.random()*700;
+        if(S.now>=S.launchAt)want=seg.vms;
+      }else{
+        S.launchAt=null;
+        const sAhead=r.s+S.v*0.8;
+        const T=synthTarget(seg,sAhead,(S.now-rt.tLaunch)/1000+0.8);
+        want=T.phase==='DECEL'?T.vt:Math.min(seg.vms*S.bias,Math.max(T.vt,S.v));
+        if(T.phase==='ACCEL')want=seg.vms;
+        if(seg.L-r.s<1.5&&S.v<1.5)want=0;
+      }
+    }else{S.launchAt=null;if(r.state==='DWELL')S.bias=0.97+Math.random()*0.06;}
+    const dv=want-S.v;
+    S.v=Math.max(0,S.v+Math.max(-dMax*h,Math.min(aMax*h,dv*Math.min(1,h/0.35))));
+    if(S.v<0.05&&want===0)S.v=0;
+    const dm=S.v*h;S.brg=(S.brg+0.25*h)%360;
+    const rad=Math.PI/180;
+    S.lat+=dm*Math.cos(S.brg*rad)/111320;
+    S.lon+=dm*Math.sin(S.brg*rad)/(111320*Math.cos(S.lat*rad));
+    if(S.now>=S.nextFix){
+      S.nextFix+=1000;
+      const noisy=S.v>0?Math.max(0,S.v+(Math.random()-0.5)*0.12):0;
+      this._gpsState='good';
+      this.onFix({t:S.now,lat:S.lat,lon:S.lon,v:noisy,acc:4});
+    }
+  },
+
+  /* ── audio / voice ────────────────────────────────────────────── */
+  _beep(freq,ms){
+    try{
+      if(!voiceOn)return;
+      const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+      if(!this._audio)this._audio=new AC();
+      const ctx=this._audio;if(ctx.state==='suspended')ctx.resume();
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='square';o.frequency.value=freq;g.gain.value=0.18;
+      o.connect(g);g.connect(ctx.destination);
+      const t=ctx.currentTime;g.gain.setValueAtTime(0.18,t);g.gain.exponentialRampToValueAtTime(0.001,t+ms/1000);
+      o.start(t);o.stop(t+ms/1000+0.02);
+    }catch(e){}
+  },
+  _say(text,prio){try{if(this.sim&&this.sim.mult>3)return;speakText(text,!!prio);}catch(e){}},
+
+  /* ── user actions ─────────────────────────────────────────────── */
+  startTap(sim){
+    if(this.run&&(this.run.state==='COUNTDOWN'||this.run.state==='DRIVE'||this.run.state==='DWELL')){this.openCockpit();return;}
+    if(typeof navActive!=='undefined'&&navActive){alert('Stop route navigation first — the synthetic cycle uses the GPS on its own.');return;}
+    if(typeof isRec!=='undefined'&&isRec){alert('Stop the recording first.');return;}
+    if(typeof simRec!=='undefined'&&simRec){alert('Stop the route simulation first.');return;}
+    if(typeof watchId!=='undefined'&&watchId!==null&&!this._ownWatch){alert('GPS is in use by route navigation — stop it first.');return;}
+    const bus=(el('syn-bus')&&el('syn-bus').value)||this.prefs.bus;
+    const driver=(el('syn-driver')&&el('syn-driver').value)||this.prefs.driver;
+    if(!String(bus).trim()&&!sim){alert('Enter the bus / vehicle ID first — it names the data files.');return;}
+    this.prefs.bus=bus;this.prefs.driver=driver;this._savePrefs();
+    // audio must be unlocked inside the tap
+    try{const AC=window.AudioContext||window.webkitAudioContext;if(AC&&!this._audio)this._audio=new AC();if(this._audio&&this._audio.state==='suspended')this._audio.resume();}catch(e){}
+    this.startRun(this.cur(),{bus:String(bus).trim()||'SIM',driver,band:+this.prefs.band||SYNTH_CFG.bandKmh,sim:!!sim},Date.now());
+    this._gpsState=sim?'good':'wait';this._gpsMsg='';
+    this._startSensors(!!sim);
+    this.openCockpit();
+    this._say(`Cycle starts in ${this.run.plan.cycle.startDelay} seconds.`,true);
+  },
+  openCockpit(){
+    const ck=el('syn-ck');if(!ck)return;
+    ck.classList.add('on');ck.setAttribute('aria-hidden','false');
+    document.body.classList.add('synth-on');
+    this.renderCockpit(this.clock(),true);
+  },
+  closeCockpit(){
+    const ck=el('syn-ck');if(ck){ck.classList.remove('on');ck.setAttribute('aria-hidden','true');}
+    document.body.classList.remove('synth-on');
+    this.renderPane();
+  },
+  exitTap(){
+    const r=this.run;
+    if(r&&(r.state==='COUNTDOWN'||r.state==='DRIVE'||r.state==='DWELL')){
+      if(!confirm('Abort this run? Everything logged so far is kept and can be exported.'))return;
+      this.finish('ABORT');return;
+    }
+    this.closeCockpit();
+  },
+  markTap(){
+    this.mark('');const b=el('syn-markbtn');
+    if(b){b.classList.add('hit');setTimeout(()=>b.classList.remove('hit'),600);}
+  },
+
+  /* ── export ───────────────────────────────────────────────────── */
+  async _getFull(id){
+    if(this._full[id])return this._full[id];
+    const d=await SynthDB.get(id);
+    if(d)this._full[id]={samples:d.samples||[],events:d.events||[]};
+    return this._full[id]||null;
+  },
+  samplesCSV(samples){
+    const h='utc_iso,epoch_ms,t_run_s,lap,seg,seg_in_lap,phase,target_kmh,speed_kmh,err_kmh,accel_mps2,seg_dist_m,total_dist_m,lat,lon,gps_acc_m';
+    const t0=samples.length?samples[0].t:0;
+    return [h,...samples.map(x=>[new Date(x.t).toISOString(),x.t,(x.t-t0)/1000,x.lap,x.i+1,x.k,x.ph,
+      x.vt,x.v,(x.ph==='ACCEL'||x.ph==='CRUISE'||x.ph==='DECEL')?x.v-x.vt:'',x.a,x.s,x.sTot,
+      x.lat!=null?x.lat.toFixed(7):'',x.lon!=null?x.lon.toFixed(7):'',x.accM].map(synCsv).join(','))].join('\n');
+  },
+  eventsCSV(events,t0){
+    const h='utc_iso,epoch_ms,t_run_s,lap,seg,event,value,detail,total_dist_m';
+    return [h,...events.map(e=>[new Date(e.t).toISOString(),e.t,(e.t-t0)/1000,e.lap,e.seg,e.type,e.value,e.detail,e.sTot].map(synCsv).join(','))].join('\n');
+  },
+  segmentsCSV(stats){
+    const h='lap,seg,seg_in_lap,target_kmh,cruise_m,planned_dist_m,actual_dist_m,stop_err_m,accel_target_mps2,accel_meas_mps2,decel_target_mps2,decel_meas_mps2,cruise_mean_kmh,cruise_std_kmh,vmax_kmh,rmse_kmh,in_band_pct,launch_delay_s,drive_time_s,dwell_target_s,dwell_actual_s,early_start,unplanned_stops,go_utc,stop_utc,verdict,reason';
+    return [h,...stats.map(s=>[s.lap,s.idx+1,s.k,s.v,s.cruise,s.L,s.actualM,s.stopErr,s.a,s.aMeas,s.d,s.dMeas,
+      s.cMean,s.cStd,s.vmax,s.rmse,s.inBand,s.launchDelay,s.driveS,s.dwellTarget,s.dwellActual,
+      s.early?1:0,s.unplanned,s.tGo?new Date(s.tGo).toISOString():'',s.tStop?new Date(s.tStop).toISOString():'',
+      s.verdict,s.why].map(synCsv).join(','))].join('\n');
+  },
+  async exportRun(id){
+    const rec=this.runs.find(x=>x.id===id);if(!rec){alert('Run not found.');return;}
+    const full=await this._getFull(id);
+    const base=`SYN_${rec.bus}_${rec.cycleName}_${synStamp(rec.date)}`.replace(/[^a-z0-9_\-]+/gi,'_');
+    const files=[{name:base+'_run.json',type:'application/json',
+      body:JSON.stringify({type:'gpx-synth-run',version:1,...rec,
+        note:'Times are tablet UTC. Speeds km/h, distances m, rates m/s². Stop error + = past the mark.'},null,1)},
+      {name:base+'_segments.csv',type:'text/csv',body:this.segmentsCSV(rec.stats||[])}];
+    if(full){
+      files.push({name:base+'_samples.csv',type:'text/csv',body:this.samplesCSV(full.samples)});
+      files.push({name:base+'_events.csv',type:'text/csv',body:this.eventsCSV(full.events,rec.date)});
+    }else alert('The 1 Hz samples of this run are no longer on this tablet — exporting the summary only.');
+    await this._deliver(files,base);
+  },
+  async _deliver(files,title){
+    try{
+      if(typeof File!=='undefined'&&navigator.canShare){
+        const fs=files.map(f=>new File([f.body],f.name,{type:f.type}));
+        if(navigator.canShare({files:fs})){await navigator.share({files:fs,title});return;}
+      }
+    }catch(e){if(e&&e.name==='AbortError')return;}
+    files.forEach((f,i)=>setTimeout(()=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([f.body],{type:f.type}));a.download=f.name;a.click();
+    },i*400));
+  },
+  delRun(id){
+    const r=this.runs.find(x=>x.id===id);if(!r)return;
+    if(!confirm(`Delete the run "${r.bus} · ${new Date(r.date).toLocaleString()}"? Its data will be gone from this tablet.`))return;
+    this.runs=this.runs.filter(x=>x.id!==id);delete this._full[id];SynthDB.del(id);
+    this._saveRuns();this.renderPane();
+  },
+  compareRows(A,B){
+    const n=Math.max(A.stats.length,B.stats.length),rows=[];
+    for(let i=0;i<n;i++){
+      const a=A.stats.find(s=>s.idx===i),b=B.stats.find(s=>s.idx===i);
+      rows.push({i,a,b,v:(a||b).v,L:(a||b).L});
+    }
+    return rows;
+  },
+  exportCompare(){
+    const A=this.runs.find(x=>x.id===this.prefs.cmpA),B=this.runs.find(x=>x.id===this.prefs.cmpB);
+    if(!A||!B){alert('Pick run A and run B first.');return;}
+    const f=['cruise_mean_kmh','accel_meas_mps2','decel_meas_mps2','stop_err_m','rmse_kmh','in_band_pct','drive_time_s','actual_dist_m','verdict'];
+    const k=['cMean','aMeas','dMeas','stopErr','rmse','inBand','driveS','actualM','verdict'];
+    const h=['seg','target_kmh','planned_dist_m',...f.map(x=>'A_'+x),...f.map(x=>'B_'+x)].join(',');
+    const body=[`# A: ${A.bus} ${new Date(A.date).toISOString()} cycle ${A.hash}`,`# B: ${B.bus} ${new Date(B.date).toISOString()} cycle ${B.hash}`,h,
+      ...this.compareRows(A,B).map(r=>[r.i+1,r.v,r.L,...k.map(x=>r.a?r.a[x]:''),...k.map(x=>r.b?r.b[x]:'')].map(synCsv).join(','))].join('\n');
+    this._deliver([{name:`SYN_compare_${A.bus}_vs_${B.bus}_${synStamp(Date.now())}.csv`.replace(/[^a-z0-9_\-.]+/gi,'_'),type:'text/csv',body}],'Comparison');
+  },
+
+  /* ── pane (drawer) ────────────────────────────────────────────── */
+  renderPane(){
+    const host=el('syn-pane');if(!host)return;
+    const c=this.cur();if(!c)return;
+    const P=synthPlan(c);
+    const running=this.run&&(this.run.state==='COUNTDOWN'||this.run.state==='DRIVE'||this.run.state==='DWELL');
+    const dis=running?' disabled':'';
+    const segRows=c.segs.map((g,i)=>`
+      <tr>
+        <td class="syn-n">${i+1}</td>
+        <td><input class="syn-in" type="number" inputmode="decimal" value="${g.v}" onchange="Synth.setSeg(${i},'v',this.value)"${dis}></td>
+        <td><input class="syn-in" type="number" inputmode="decimal" value="${g.cruise}" onchange="Synth.setSeg(${i},'cruise',this.value)"${dis}></td>
+        <td><input class="syn-in" type="number" inputmode="decimal" value="${g.dwell??''}" placeholder="${c.dwell}" onchange="Synth.setSeg(${i},'dwell',this.value)"${dis}></td>
+        <td><input class="syn-in" type="number" inputmode="decimal" step="0.1" value="${g.a??''}" placeholder="${c.a}" onchange="Synth.setSeg(${i},'a',this.value)"${dis}></td>
+        <td><input class="syn-in" type="number" inputmode="decimal" step="0.1" value="${g.d??''}" placeholder="${c.d}" onchange="Synth.setSeg(${i},'d',this.value)"${dis}></td>
+        <td class="syn-ops"><button onclick="Synth.moveSeg(${i},-1)" aria-label="Move up"${dis}>▲</button><button onclick="Synth.delSeg(${i})" aria-label="Delete segment"${dis}>✕</button></td>
+      </tr>`).join('');
+    const runs=this.runs.map(r=>{
+      const s=r.summary||{};
+      const vc={VALID:'ok',CHECK:'warn',INCOMPLETE:'bad'}[s.verdict]||'bad';
+      return `<div class="syn-run">
+        <div class="syn-run-h"><b>${synEsc(r.bus)}</b>${r.sim?'<span class="syn-simtag">SIM</span>':''}<span class="syn-v ${vc}">${synEsc(r.state==='INTERRUPTED'?'INTERRUPTED':s.verdict||'—')}</span></div>
+        <div class="syn-run-m">${new Date(r.date).toLocaleString()} · ${synEsc(r.driver||'—')}</div>
+        <div class="syn-run-m">${synEsc(r.cycleName)} · ID ${r.hash}</div>
+        <div class="syn-run-k">
+          <span>in band <b>${synFix(s.inBand,0)}%</b></span><span>RMSE <b>${synFix(s.rmse,1)}</b></span>
+          <span>stop err <b>${synFix(s.meanAbsStopErr,1)} m</b></span><span>segs <b>${s.segsOK??0}/${s.segsPlanned??0}</b></span>
+        </div>
+        <div class="syn-run-b"><button class="btn primary" onclick="Synth.exportRun('${r.id}')">📤 Export data</button><button class="btn" onclick="Synth.delRun('${r.id}')" aria-label="Delete run">✕</button></div>
+      </div>`;}).join('');
+    const opt=(sel)=>this.runs.map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${synEsc(r.bus)} · ${new Date(r.date).toLocaleDateString()} ${synClock(r.date).slice(0,5)} · ${r.hash}</option>`).join('');
+    host.innerHTML=`
+      <section class="syn-sec">
+        <div class="syn-h">CYCLE</div>
+        <div class="syn-row">
+          <select class="syn-sel" onchange="Synth.selectCycle(this.value)"${dis}>${this.cycles.map(x=>`<option value="${x.id}"${x.id===c.id?' selected':''}>${synEsc(x.name)}</option>`).join('')}</select>
+          <button class="btn" onclick="Synth.copyCycle()"${dis}>Copy</button>
+          <button class="btn" onclick="Synth.delCycle()"${dis} aria-label="Delete cycle">✕</button>
+        </div>
+        <input class="syn-name" value="${synEsc(c.name)}" onchange="Synth.setField('name',this.value)" aria-label="Cycle name"${dis}>
+        <div class="syn-id"><span>CYCLE ID</span><b>${P.hash}</b><em>must match on both buses</em></div>
+        <canvas class="syn-prev" id="syn-prev"></canvas>
+        <div class="syn-tot">
+          <div><b>${P.segs.length}</b><span>stops</span></div>
+          <div><b>${(P.totalM/1000).toFixed(2)}</b><span>km</span></div>
+          <div><b>${synMMSS(P.totalS)}</b><span>nominal</span></div>
+          <div><b>${P.avgKmh.toFixed(1)}</b><span>avg km/h</span></div>
+        </div>
+        <div class="syn-grid">
+          <label>Accel m/s²<input class="syn-in" type="number" inputmode="decimal" step="0.1" value="${c.a}" onchange="Synth.setField('a',this.value)"${dis}></label>
+          <label>Decel m/s²<input class="syn-in" type="number" inputmode="decimal" step="0.1" value="${c.d}" onchange="Synth.setField('d',this.value)"${dis}></label>
+          <label>Stop wait s<input class="syn-in" type="number" inputmode="decimal" value="${c.dwell}" onchange="Synth.setField('dwell',this.value)"${dis}></label>
+          <label>Laps<input class="syn-in" type="number" inputmode="numeric" value="${c.laps}" onchange="Synth.setField('laps',this.value)"${dis}></label>
+          <label>Countdown s<input class="syn-in" type="number" inputmode="numeric" value="${c.startDelay}" onchange="Synth.setField('startDelay',this.value)"${dis}></label>
+        </div>
+        <table class="syn-tab">
+          <thead><tr><th>#</th><th>km/h</th><th>cruise m</th><th>wait s</th><th>a</th><th>d</th><th></th></tr></thead>
+          <tbody>${segRows}</tbody>
+        </table>
+        <div class="syn-hintline">Blank wait / a / d = cycle default. Each segment ends in a full stop.</div>
+        <div class="syn-row">
+          <button class="btn" style="flex:1" onclick="Synth.addSeg()"${dis}>＋ Segment</button>
+          <select class="syn-sel" onchange="if(this.value!==''){Synth.newCycle(this.value);this.value=''}"${dis}>
+            <option value="">＋ New from preset…</option>${SYNTH_PRESETS.map((p,i)=>`<option value="${i}">${synEsc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="syn-row">
+          <button class="btn primary" style="flex:1" onclick="Synth.shareCycle()">📤 Share cycle</button>
+          <button class="btn" style="flex:1" onclick="el('syn-import').click()"${dis}>📥 Import cycle</button>
+        </div>
+      </section>
+      <section class="syn-sec">
+        <div class="syn-h">RUN</div>
+        <div class="syn-grid two">
+          <label>Bus / vehicle ID<input id="syn-bus" class="syn-in wide" value="${synEsc(this.prefs.bus)}" placeholder="e.g. Bus A 7900e" onchange="Synth.setPref('bus',this.value)"></label>
+          <label>Driver<input id="syn-driver" class="syn-in wide" value="${synEsc(this.prefs.driver)}" placeholder="optional" onchange="Synth.setPref('driver',this.value)"></label>
+          <label>Speed band ± km/h<select class="syn-in wide" onchange="Synth.setPref('band',this.value)">${[1,1.5,2,3,4].map(b=>`<option value="${b}"${+this.prefs.band===b?' selected':''}>± ${b}</option>`).join('')}</select></label>
+          <label>Simulator speed<select class="syn-in wide" onchange="Synth.setPref('simMult',this.value)">${[1,2,5,10,20].map(b=>`<option value="${b}"${+this.prefs.simMult===b?' selected':''}>${b}×</option>`).join('')}</select></label>
+        </div>
+        <button class="btn go syn-start" onclick="Synth.startTap(false)">${running?'▶ RETURN TO CYCLE':'▶ START CYCLE'}</button>
+        <button class="btn syn-simbtn" onclick="Synth.startTap(true)"${running?' disabled':''}>▶ Simulate on bench</button>
+      </section>
+      <section class="syn-sec">
+        <div class="syn-h">RESULTS <span class="syn-cnt">${this.runs.length||''}</span></div>
+        ${this.runs.length?`
+        <div class="syn-cmp">
+          <label>A<select class="syn-sel" onchange="Synth.setPref('cmpA',this.value)"><option value="">—</option>${opt(this.prefs.cmpA)}</select></label>
+          <label>B<select class="syn-sel" onchange="Synth.setPref('cmpB',this.value)"><option value="">—</option>${opt(this.prefs.cmpB)}</select></label>
+        </div>
+        ${this._cmpHTML()}
+        ${runs}`:'<div class="syn-empty">No runs yet. Drive the cycle with each bus, then compare them here.</div>'}
+      </section>`;
+    this.drawPreview(el('syn-prev'),P);
+  },
+  _cmpHTML(){
+    const A=this.runs.find(x=>x.id===this.prefs.cmpA),B=this.runs.find(x=>x.id===this.prefs.cmpB);
+    if(!A||!B)return '<div class="syn-hintline">Pick two runs to check both buses drove the same cycle.</div>';
+    const same=A.hash===B.hash;
+    const f=(x,n)=>synFix(x,n);
+    const pair=(a,b,n,tol)=>{
+      const d=(a!=null&&b!=null&&isFinite(a)&&isFinite(b))?Math.abs(a-b):null;
+      const cls=d===null?'':(d<=tol?'ok':'warn');
+      return `<td class="${cls}">${f(a,n)}<i>/</i>${f(b,n)}</td>`;};
+    const rows=this.compareRows(A,B).map(r=>`<tr><td>${r.i+1}</td><td>${r.v}</td>
+      ${pair(r.a&&r.a.cMean,r.b&&r.b.cMean,1,1)}${pair(r.a&&r.a.aMeas,r.b&&r.b.aMeas,2,0.1)}
+      ${pair(r.a&&r.a.dMeas,r.b&&r.b.dMeas,2,0.1)}${pair(r.a&&r.a.stopErr,r.b&&r.b.stopErr,1,5)}</tr>`).join('');
+    const sa=A.summary||{},sb=B.summary||{};
+    return `<div class="syn-cmpbox">
+      <div class="syn-cmphead ${same?'ok':'bad'}">${same?'✓ SAME CYCLE '+A.hash:'✗ DIFFERENT CYCLES — '+A.hash+' vs '+B.hash}</div>
+      <div class="syn-run-k"><span>in band <b>${f(sa.inBand,0)} / ${f(sb.inBand,0)}%</b></span><span>RMSE <b>${f(sa.rmse,1)} / ${f(sb.rmse,1)}</b></span>
+        <span>dist <b>${f((sa.actualM||0)/1000,3)} / ${f((sb.actualM||0)/1000,3)} km</b></span></div>
+      <table class="syn-ctab"><thead><tr><th>#</th><th>km/h</th><th>cruise</th><th>a</th><th>d</th><th>stop m</th></tr></thead><tbody>${rows}</tbody></table>
+      <button class="btn primary" style="width:100%" onclick="Synth.exportCompare()">📤 Export comparison CSV</button>
+    </div>`;
+  },
+  _ctx(cv){
+    if(!cv||!cv.getContext)return null;
+    const ctx=cv.getContext('2d');if(!ctx||!ctx.fillRect)return null;
+    const dpr=window.devicePixelRatio||1,w=cv.clientWidth||300,h=cv.clientHeight||120;
+    if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    return {ctx,w,h};
+  },
+  _css(name,fb){try{return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||fb;}catch(e){return fb;}},
+  drawPreview(cv,P){
+    const C=this._ctx(cv);if(!C)return;const {ctx,w,h}=C;
+    const segs=P.segs.filter(s=>s.lap===0),tot=segs.reduce((a,s)=>a+s.L,0)||1;
+    const vmax=Math.max(10,...segs.map(s=>s.v))*1.15,pad=4,ph=h-16;
+    const X=m=>pad+m/tot*(w-2*pad),Y=v=>pad+(1-v/vmax)*(ph-pad);
+    ctx.strokeStyle=this._css('--border','#333');ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(pad,Y(0));ctx.lineTo(w-pad,Y(0));ctx.stroke();
+    ctx.beginPath();ctx.strokeStyle=this._css('--accent','#ff6a00');ctx.lineWidth=2;
+    let first=true;
+    segs.forEach(sg=>{const s0=sg.s0;const n=40;
+      for(let j=0;j<=n;j++){const s=sg.L*j/n,x=X(s0+s),y=Y(synthProfileAt(sg,s)*3.6);if(first){ctx.moveTo(x,y);first=false;}else ctx.lineTo(x,y);}});
+    ctx.stroke();
+    ctx.fillStyle=this._css('--muted','#a3a3a3');ctx.font='11px '+this._css('--mono','monospace');ctx.textAlign='center';
+    segs.forEach(sg=>{ctx.fillText(String(sg.v),X(sg.s0+sg.L/2),h-3);});
+  },
+
+  /* ── cockpit ──────────────────────────────────────────────────── */
+  _set(id,txt){const e=el(id);if(e&&e.textContent!==txt)e.textContent=txt;},
+  renderCockpit(now,force){
+    const ck=el('syn-ck');if(!ck||(!force&&!(ck.classList&&ck.classList.contains('on'))))return;
+    const r=this.run;if(!r)return;
+    const P=r.plan,cfg=SYNTH_CFG;
+    let segIdx=r.segIdx;
+    // during a wait the NEXT segment is what the driver prepares for
+    if(r.state==='DWELL')segIdx=Math.min(P.segs.length-1,r.segIdx+1);
+    const seg=P.segs[segIdx],rt=r.seg[segIdx];
+    // extrapolate between 1 Hz fixes so the numbers do not step
+    const lf=r.lastFix,age=lf?Math.min(cfg.extrapolateMs,Math.max(0,now-lf.t)):0;
+    const vNow=r.v;
+    let s=r.s,vt=0,phase=r.phase;
+    if(r.state==='DRIVE'){
+      s=r.s+vNow*age/1000;
+      const T=synthTarget(seg,s,this._tl(rt,now));
+      vt=T.vt*3.6;phase=rt.tLaunch==null?(rt.unplanned?'HOLD':'GO'):T.phase;
+    }
+    const kmh=vNow*3.6,err=kmh-vt;
+    let cls='wait',ban='WAIT',cue='',hint='';
+    if(r.state==='COUNTDOWN'||r.state==='DWELL'){
+      const end=r.state==='COUNTDOWN'?r.countdownEnd:r.dwellEnd,rem=(end-now)/1000;
+      if(rem<=3){cls='ready';ban='READY '+Math.max(1,Math.ceil(rem));}
+      else{cls='wait';ban=(r.state==='COUNTDOWN'?'START ':'WAIT ')+synMMSS(rem);}
+      cue=`NEXT → ${seg.v} km/h · ${Math.round(seg.cruise)} m`;
+      hint=kmh>=cfg.moveKmh?'STAY STOPPED':'HOLD STOPPED';
+    }else if(r.state==='DRIVE'){
+      const rem=seg.L-s;
+      if(phase==='GO'){cls='go';ban='GO';cue=`Accelerate to ${seg.v} km/h`;}
+      else if(phase==='HOLD'){cls='hold';ban='GO AGAIN';cue=`Unplanned stop · ${Math.max(0,rem).toFixed(0)} m to mark`;}
+      else if(phase==='ACCEL'){cls='accel';ban='ACCELERATE';cue=`to ${seg.v} km/h · ${seg.a.toFixed(1)} m/s²`;}
+      else if(phase==='CRUISE'){
+        cls='cruise';ban='HOLD '+seg.v;
+        const brakeAt=seg.L-vNow*vNow/(2*seg.d);const db=brakeAt-s;
+        cue=db<=0?'BRAKE NOW':(db<=150?`BRAKE IN ${Math.round(db)} m`:`hold for ${Math.round(db)} m`);
+        if(db<=vNow*cfg.brakeLatencyS)cls='brake';
+      }else if(phase==='DECEL'){
+        cls='brake';ban='BRAKE';
+        cue=rem>=0?`STOP IN ${Math.round(rem)} m`:`PAST MARK +${Math.round(-rem)} m`;
+        if(rem<3)ban='STOP';
+      }
+      if(phase==='ACCEL'||phase==='CRUISE'||phase==='DECEL'){
+        const a=Math.abs(err);
+        hint=a<=r.band?'ON TARGET':(err<0?(phase==='DECEL'?'EASE BRAKE ':'SPEED UP ')+'+'+a.toFixed(0):(phase==='DECEL'?'BRAKE HARDER ':'SLOW DOWN ')+'−'+a.toFixed(0));
+      }else hint='';
+    }else{
+      cls='done';ban=r.state==='DONE'?'COMPLETE':'ABORTED';cue='';hint='';
+    }
+    ck.className='syn-ck on ph-'+cls;
+    this._set('syn-phase',ban);this._set('syn-cue',cue);this._set('syn-hint',hint);
+    this._set('syn-v',String(Math.round(kmh)));
+    this._set('syn-vt',r.state==='DRIVE'&&phase!=='GO'&&phase!=='HOLD'?String(Math.round(vt)):(r.state==='DRIVE'?'0':'—'));
+    const hb=el('syn-hint');if(hb)hb.className='syn-hint '+(Math.abs(err)<=r.band?'ok':(Math.abs(err)<=cfg.warnKmh?'warn':'bad'));
+    // tape
+    const nd=el('syn-needle'),bd=el('syn-bandbox');
+    if(nd){
+      const x=Math.max(-1,Math.min(1,err/10));nd.style.left=(50+x*48)+'%';
+      nd.className='syn-needle '+(r.state!=='DRIVE'||phase==='GO'||phase==='HOLD'?'off':(Math.abs(err)<=r.band?'ok':(Math.abs(err)<=cfg.warnKmh?'warn':'bad')));
+    }
+    if(bd){const w=Math.min(100,r.band/10*48*2);bd.style.left=(50-w/2)+'%';bd.style.width=w+'%';}
+    // header
+    this._set('syn-seg',`STOP ${seg.k+1}/${P.perLap}`+(P.laps>1?` · LAP ${seg.lap+1}/${P.laps}`:''));
+    this._set('syn-clock',synClock(now));
+    const g=el('syn-gps');
+    if(g){const st=this.sim?'good':(this._gpsState||'wait');g.className='syn-gps '+st;
+      this._set('syn-gps-t',this.sim?'SIM '+this.sim.mult+'×':(st==='good'?'GPS':(st==='weak'?'GPS WEAK':(this._gpsMsg||'GPS…'))));}
+    // progress blocks
+    const pg=el('syn-prog');
+    if(pg){
+      const key=P.segs.length+':'+r.segIdx+':'+r.state;
+      if(pg._key!==key){pg._key=key;
+        pg.innerHTML=P.segs.map((sg,i)=>{const st=r.stats[i];
+          const c=i<r.segIdx||(i===r.segIdx&&(r.state==='DWELL'||r.state==='DONE'))?(st&&st.verdict==='OK'?'ok':'chk'):(i===segIdx&&r.state!=='DONE'&&r.state!=='ABORTED'?'cur':'');
+          return `<i class="${c}" style="flex:${Math.max(1,sg.L)}"></i>`;}).join('');}
+    }
+    // kpis
+    if(!r._sumKey||r._sumKey!==r.samples.length+r.state){r._sumKey=r.samples.length+r.state;r._sum=this.summarize(r);}
+    const S=r._sum;
+    this._set('syn-k-dist',((r.sTot)/1000).toFixed(2)+' / '+(P.totalM/1000).toFixed(2));
+    this._set('syn-k-time',synMMSS(((r.tEnd??now)-r.t0)/1000));
+    this._set('syn-k-band',S.inBand===null?'—':S.inBand.toFixed(0)+'%');
+    this._set('syn-k-rmse',S.rmse===null?'—':S.rmse.toFixed(1));
+    const lastSt=r.stats.filter(Boolean).slice(-1)[0];
+    this._set('syn-k-stop',lastSt&&lastSt.stopErr!==null?(lastSt.stopErr>=0?'+':'')+lastSt.stopErr.toFixed(1)+' m':'—');
+    this._set('syn-k-acc',lastSt&&lastSt.aMeas?lastSt.aMeas.toFixed(2)+' / '+lastSt.a.toFixed(1):'—');
+    const nx=P.segs[segIdx+1];
+    this._set('syn-next',seg.last?'LAST STOP — end of cycle':(nx?`then ${nx.v} km/h · ${Math.round(nx.cruise)} m · wait ${Math.round(seg.dwell)} s`:''));
+    // chart ~5 Hz
+    if(force||now-this._lastRender>=200||this.sim){this._lastRender=now;this.drawChart(el('syn-chart'),seg,r.state==='DRIVE'?r.trace:[],r.state==='DRIVE'?s:(r.state==='DWELL'?0:r.s),vNow*3.6,r.band);}
+    this._renderEnd();
+  },
+  drawChart(cv,seg,trace,s,kmh,band){
+    const C=this._ctx(cv);if(!C)return;const {ctx,w,h}=C;
+    const mono=this._css('--mono','monospace'),muted=this._css('--muted','#a3a3a3');
+    const padL=38,padR=12,padT=14,padB=26;
+    const Lx=seg.L*1.06,vmax=Math.max(20,seg.v*1.25);
+    const X=m=>padL+Math.max(0,Math.min(Lx,m))/Lx*(w-padL-padR),Y=v=>padT+(1-Math.max(0,v)/vmax)*(h-padT-padB);
+    ctx.font='12px '+mono;ctx.fillStyle=muted;ctx.strokeStyle=this._css('--border','#333');ctx.lineWidth=1;
+    // grid
+    const vs=vmax>60?20:10;
+    for(let v=0;v<=vmax;v+=vs){ctx.beginPath();ctx.moveTo(padL,Y(v));ctx.lineTo(w-padR,Y(v));ctx.stroke();ctx.textAlign='right';ctx.fillText(String(v),padL-6,Y(v)+4);}
+    const step=seg.L>1200?500:(seg.L>500?200:(seg.L>200?100:50));
+    ctx.textAlign='center';
+    for(let m=0;m<=Lx;m+=step)ctx.fillText(m+' m',X(m),h-8);
+    // band
+    ctx.fillStyle='rgba(0,230,118,0.10)';ctx.beginPath();const N=60;
+    for(let j=0;j<=N;j++){const m=seg.L*j/N;const y=Y(synthProfileAt(seg,m)*3.6+band);j?ctx.lineTo(X(m),y):ctx.moveTo(X(m),y);}
+    for(let j=N;j>=0;j--){const m=seg.L*j/N;ctx.lineTo(X(m),Y(Math.max(0,synthProfileAt(seg,m)*3.6-band)));}
+    ctx.closePath();ctx.fill();
+    // target
+    ctx.strokeStyle=this._css('--accent','#ff6a00');ctx.lineWidth=2.5;ctx.beginPath();
+    for(let j=0;j<=N;j++){const m=seg.L*j/N;const y=Y(synthProfileAt(seg,m)*3.6);j?ctx.lineTo(X(m),y):ctx.moveTo(X(m),y);}
+    ctx.stroke();
+    // braking point + stop mark
+    const bp=seg.dA+seg.cruise;
+    ctx.setLineDash([5,5]);ctx.strokeStyle=this._css('--warn','#ffc400');ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(X(bp),padT);ctx.lineTo(X(bp),h-padB);ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle=this._css('--red','#ff1744');ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(X(seg.L),padT);ctx.lineTo(X(seg.L),h-padB);ctx.stroke();
+    ctx.fillStyle=this._css('--red','#ff1744');ctx.textAlign='right';ctx.fillText('STOP',X(seg.L)-4,padT+10);
+    // actual
+    if(trace&&trace.length){
+      ctx.strokeStyle=this._css('--blue','#00b0ff');ctx.lineWidth=3;ctx.beginPath();
+      trace.forEach((p,j)=>{j?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1]));});
+      ctx.lineTo(X(s),Y(kmh));ctx.stroke();
+    }
+    // position
+    ctx.strokeStyle=this._css('--text','#f5f5f5');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X(s),padT);ctx.lineTo(X(s),h-padB);ctx.stroke();
+    ctx.fillStyle=this._css('--text','#f5f5f5');ctx.beginPath();ctx.arc(X(s),Y(kmh),7,0,Math.PI*2);ctx.fill();
+  },
+  _renderEnd(){
+    const box=el('syn-end'),r=this.run;if(!box||!r)return;
+    const done=r.state==='DONE'||r.state==='ABORTED';
+    box.classList.toggle('on',done);
+    if(!done){box._key='';return;}
+    if(box._key===r.id)return;box._key=r.id;
+    const S=r.summary||this.summarize(r);
+    const vc={VALID:'ok',CHECK:'warn',INCOMPLETE:'bad'}[S.verdict];
+    const rows=r.stats.filter(Boolean).map(s=>`<tr class="${s.verdict==='OK'?'':'chk'}"><td>${s.lap>1||r.plan.laps>1?s.lap+'·':''}${s.k}</td><td>${s.v}</td>
+      <td>${synFix(s.stopErr,1)}</td><td>${synFix(s.aMeas,2)}</td><td>${synFix(s.dMeas,2)}</td><td>${synFix(s.rmse,1)}</td><td>${s.verdict}${s.why&&s.verdict!=='OK'?'<small>'+synEsc(s.why)+'</small>':''}</td></tr>`).join('');
+    box.innerHTML=`<div class="syn-endcard">
+      <div class="syn-endt">${r.state==='DONE'?'CYCLE COMPLETE':'RUN ABORTED'}</div>
+      <div class="syn-endv ${vc}">${S.verdict}</div>
+      <div class="syn-endm">${synEsc(r.bus)} · ${synEsc(r.cycleName)} · ID ${r.hash}</div>
+      <div class="syn-endk">
+        <div><b>${synFix(S.inBand,0)}%</b><span>in ±${r.band} band</span></div>
+        <div><b>${synFix(S.rmse,1)}</b><span>RMSE km/h</span></div>
+        <div><b>${synFix(S.meanAbsStopErr,1)} m</b><span>mean stop error</span></div>
+        <div><b>${S.segsOK}/${S.segsPlanned}</b><span>segments OK</span></div>
+      </div>
+      <div class="syn-endtab"><table><thead><tr><th>stop</th><th>km/h</th><th>err m</th><th>a</th><th>d</th><th>RMSE</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="syn-endb"><button class="btn go" onclick="Synth.exportRun('${r.id}')">📤 EXPORT DATA</button><button class="btn" onclick="Synth.closeCockpit()">CLOSE</button></div>
+    </div>`;
+  }
+};
+document.addEventListener('visibilitychange',()=>{
+  try{if(document.visibilityState==='visible'&&Synth.run&&(Synth.run.state==='DRIVE'||Synth.run.state==='DWELL'||Synth.run.state==='COUNTDOWN'))requestWakeLock();}catch(e){}
+});
+try{Synth.init();}catch(e){console.warn('[Synth] init',e);}
 
 // Drag & drop
 map.getContainer().addEventListener('dragover',e=>e.preventDefault());

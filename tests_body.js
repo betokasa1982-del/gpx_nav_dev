@@ -4831,3 +4831,168 @@ console.log('\n── field 22/09-C (exit button · orphaned stops) ──');
 })();
 console.log('ALL FIELD 22/09-C TESTS PASSED');
 __group('Field 22/09-C tests');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SYNTHETIC TRAPEZOID CYCLE — two buses, one identical cycle
+//  Rates + cruise distance define each segment; the engine must place the
+//  stop mark at the same distance for every bus, measure the rates the
+//  driver actually achieved, and keep its hands off the navigation engine.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── synthetic cycle ──');
+(function(){
+  const near=(a,b,tol)=>a!==null&&Math.abs(a-b)<=tol;
+  const CY={name:'T',a:1.0,d:0.8,dwell:10,laps:1,startDelay:5,
+    segs:[{v:20,cruise:100},{v:36,cruise:200},{v:50,cruise:300,a:0.8,d:0.7}]};
+
+  // ── SYN-1: plan geometry from rates and distances ──
+  const P=synthPlan(CY);
+  const s1=P.segs[0],v1=20/3.6;
+  console.assert(P.segs.length===3,'SYN-1: 3 segments expected');
+  console.assert(near(s1.dA,v1*v1/2,1e-9)&&near(s1.dD,v1*v1/1.6,1e-9),'SYN-1: accel/decel distance wrong');
+  console.assert(near(s1.L,s1.dA+100+s1.dD,1e-9),'SYN-1: segment length ≠ dA+cruise+dD');
+  console.assert(P.segs[2].a===0.8&&P.segs[2].d===0.7,'SYN-1: per-segment rate override ignored');
+  console.assert(P.segs[2].dwell===0&&P.segs[0].dwell===10,'SYN-1: last segment must not wait, others use default');
+  console.assert(near(P.totalM,P.segs.reduce((a,s)=>a+s.L,0),1e-6),'SYN-1: total distance');
+  const P2=synthPlan({...CY,laps:2});
+  console.assert(P2.segs.length===6&&P2.segs[3].lap===1&&P2.segs[2].dwell===10,'SYN-1: laps expand, mid-cycle last seg waits');
+  console.log('SYN-1. trapezoid plan from rates + distances OK');
+
+  // ── SYN-2: the cycle ID ignores the name, catches any driven change ──
+  const h=synthHash(CY);
+  console.assert(/^[0-9A-F]{4}-[0-9A-F]{4}$/.test(h),'SYN-2: ID format '+h);
+  console.assert(synthHash({...CY,name:'renamed',startDelay:30})===h,'SYN-2: name/countdown changed the ID');
+  console.assert(synthHash({...CY,segs:[{v:20,cruise:101},...CY.segs.slice(1)]})!==h,'SYN-2: cruise change kept the ID');
+  console.assert(synthHash({...CY,d:0.9})!==h,'SYN-2: default decel change kept the ID');
+  console.assert(synthHash(JSON.parse(JSON.stringify(synthNormalize(CY))))===h,'SYN-2: round-trip (share → import) changed the ID');
+  console.log('SYN-2. cycle ID stable across tablets OK');
+
+  // ── SYN-3: target — ramp in time, brake curve in distance ──
+  let T=synthTarget(s1,0,null);console.assert(T.vt===0&&T.phase==='GO','SYN-3: before launch');
+  T=synthTarget(s1,3,2);console.assert(near(T.vt,2.0,1e-9)&&T.phase==='ACCEL','SYN-3: ramp a·t');
+  T=synthTarget(s1,s1.dA+50,20);console.assert(near(T.vt,v1,1e-9)&&T.phase==='CRUISE','SYN-3: cruise');
+  T=synthTarget(s1,s1.L-5,30);console.assert(near(T.vt,Math.sqrt(2*0.8*5),1e-9)&&T.phase==='DECEL','SYN-3: brake curve');
+  T=synthTarget(s1,s1.L+3,40);console.assert(T.vt===0,'SYN-3: past the mark target is 0');
+  console.log('SYN-3. target speed law OK');
+
+  // Ideal-driver harness: 10 Hz physics, 1 Hz fixes, engine ticked at 10 Hz.
+  // sT = true distance since the last stop.
+  function drive(cy,o){
+    o=o||{};const S=Synth;S.sim=null;let t=1.8e12;
+    const r=S.startRun(cy,{bus:'TEST',band:2},t);
+    let v=0,sT=0,key='',launchAt=null,holdUntil=null,unplannedDone=false,guard=0;
+    const aF=o.aFactor||1;
+    while(r.state!=='DONE'&&r.state!=='ABORTED'&&guard++<30000){
+      for(let k=0;k<10;k++){
+        t+=100;
+        const kk=r.state+r.segIdx;
+        if(kk!==key){key=kk;
+          if(r.state==='DWELL'||r.state==='COUNTDOWN')sT=0;
+          if(r.state==='DRIVE')launchAt=v>0?t:null;}
+        if(r.state==='DRIVE'){
+          const seg=r.plan.segs[r.segIdx];
+          if(launchAt===null)launchAt=t+(o.launchMs??1000);
+          if(o.unplannedSeg===r.segIdx&&!unplannedDone&&sT>=seg.dA+20){holdUntil=t+12000;unplannedDone=true;}
+          const holding=holdUntil&&t<holdUntil;
+          let want;
+          if(holding||t<launchAt)want=0;
+          else if(sT>=seg.L-v*v/(2*seg.d)-0.05||(v===0&&sT>seg.L-2))want=0;
+          else want=seg.vms;
+          if(want>v)v=Math.min(want,v+seg.a*aF*0.1);
+          else if(want<v)v=Math.max(0,v-(holding?2.5:seg.d)*0.1);
+        }else if(r.state==='DWELL'&&o.earlySeg===r.segIdx&&r.dwellEnd-t<4000){
+          v=Math.min(1.5,v+0.1);
+        }else v=0;
+        sT+=v*0.1;
+        if(t%1000===0){
+          const stale=o.staleStops&&r.state==='DRIVE'&&v===0&&r.seg[r.segIdx].tLaunch!=null;
+          if(!stale)S.onFix({t,lat:null,lon:null,v,acc:4});
+        }
+        S.tick(t);
+      }
+    }
+    return r;
+  }
+
+  // ── SYN-4: an ideal driver completes a VALID run, stops on the marks ──
+  let r=drive(CY);
+  console.assert(r.state==='DONE','SYN-4: run did not complete: '+r.state);
+  const st=r.stats;
+  console.assert(st.length===3&&st.every(Boolean),'SYN-4: stats for every segment');
+  console.assert(st.every(s=>Math.abs(s.stopErr)<3),'SYN-4: stop error > 3 m: '+st.map(s=>s.stopErr&&s.stopErr.toFixed(2)));
+  console.assert(st.every(s=>s.aMeas&&Math.abs(s.aMeas-s.a)/s.a<0.12),'SYN-4: measured accel off: '+st.map(s=>s.aMeas&&s.aMeas.toFixed(2)));
+  console.assert(st.every(s=>s.dMeas&&Math.abs(s.dMeas-s.d)/s.d<0.15),'SYN-4: measured decel off: '+st.map(s=>s.dMeas&&s.dMeas.toFixed(2)));
+  console.assert(st.every(s=>near(s.cMean,s.v,0.6)),'SYN-4: cruise mean off');
+  console.assert(r.summary.verdict==='VALID','SYN-4: ideal run not VALID: '+r.summary.verdict+' '+st.map(s=>s.why).join('|'));
+  console.assert(near(r.summary.actualM,P.totalM,6),'SYN-4: driven distance ≠ plan');
+  const ev=t=>r.events.filter(e=>e.type===t).length;
+  console.assert(ev('GO')===3&&ev('STOP')===3&&ev('LAUNCH')===3&&ev('RUN_END')===1,'SYN-4: event log incomplete');
+  console.assert(st.slice(0,2).every(s=>near(s.dwellActual,10,1.2)),'SYN-4: dwell not respected: '+st.map(s=>s.dwellActual));
+  console.assert(st.every(s=>near(s.launchDelay,1,1.05)),'SYN-4: launch delay not measured');
+  console.log('SYN-4. ideal driver → VALID, stops within 3 m, rates measured OK');
+
+  // ── SYN-5: exports carry what CAN alignment needs ──
+  const sc=Synth.samplesCSV(r.samples).split('\n');
+  console.assert(sc[0].startsWith('utc_iso,epoch_ms,t_run_s')&&sc.length===r.samples.length+1,'SYN-5: samples CSV');
+  console.assert(/^\d{4}-\d\d-\d\dT/.test(sc[1])&&sc[1].split(',').length===sc[0].split(',').length,'SYN-5: samples row shape');
+  const ec=Synth.eventsCSV(r.events,r.t0).split('\n');
+  console.assert(ec.some(l=>/,GO,/.test(l))&&ec.some(l=>/,STOP,/.test(l)),'SYN-5: GO/STOP markers missing from events CSV');
+  const gc=Synth.segmentsCSV(r.stats).split('\n');
+  console.assert(gc.length===4&&gc[0].split(',').length===gc[1].split(',').length,'SYN-5: segments CSV');
+  console.log('SYN-5. samples / events / segments CSV OK');
+
+  // ── SYN-6: Android stops sending fixes to a parked bus — stop still registers ──
+  r=drive(CY,{staleStops:true});
+  console.assert(r.state==='DONE','SYN-6: run stalled when fixes stopped at standstill');
+  console.assert(r.stats.every(s=>s.stopErr!==null),'SYN-6: stale stop not recorded');
+  console.log('SYN-6. stop registers without fixes OK');
+
+  // ── SYN-7: unplanned stop mid-cruise → HOLD, relaunch, flagged ──
+  r=drive(CY,{unplannedSeg:1});
+  console.assert(r.state==='DONE','SYN-7: run did not complete after an unplanned stop');
+  console.assert(r.stats[1].unplanned===1&&r.stats[1].verdict==='CHECK','SYN-7: unplanned stop not flagged');
+  console.assert(Math.abs(r.stats[1].stopErr)<4,'SYN-7: stop mark lost after the hold: '+r.stats[1].stopErr);
+  console.assert(r.events.some(e=>e.type==='RELAUNCH'),'SYN-7: relaunch not logged');
+  console.log('SYN-7. unplanned stop handled OK');
+
+  // ── SYN-8: a sluggish bus (60 % of the rate) is caught by the accel check ──
+  r=drive(CY,{aFactor:0.6});
+  console.assert(r.stats.every(s=>s.aMeas<s.a*0.75),'SYN-8: slow launch not measured');
+  console.assert(r.stats.some(s=>/ACCEL/.test(s.why)),'SYN-8: slow launch not flagged');
+  console.assert(r.stats.every(s=>Math.abs(s.stopErr)<3),'SYN-8: slow launch moved the stop mark');
+  console.log('SYN-8. rate deviation detected, stop mark unchanged OK');
+
+  // ── SYN-9: early departure from a stop starts the next segment ──
+  r=drive(CY,{earlySeg:0});
+  console.assert(r.state==='DONE','SYN-9: run did not complete after early start');
+  console.assert(r.events.some(e=>e.type==='EARLY_START'),'SYN-9: early start not logged');
+  console.assert(r.stats[1].early===true,'SYN-9: early flag missing on the segment');
+  console.assert(Math.abs(r.stats[1].stopErr)<4,'SYN-9: early start lost distance: '+r.stats[1].stopErr);
+  console.log('SYN-9. early start accounted OK');
+
+  // ── SYN-10: isolation — one GPS watch, navigation engine untouched ──
+  const html=require('fs').readFileSync([require('path').join(__dirname,'index.html'),'/tmp/dev/gpx_nav_dev-main/index.html'].find(p=>require('fs').existsSync(p)),'utf8');
+  const code=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).reduce((a,b)=>b.length>a.length?b:a);
+  const synBlock=code.slice(code.indexOf('SYNTHETIC TRAPEZOID CYCLE'),code.indexOf('// Drag & drop'));
+  console.assert(!/navigator\.geolocation/.test(synBlock),'SYN-10: Synth opened its own geolocation access');
+  console.assert(!/\b(routeProgressM|matchState|lastRouteIdx|stops)\s*=[^=]/.test(synBlock),'SYN-10: Synth writes navigation state');
+  const cp=currentPos;Synth._ownWatch=true;let got=null;const keep=Synth._onPos;Synth._onPos=p=>{got=p};
+  onGPS({coords:{latitude:1,longitude:2,accuracy:5,speed:3,heading:0},timestamp:Date.now()});
+  Synth._onPos=keep;Synth._ownWatch=false;
+  console.assert(got&&currentPos===cp,'SYN-10: fix leaked into the navigation engine while Synth owned the watch');
+  const na=navActive;navActive=true;Synth.run=null;const al=global.alert;let msg='';global.alert=m=>{msg=m};
+  Synth.startTap(true);global.alert=al;navActive=na;
+  console.assert(Synth.run===null&&/navigation/i.test(msg),'SYN-10: Synth started over active navigation');
+  console.log('SYN-10. GPS ownership and nav isolation OK');
+
+  // ── SYN-11: rail tab + pane wired ──
+  switchTab('synth');
+  console.assert(el('pane-synth').classList.contains('active')&&el('stab-synth').classList.contains('active'),'SYN-11: synth tab does not open its pane');
+  console.assert(/id="stab-synth"/.test(html)&&/id="syn-ck"/.test(html),'SYN-11: markup missing');
+  switchTab('rota');
+  console.log('SYN-11. SYNTH tab wired OK');
+
+  Synth.run=null;Synth.runs=[];Synth._full={};
+  ['synth-cycles-v1','synth-runs-v1','synth-prefs-v1'].forEach(k=>localStorage.removeItem(k));
+})();
+console.log('ALL SYNTHETIC CYCLE TESTS PASSED');
+__group('Synthetic cycle tests');
