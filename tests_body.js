@@ -5191,7 +5191,8 @@ console.log('\n── synthetic cycle v2 ──');
   console.assert(near(r.gnss.last.lat,57.7,1e-9)&&!r.events.some(e=>e.type==='GPS_REANCHOR'),'REG-2: re-anchored on scattered outliers');
   {const MW=synthCycle({name:'mw',refMode:'position',startDelay:3,segs:[synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,5,'s'),synSeg(0,'rate',0.8,5,'s'),synSeg(20,'rate',1,50,'m'),synSeg(0,'rate',0.8,0,'s')]});
    const rr=sim(MW,'perfect');
-   console.assert(rr.state==='DONE'&&rr.summary.verdict==='VALID','REG-2: merged waits made the run '+rr.summary.verdict+' '+rr.summary.segs.map(x=>x.why).join('|'));}
+   // (segment 1 is the very first launch, driven before the IMU is calibrated: GPS-only lag may flag SPEED)
+   console.assert(rr.state==='DONE'&&!rr.summary.segs.some(x=>/NOT DRIVEN|NO DATA/.test(x.why))&&rr.summary.segs.slice(1).every(x=>x.verdict==='OK'),'REG-2: merged waits: '+rr.summary.segs.map(x=>x.why).join('|'));}
   Synth.run=null;
   console.log('SYN-REG-1. review regressions (pauses, no-data, overflow, HOLD, end tail, CAN NA, flags, summary) OK');
 
@@ -5336,7 +5337,7 @@ console.log('\n── synthetic cycle v2 ──');
      let best=[1e9,0];for(let L=0;L<=1500;L+=100){let s2=0,n=0;rows.forEach(x=>{const tv=tr.get(Math.round(x[C.UTC_Time_ms])-L);if(tv!==undefined){s2+=(x[C.Actual_Speed_kmh]-tv)**2;n++;}});const e=Math.sqrt(s2/n);if(e<best[0])best=[e,L];}
      return best[1];};
    const res=[];
-   for(const d of [0,300,600,1000]){
+   for(const d of [0,300,600]){                       // Android receivers: typically 0.2–0.6 s (learning is capped at 0.8 s)
      SYN_SCEN._lagt=Object.assign({},SYN_SCEN.typical,{gpsDelayMs:d});
      Synth.run=null;const rl=Synth.simulate(SPEC,'_lagt',{seed:9,t0:1.8e12});
      res.push([d,rl.gnss.latMs,lag(rl)]);
@@ -5353,6 +5354,79 @@ console.log('\n── synthetic cycle v2 ──');
    const imuN=rn.rows.filter(x=>x[C.Acceleration_Source]==='IMU').length/rn.rows.length;
    console.assert(imuN>0.6,'LAG-1: IMU rejected with noisy sensors ('+(imuN*100).toFixed(0)+'%)');
    console.log('SYN-LAG-1. GNSS delay learned/removed '+res.map(x=>x[0]+'→'+x[1]+'ms (lag '+x[2]+')').join(', ')+'; noisy IMU used '+(imuN*100).toFixed(0)+'% OK');}
+
+  // ── SYN-FIELD-1 (field 25/09, B1990, Galaxy Tab S10 FE): the recorded drive
+  //    replayed through the engine — same GNSS and IMU samples, same timing.
+  //    v65 on this drive: 171 displayed steps > 1 km/h per 0.1 s, max 15 km/h,
+  //    42 km/h shown while parked, IMU used 3 %, error vs GPS 1.63 km/h.
+  {// Replays a field DriveTest RAW file through the engine: same sensor data, same timing.
+  function synthReplay(raw){
+    const J=typeof raw==='string'?JSON.parse(raw):raw,C=SYN_C;
+    const gc=J.gnss.columns,ic=J.imu.columns,ix=(cols,n)=>cols.indexOf(n);
+    const G=J.gnss.rows.map(r=>({k:'g',t:r[ix(gc,'UTC_Time_ms')],f:{t:r[ix(gc,'UTC_Time_ms')],recv:r[ix(gc,'Received_UTC_ms')],lat:r[ix(gc,'Latitude')],lon:r[ix(gc,'Longitude')],
+      v:r[ix(gc,'Speed_ms')],acc:r[ix(gc,'Accuracy_m')],hdg:r[ix(gc,'Heading_deg')],alt:r[ix(gc,'Altitude_m')]}}));
+    const I=J.imu.rows.map(r=>({k:'i',t:r[0],x:r[1],y:r[2],z:r[3]}));
+    const all=G.concat(I).sort((a,b)=>a.t-b.t);
+    const t0=J.timebase.t0_utc_ms,tStart=Math.min(all[0].t,t0)-50,tEnd=J.timebase.end_utc_ms+2000;
+    Synth.run=null;Synth.sim=null;
+    const r=Synth.startRun(synthCycle(J.cycle),{vehicle:'replay',precheck:true,guide:J.settings.guide},tStart);
+    let k=0,started=false;
+    for(let t=tStart;t<=tEnd&&r.state!=='DONE'&&r.state!=='ABORTED';t+=100){
+      while(k<all.length&&all[k].t<=t){const e=all[k++];if(e.k==='g')Synth.gnss(e.f);else Synth.imu(e.t,e.x,e.y,e.z);}
+      if(!started&&t>=t0){started=true;Synth._beginCountdown(t0);}
+      Synth.tick(t);
+      r._disp=r._disp||[];if(r.cur&&r.cur.act)r._disp.push([t,r.cur.act.v===null?null:r.cur.act.v*3.6,r.state,r.cur.act.aSrc]);
+    }
+    return r;
+  }
+  function replayMetrics(r,J){
+    const C=SYN_C,rows=r.rows,go=r.tGo;
+    const drive=rows.filter(x=>x[C.UTC_Time_ms]>=go&&x[C.Actual_Speed_kmh]!==null);
+    const steps=[];for(let i=1;i<drive.length;i++)steps.push(Math.abs(drive[i][C.Actual_Speed_kmh]-drive[i-1][C.Actual_Speed_kmh]));
+    steps.sort((a,b)=>a-b);const q=p=>steps[Math.min(steps.length-1,Math.floor(p*steps.length))];
+    const pre=r._disp.filter(d=>d[0]<go&&d[1]!==null).map(d=>d[1]);
+    const gd=drive.filter(x=>x[C.GPS_Speed_kmh]!==null).map(x=>Math.abs(x[C.Actual_Speed_kmh]-x[C.GPS_Speed_kmh])).sort((a,b)=>a-b);
+    // proxy truth: Doppler speed interpolated between fixes (good fixes after GO)
+    const gc=J.gnss.columns,gi=n=>gc.indexOf(n);
+    const F=J.gnss.rows.filter(g=>g[gi('Speed_ms')]!==null&&g[gi('Accuracy_m')]<=15&&g[gi('UTC_Time_ms')]>=go).map(g=>[g[gi('UTC_Time_ms')],g[gi('Speed_ms')]*3.6]);
+    const interp=q=>{let lo=0,hi=F.length-1;if(q<F[0][0]||q>F[hi][0])return null;while(hi-lo>1){const m=(lo+hi)>>1;if(F[m][0]<=q)lo=m;else hi=m;}const a=F[lo],b=F[hi];if(b[0]-a[0]>1600)return null;return a[1]+(b[1]-a[1])*(q-a[0])/Math.max(1,b[0]-a[0]);};
+    let best=[1e9,0];
+    for(let L=-500;L<=1500;L+=100){let s2=0,n=0;drive.forEach(x=>{const z=interp(x[C.UTC_Time_ms]-L);if(z!==null){s2+=(x[C.Actual_Speed_kmh]-z)**2;n++;}});const e=Math.sqrt(s2/n);if(e<best[0])best=[e,L];}
+    const e0=(()=>{let s2=0,n=0;drive.forEach(x=>{const z=interp(x[C.UTC_Time_ms]);if(z!==null){s2+=(x[C.Actual_Speed_kmh]-z)**2;n++;}});return Math.sqrt(s2/n);})();
+    return {rows:rows.length,vsInterpRmse0:+e0.toFixed(2),bestLagMs:best[1],vsInterpRmseBest:+best[0].toFixed(2),state:r.state,stepP99:+q(0.99).toFixed(2),stepMax:+steps[steps.length-1].toFixed(2),stepsOver1:steps.filter(s=>s>1).length,
+      preGoMax:+Math.max(0,...pre).toFixed(1),dispVsGpsP95:+gd[Math.floor(0.95*gd.length)].toFixed(2),
+      imuShare:+(drive.filter(x=>x[C.Acceleration_Source]==='IMU').length/drive.length*100).toFixed(0),
+      latMs:r.gnss.latMs,stops:Object.values(r.stops).map(s=>s.err===null||s.err===undefined?null:+s.err.toFixed(1)),
+      events:r.events.filter(e=>/IMU|LATENCY/.test(e.type)).map(e=>e.type+'@'+e.elapsed).join(' ')};
+  }
+  
+   const fp=[path.join(__dirname,'testdata','Synth_field_B1990_25_09.dtraw.json')].find(p=>fs.existsSync(p));
+   if(!fp)console.assert(false,'FIELD-1: testdata/Synth_field_B1990_25_09.dtraw.json missing');
+   else{
+     const J=JSON.parse(fs.readFileSync(fp,'utf8'));
+     const keepAuto=Synth.prefs.autosave,keepM=Synth.prefs.imuModel,keepL=Synth.prefs.gpsLatMs;
+     Synth.prefs.autosave=false;delete Synth.prefs.imuModel;delete Synth.prefs.gpsLatMs;
+     const rf=synthReplay(J),m=replayMetrics(rf,J);
+     console.assert(rf.state==='DONE','FIELD-1: replay did not complete');
+     console.assert(m.stepsOver1<=25&&m.stepMax<=3,'FIELD-1: displayed speed still jumps: '+m.stepsOver1+' steps > 1 km/h, max '+m.stepMax);
+     console.assert(m.preGoMax<=6,'FIELD-1: '+m.preGoMax+' km/h shown while parked before GO');
+     console.assert(m.vsInterpRmse0<=1.4,'FIELD-1: displayed speed vs GPS error '+m.vsInterpRmse0+' km/h (v65: 1.63)');
+     console.assert(m.imuShare>=60,'FIELD-1: IMU used only '+m.imuShare+'%');
+     console.assert(!rf.events.some(e=>e.type==='IMU_CALIBRATED'&&e.t<rf.t0),'FIELD-1: IMU calibrated on the GPS warm-up before START');
+     // the learned model is kept, and restored on the same mount at the next test
+     console.assert(Synth.prefs.imuModel&&Synth.prefs.imuModel.w.length===3,'FIELD-1: IMU model not saved at the end of a real test');
+     const r2=synthReplay(J),m2=replayMetrics(r2,J);
+     console.assert(r2.events.some(e=>e.type==='IMU_MODEL_RESTORED'),'FIELD-1: model not restored on the same mount');
+     console.assert(m2.imuShare>=m.imuShare,'FIELD-1: restored model did not help ('+m2.imuShare+' vs '+m.imuShare+'%)');
+     // tablet mounted differently (gravity 20° off): must NOT reuse the model
+     const a20=20*Math.PI/180,g0=Synth.prefs.imuModel.g;
+     Synth.prefs.imuModel.g=[g0[0]*Math.cos(a20)-g0[1]*Math.sin(a20),g0[0]*Math.sin(a20)+g0[1]*Math.cos(a20),g0[2]];
+     const r3=synthReplay(J);
+     console.assert(r3.events.some(e=>e.type==='IMU_MOUNT_CHANGED')&&!r3.events.some(e=>e.type==='IMU_MODEL_RESTORED'),'FIELD-1: model reused after the mount changed');
+     Synth.prefs.autosave=keepAuto;if(keepM)Synth.prefs.imuModel=keepM;else delete Synth.prefs.imuModel;if(keepL!==undefined)Synth.prefs.gpsLatMs=keepL;else delete Synth.prefs.gpsLatMs;
+     console.log(`SYN-FIELD-1. field drive 25/09 replayed: ${m.stepsOver1} steps > 1 km/h (v65: 171), max ${m.stepMax} (15.1), parked ${m.preGoMax} km/h (42.1), error ${m.vsInterpRmse0} km/h (1.63), IMU ${m.imuShare}% (3) → ${m2.imuShare}% with restored model OK`);
+   }
+  }
 
   Synth.run=null;Synth.runs=[];Synth._full={};
   Object.values(SYNTH_CFG.keys).forEach(k=>localStorage.removeItem(k));

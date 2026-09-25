@@ -1,4 +1,4 @@
-# SYNTH v2 — Drive-cycle execution, driver guidance and logging (v65)
+# SYNTH v2 — Drive-cycle execution, driver guidance and logging (v66)
 
 Mode inside GPX Navigator DEV (rail tab **SYNTH**) for repeatable multi-vehicle
 drive-cycle tests — e.g. energy comparison of buses on a test track. Built as a
@@ -98,23 +98,41 @@ mutually consistent candidates (2 if far more accurate) re-anchor. Impossible
 speed steps (> 5 m/s²) rejected. Stale > 2.5 s, lost > 5 s: speed and errors
 become null, command NO GPS, reference continues. Raw fixes are always kept.
 
-**IMU** — `devicemotion` accelerationIncludingGravity. Gravity is levelled only
-while GPS reports standstill on two fixes *and* the IMU sees no horizontal
-acceleration. The forward axis is found automatically by correlating the
-horizontal IMU vector with GPS acceleration during the first accelerations
-(any mounting yaw). Longitudinal acceleration filtered with a first-order low
-pass, τ = 0.3 s (≈ 0.3 s delay). Checked continuously against GPS acceleration;
-if they disagree (RMS > 0.35 m/s² over ~3 s windows) GPS acceleration is used.
-Parked-levelling uses the averaged residual vector (sensor noise cancels).
+**GNSS quality.** Speed from fixes worse than ±20 m is not used (GPS warm-up:
+field 25/09 showed 53 km/h while parked at ±28 m); a rise faster than 3 m/s²
+between fixes is rejected. START in the pre-test needs a fix of ±10 m or better
+("START WITHOUT GPS FIX" remains as an override).
+
+**IMU** — `devicemotion` accelerationIncludingGravity. Gravity is levelled while
+the bus is parked (GPS standstill on two fixes and no horizontal IMU
+acceleration, averaged as a vector so sensor noise cancels). The **forward
+acceleration model** `a = w·lh + c` (lh = IMU acceleration with gravity removed,
+device frame) is fitted continuously against GPS: each pair of good fixes
+(accuracy ≤ 10 m) gives Δv/Δt and the mean lh over the same interval, shifted by
+the learned GNSS delay. Least squares with forgetting (~100 fixes) and a small
+ridge; `w` carries direction and scale of the bus axis (any mounting), `c`
+absorbs sensor bias and slow tilt drift. Quality = online R² of the model on new
+data over ~3 s windows: below 0.30 → IMU_SUSPECT (GPS-only), above 0.45 → back.
+Nothing is learned from the GPS warm-up (fixes worse than ±10 m). The model is
+kept on the tablet and reused at the next test only if the tablet is mounted at
+the same angle (gravity direction within 5°); otherwise IMU_MOUNT_CHANGED and it
+is learned again. Driving to the start line before START already trains it.
 
 **GNSS delay compensation.** A phone's Doppler speed describes the vehicle
-~0.2–1 s *before* its timestamp (receiver filtering). The app learns this delay
-by fitting GPS speed to the IMU speed integral (scale, offset and drift fitted
-away, so only the timing of speed changes counts) and shows
-`v = v_gps + ∫ a_imu dt` from (fix time − delay) to now. The learned value is
-logged (`GPS_LATENCY` event, RAW settings) and kept on the tablet as the start
-value for the next test. Without IMU, speed is carried forward with GPS
-acceleration only (no delay removal). No internet is needed for any of this.
+~0.2–0.8 s *before* its timestamp (receiver filtering). The app learns this
+delay by fitting GPS speed to the IMU speed integral (scale, offset and drift
+fitted away, so only the timing of speed changes counts) — only while the IMU
+model is trusted, capped at 0.8 s. Logged as `GPS_LATENCY` and kept on the
+tablet as the start value for the next test. No internet is needed.
+
+**Displayed / logged actual speed** — a continuous estimator, not the raw 1 Hz
+GPS value: between fixes it moves with the IMU acceleration (minus a slowly
+estimated offset) or, without IMU, with an α-β trend; each new fix (brought to
+"now" with the IMU integral from fix time − GNSS delay) is blended in over
+~0.3 s (α 0.55 with IMU, 0.75 GPS-only). No hard snaps while driving; exactly 0
+when parked; nothing shown while GPS is lost. The raw fix stays in
+`GPS_Speed_kmh`. Before the IMU model is ready (first launches of the day,
+tablet moved), the display is GPS-only and trails a hard launch by ~1 km/h.
 
 Phone-IMU limits: road grade reads as acceleration (g·sinθ ≈ 0.1 m/s² per 1 %
 grade — re-levelled at every stop); mounting must be rigid; vibration raises
@@ -188,7 +206,7 @@ names, log column, CAN flag bit 7); the comparison warns when sim and real runs
 are mixed.
 
 ## Verification
-`node runner.js` → **1277 passed / 0 failed** (246 in "Synthetic cycle v2", 16 async zip/save checks).
+`node runner.js` → **1285 passed / 0 failed** (254 in "Synthetic cycle v2", 16 async zip/save checks).
 
 | Test | Spec | What | Status |
 |---|---|---|---|
@@ -216,7 +234,8 @@ are mixed.
 | SYN-SAFE-1 | §35 | configuration locked; STOP = tap + confirm, CONTINUE keeps running | PASS |
 | SYN-SAVE-1 | field 24/09 | save goes to Downloads, no share sheet; zip stored/deflated round trip; Python `zipfile` OK | PASS |
 | SYN-BAND-1 | field 24/09 | ± 4 km/h band, large = 2 × band, stored with run | PASS |
-| SYN-LAG-1 | field 24/09 | GNSS delay 0/300/600/1000 ms learned within 150 ms; displayed lag after learning 0/100/100/200 ms; noisy IMU used 89 % | PASS |
+| SYN-LAG-1 | field 24/09 | GNSS delay 0/300/600 ms learned within 150 ms; displayed lag after learning 0/100/100 ms; noisy IMU used 89 % | PASS |
+| SYN-FIELD-1 | field 25/09 | recorded B1990 drive (`testdata/Synth_field_B1990_25_09.dtraw.json`) replayed through the engine: displayed steps > 1 km/h per 0.1 s 171 → 13, max 15.1 → 1.8 km/h, parked 42 → 5 km/h, error vs GPS 1.63 → 1.14 km/h, IMU used 3 % → 82 % (95 % with restored model); model not reused after a 20° mount change | PASS |
 | Browser save | field 24/09 | Chromium: one .zip download, share not called; contents pass `validate_drivetest.py` | PASS |
 | UI walk-through | §10–13 | headless Chromium 1280×800 and 800×1280, sv + en | PASS |
 | Persistence | §33 | results reopened from IndexedDB after reload | PASS |

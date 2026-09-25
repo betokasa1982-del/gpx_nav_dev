@@ -6592,11 +6592,13 @@ function setGPS(state,msg){el('gps-dot').className='gps-dot '+state;el('gps-text
 const SYNTH_CFG={
   version:2,
   stopKmh:1.0,moveKmh:3.0,stopHoldMs:1000,staleStopMs:2500,zeroMs:0.2,
-  gpsStaleMs:2500,gpsLostMs:5000,gpsWeakAcc:25,gpsMaxAccel:5,gpsMaxJump:70,gpsMaxIntegrateMs:3000,
+  gpsStaleMs:2500,gpsLostMs:5000,gpsWeakAcc:25,gpsMaxAccel:5,gpsMaxRise:3,gpsMaxJump:70,gpsMaxIntegrateMs:3000,
+  gpsSpeedMaxAcc:20,gpsCalMaxAcc:10,gpsReadyAcc:10,imuFitExcite:3,imuR2Bad:0.3,imuR2Good:0.45,
+  estAlphaImu:0.55,estAlphaGps:0.75,estBetaGps:0.45,estBiasGain:0.04,estSnapMs:3,estBlendS:0.3,
   extrapMaxMs:1500,
   imuTau:0.3,imuGravTau:2.0,imuCalW:3.0,imuCalMinA:0.25,imuStaleMs:600,imuDisagree:0.35,imuMinStillS:1.0,
   imuStillStd:0.08,imuStillRes:0.15,imuWaitMs:2500,
-  gpsAccTau:0.8,gpsLatMaxMs:1500,gpsLatStepMs:50,imuHistMs:25000,
+  gpsAccTau:0.8,gpsLatMaxMs:800,gpsLatStepMs:50,imuHistMs:25000,
   logMs:100,flushMs:5000,
   stopZoneM:25,lookaheadS:3,
   guide:{tolV1:1,tolV2:2,tolA1:0.10,tolA2:0.20,hyst:0.75,stableMs:400,graceMs:600,settleMs:1000},
@@ -6627,7 +6629,7 @@ const SYN_I18N={
   'p.gnss':'GNSS / GPS','p.acc':'Accuracy','p.imu':'IMU','p.audio':'Audio','p.logging':'Logging',
   'p.language':'Language','p.vehicle':'Vehicle','p.driver':'Driver','p.testId':'Test ID','p.track':'Track',
   'p.comments':'Comments','p.bands':'Tolerances','p.start':'START TEST','p.cancel':'Cancel','p.startAnyway':'START WITHOUT GPS FIX',
-  'p.waitGps':'Waiting for GPS fix…','p.stationary':'Keep the vehicle stationary for IMU levelling',
+  'p.waitGps':'Waiting for an accurate GPS fix…','p.stationary':'Keep the vehicle stationary for IMU levelling',
   's.ok':'OK','s.wait':'waiting','s.weak':'weak','s.none':'unavailable','s.cal':'calibrating','s.lost':'lost',
   's.suspect':'disagrees with GPS — GPS used','s.on':'on','s.off':'off','s.sim':'simulated',
   's.storage':'free','s.noStore':'memory only — export before closing',
@@ -6686,7 +6688,7 @@ const SYN_I18N={
   'p.gnss':'GNSS / GPS','p.acc':'Noggrannhet','p.imu':'IMU','p.audio':'Ljud','p.logging':'Loggning',
   'p.language':'Språk','p.vehicle':'Fordon','p.driver':'Förare','p.testId':'Prov-ID','p.track':'Bana',
   'p.comments':'Kommentarer','p.bands':'Toleranser','p.start':'STARTA PROV','p.cancel':'Avbryt','p.startAnyway':'STARTA UTAN GPS-FIX',
-  'p.waitGps':'Väntar på GPS-fix…','p.stationary':'Håll fordonet stilla för IMU-nivellering',
+  'p.waitGps':'Väntar på noggrann GPS-fix…','p.stationary':'Håll fordonet stilla för IMU-nivellering',
   's.ok':'OK','s.wait':'väntar','s.weak':'svag','s.none':'saknas','s.cal':'kalibrerar','s.lost':'förlorad',
   's.suspect':'avviker från GPS — GPS används','s.on':'på','s.off':'av','s.sim':'simulerad',
   's.storage':'ledigt','s.noStore':'endast minne — exportera innan du stänger',
@@ -7065,6 +7067,17 @@ function synthRunStats(rows,plan,opt){
   return Object.assign({},all,{segs});
 }
 
+/* N×N linear solve (Gaussian elimination, partial pivoting); null if singular */
+function synSolveN(A,b){
+  const n=b.length,M=A.map((r,i)=>r.slice().concat([b[i]]));
+  for(let c=0;c<n;c++){
+    let p=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-12)return null;
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<n;r++)if(r!==c){const f=M[r][c]/M[c][c];for(let k=c;k<=n;k++)M[r][k]-=f*M[c][k];}
+  }
+  return M.map((r,i)=>r[n]/r[i]);
+}
 /* 3×3 linear solve (Gaussian elimination, partial pivoting); null if singular */
 function synSolve3(A,b){
   const M=A.map((r,i)=>r.concat([b[i]]));
@@ -7409,7 +7422,7 @@ const Synth={
       t0:t,tGo:null,countdownEnd:null,tEnd:null,state:opts.precheck?'PRECHECK':'COUNTDOWN',
       gnss:{last:null,aSm:null,aRaw:null,lost:false,n:0,fh:[],latN:0,
         latMs:(!opts.sim&&Number.isFinite(this.prefs.gpsLatMs))?this.prefs.gpsLatMs:0},   // start from this tablet's last learned value
-      imu:{n:0,lt:null,raw:null,g:null,stillS:0,cal:[0,0,0],calW:0,f:null,along:null,filt:0,intFix:0,
+      imu:{n:0,lt:null,raw:null,g:null,stillS:0,f:null,w:[0,0,0],c:0,lhh:[],mdl:null,r2:null,along:null,filt:0,intFix:0,
         status:'wait',mag:null,magVar:0,hist:[],rms2:null,nCmp:0,firstT:null},
       pos:{item:0,s:0,tLaunch:null,tLaunch1:null,stopCand:null,pauseStart:null,dwellEnd:null,pendS:0,moveN:0,unplanned:false,tGo:null},
       stops:{},sTot:0,sGo:0,guide:synthGuideNew(),cur:null,
@@ -7469,7 +7482,12 @@ const Synth={
     const noise=Math.max(2,((A&&A.acc)||0)/2+(fix.acc||0)/2);
     if(v===null&&dPos!==null&&dt>0&&dPos>noise){v=dPos/dt;flags.push('SPEED_DERIVED');}
     if(v===null)flags.push('NO_SPEED');
-    if(v!==null&&prev&&prev.v!==null&&dt>0&&dt<3&&Math.abs(v-prev.v)/dt>C.gpsMaxAccel){flags.push('SPEED_JUMP');v=null;}
+    // GNSS warm-up: a fix this coarse also has an unreliable Doppler speed
+    // (field 25/09: 53 km/h reported while parked at ±28 m). Raw kept, not used.
+    if(v!==null&&Number.isFinite(fix.acc)&&fix.acc>C.gpsSpeedMaxAcc){flags.push('GPS_WEAK','SPEED_UNTRUSTED');v=null;}
+    // a bus cannot gain speed faster than ~3 m/s² (braking may be harder)
+    if(v!==null&&prev&&prev.v!==null&&dt>0&&dt<3){const acc=(v-prev.v)/dt;
+      if(acc>C.gpsMaxRise||-acc>C.gpsMaxAccel){flags.push('SPEED_JUMP');v=null;}}
     if(v!==null&&v<C.zeroMs)v=0;
     r.raw.gnss.push([Math.round(t),Math.round(fix.recv??t),hasPos?fix.lat:null,hasPos?fix.lon:null,
       fix.v??null,fix.acc??null,fix.hdg??null,fix.alt??null,flags.join('|')]);   // raw is always kept as measured
@@ -7491,18 +7509,7 @@ const Synth={
       const k=Math.min(1,dt/C.gpsAccTau);G.aSm=G.aSm===null?aNow:G.aSm+k*(aNow-G.aSm);G.aRaw=aNow;G.aT=t;}
     G.fh.push([t,v]);while(G.fh.length>30)G.fh.shift();
     this._learnLatency(t);
-    // IMU ↔ GPS agreement over ~3 fixes (GPS speed noise averages out),
-    // with the IMU window shifted by the learned GNSS latency
-    if(I.f&&I.hist.length&&G.fh.length>=4){
-      const j=G.fh[G.fh.length-4],span=(t-j[0])/1000;
-      if(span>1.5&&span<5&&I.hist[0][0]<j[0]-G.latMs){
-        const ag=(v-j[1])/span,ai=this._imuInt(I,j[0]-G.latMs,t-G.latMs)/span,e2=(ag-ai)**2;
-        I.rms2=I.rms2===null?e2:I.rms2+0.2*(e2-I.rms2);I.nCmp++;
-        const rms=Math.sqrt(I.rms2);
-        if(I.nCmp>=5&&rms>C.imuDisagree&&I.status==='ok'){I.status='suspect';this._ev('IMU_SUSPECT',t,rms.toFixed(3),'');}
-        else if(I.status==='suspect'&&rms<C.imuDisagree*0.7){I.status='ok';this._ev('IMU_OK',t,rms.toFixed(3),'');}
-      }
-    }
+    if(!flags.includes('SPEED_JUMP'))this._imuModel(t,prev,v);
     // distance
     let ds=0;
     if(prev){
@@ -7549,24 +7556,35 @@ const Synth={
     if(gpsStill&&!still){I.stuckS=(I.stuckS||0)+dt;
       if(I.stuckS>1.5){I.g=I.rawAvg.slice();I.res=0;I.resV=null;I.stuckS=0;this._ev('IMU_RELEVEL',t,'','device moved while parked');}}
     else I.stuckS=0;
+    if(still&&r.est&&I.stillS>2)r.est.bias*=Math.exp(-dt/2);
     if(still){const k=Math.min(1,dt/C.imuGravTau);I.g=[I.g[0]+k*(x-I.g[0]),I.g[1]+k*(y-I.g[1]),I.g[2]+k*(z-I.g[2])];I.stillS+=dt;}
     if(I.stillS<C.imuMinStillS){I.status='cal';I.along=null;return;}
     const gm=Math.hypot(...I.g)||9.81,gu=I.g.map(q=>q/gm);
     const lin=[x-I.g[0],y-I.g[1],z-I.g[2]],dp=lin[0]*gu[0]+lin[1]*gu[1]+lin[2]*gu[2];
     const lh=[lin[0]-dp*gu[0],lin[1]-dp*gu[1],lin[2]-dp*gu[2]];
-    const aG=(r.gnss.aT&&t-r.gnss.aT<1500)?r.gnss.aRaw:null;
-    if(!still&&aG!==null&&Math.abs(aG)>=C.imuCalMinA){
-      I.cal=[I.cal[0]+lh[0]*aG*dt,I.cal[1]+lh[1]*aG*dt,I.cal[2]+lh[2]*aG*dt];I.calW+=Math.abs(aG)*dt;
+    // running integral of the horizontal IMU vector (device frame): the
+    // forward-acceleration model is fitted on its interval means
+    {const L0=I.lhh[I.lhh.length-1],h=Math.min(0.1,L0?(t-L0[0])/1000:0);
+     I.lhh.push([t,(L0?L0[1]:0)+lh[0]*h,(L0?L0[2]:0)+lh[1]*h,(L0?L0[3]:0)+lh[2]*h]);
+     while(I.lhh.length&&I.lhh[0][0]<t-C.imuHistMs)I.lhh.shift();}
+    // same mount as the last test (gravity direction within 5°)? then start
+    // with that test's forward-acceleration model instead of learning again
+    if(!I.f&&!I.restoreTried&&!r.meta.sim){
+      I.restoreTried=true;
+      const M0=this.prefs.imuModel;
+      if(M0&&Array.isArray(M0.g)&&Array.isArray(M0.w)){
+        const cos=gu[0]*M0.g[0]+gu[1]*M0.g[1]+gu[2]*M0.g[2];
+        if(cos>Math.cos(5*Math.PI/180)){I.w=M0.w.slice();I.c=M0.c||0;I.f=true;I.status='ok';I.restored=true;
+          this._ev('IMU_MODEL_RESTORED',t,(Math.acos(Math.min(1,cos))*180/Math.PI).toFixed(1),'deg mount difference vs last test');}
+        else this._ev('IMU_MOUNT_CHANGED',t,(Math.acos(Math.max(-1,Math.min(1,cos)))*180/Math.PI).toFixed(1),'deg — learning the forward axis again');
+      }
     }
-    if(I.calW>=C.imuCalW){
-      const cd=I.cal[0]*gu[0]+I.cal[1]*gu[1]+I.cal[2]*gu[2];
-      const f=[I.cal[0]-cd*gu[0],I.cal[1]-cd*gu[1],I.cal[2]-cd*gu[2]],fm=Math.hypot(...f);
-      if(fm>1e-9){const was=!!I.f;I.f=f.map(q=>q/fm);if(!was){I.status='ok';this._ev('IMU_CALIBRATED',t,'','forward axis found');}}
-    }
-    if(!I.f){I.status='cal';I.along=null;return;}
-    I.along=lh[0]*I.f[0]+lh[1]*I.f[1]+lh[2]*I.f[2];
+    if(!I.f){I.along=null;return;}
+    // forward acceleration = w·lh + c  (w, c fitted against GPS in gnss())
+    I.along=I.w[0]*lh[0]+I.w[1]*lh[1]+I.w[2]*lh[2]+I.c;
+    if(still)I.along=0;                                        // a parked bus has no acceleration
     I.filt+=(dt/(C.imuTau+dt))*(I.along-I.filt);
-    if(still)I.filt=0;                                          // a parked bus has no acceleration
+    if(still)I.filt=0;
     // speed carry-forward integrates the UNFILTERED axis (integration filters
     // the noise; the low-pass would add its own 0.3 s of lag)
     I.intFix+=(still?0:I.along)*dt;
@@ -7574,7 +7592,55 @@ const Synth={
     const last=I.hist[I.hist.length-1];
     I.hist.push([t,I.along,last?last[2]+(still?0:I.along)*Math.min(0.1,(t-last[0])/1000):0]);
     while(I.hist.length&&I.hist[0][0]<t-C.imuHistMs)I.hist.shift();
-    if(I.status==='cal')I.status='ok';
+  },
+
+  /* Forward-acceleration model, refitted continuously (field 25/09):
+       a_gps(interval) = w · mean(lh over the same interval, shifted by the
+                         GNSS delay) + c
+     lh = IMU acceleration with gravity removed, in the device frame. w gives
+     direction AND scale of the bus's forward axis, c absorbs sensor bias and
+     slow tilt drift. Least squares with forgetting (≈100 fixes) and a small
+     ridge; quality = online R² of the prediction made BEFORE each update. */
+  _imuModel(t,prev,v){
+    const r=this.run,I=r.imu,G=r.gnss,C=SYNTH_CFG;
+    if(!prev||prev.v===null||v===null||I.lhh.length<2)return;
+    const dt=(t-prev.t)/1000;if(dt<0.5||dt>1.6)return;
+    if(!(G.last&&Number.isFinite(G.last.acc)&&G.last.acc<=C.gpsCalMaxAcc))return;
+    const L=G.latMs,t0=prev.t-L,t1=t-L,H=I.lhh;
+    if(H[0][0]>t0||H[H.length-1][0]<t1-50)return;
+    const at=q=>{let lo=0,hi=H.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(H[m][0]<=q)lo=m;else hi=m;}
+      const a=H[lo],b=H[hi],f=b[0]>a[0]?Math.min(1,Math.max(0,(q-a[0])/(b[0]-a[0]))):0;return [1,2,3].map(k=>a[k]+(b[k]-a[k])*f);};
+    const A=at(t0),B=at(t1),span=(t1-t0)/1000;
+    const m=[(B[0]-A[0])/span,(B[1]-A[1])/span,(B[2]-A[2])/span],x=[m[0],m[1],m[2],1];
+    const aG=(v-prev.v)/dt;
+    const M=I.mdl||(I.mdl={S:[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],y:[0,0,0,0],ex:0,n:0,e2:null,v2:null});
+    // quality of the CURRENT model on new, unseen data — scored over ~3 s so
+    // that GPS speed noise (differentiated over 1 s) does not dominate
+    if(I.f&&G.fh.length>=4){
+      const j=G.fh[G.fh.length-4],sp=(t-j[0])/1000;
+      if(sp>=2.5&&sp<=4.5&&H[0][0]<=j[0]-L){
+        const A3=at(j[0]-L),m3=[(B[0]-A3[0])/sp,(B[1]-A3[1])/sp,(B[2]-A3[2])/sp];
+        const a3=(v-j[1])/sp,pr=I.w[0]*m3[0]+I.w[1]*m3[1]+I.w[2]*m3[2]+I.c,e2=(a3-pr)**2,v2=a3*a3;
+        M.e2=M.e2===null?e2:M.e2+0.08*(e2-M.e2);M.v2=M.v2===null?v2:M.v2+0.08*(v2-M.v2);M.n++;
+      }
+    }
+    const lam=0.99;
+    for(let i=0;i<4;i++){M.y[i]=lam*M.y[i]+x[i]*aG;for(let j=0;j<4;j++)M.S[i][j]=lam*M.S[i][j]+x[i]*x[j];}
+    M.ex=lam*M.ex+aG*aG;
+    if(M.ex<C.imuFitExcite)return;                            // not enough speed change seen yet
+    const tr=(M.S[0][0]+M.S[1][1]+M.S[2][2])/3,rg=0.02*tr+1e-9;
+    const S=M.S.map((row,i)=>row.map((q,j)=>q+(i===j&&i<3?rg:0)));
+    const beta=synSolveN(S,M.y);if(!beta)return;
+    const wn=Math.hypot(beta[0],beta[1],beta[2]);
+    if(!(wn>0.3&&wn<3)){return;}                              // implausible scale: keep the previous model
+    const first=!I.f;
+    I.w=[beta[0],beta[1],beta[2]];I.c=Math.max(-1.5,Math.min(1.5,beta[3]));I.f=true;
+    if(first){I.status='ok';M.e2=null;M.v2=null;M.n=0;this._ev('IMU_CALIBRATED',t,wn.toFixed(2),'forward-acceleration model fitted (scale)');return;}
+    if(M.n>=8&&M.v2>0.02){
+      const r2=1-M.e2/M.v2;I.r2=r2;
+      if(I.status==='ok'&&r2<C.imuR2Bad){I.status='suspect';this._ev('IMU_SUSPECT',t,r2.toFixed(2),'model R² — GPS acceleration used');}
+      else if(I.status==='suspect'&&r2>C.imuR2Good){I.status='ok';this._ev('IMU_OK',t,r2.toFixed(2),'model R²');}
+    }
   },
 
   /* ∫ along·dt from t0 to t1 (ms) using the running integral in imu.hist */
@@ -7599,7 +7665,8 @@ const Synth={
     // only the TIMING of speed changes decides L. Evidence (fit residual per
     // candidate L) accumulates over the run.
     const r=this.run,G=r.gnss,I=r.imu,C=SYNTH_CFG;
-    if(!I.f||I.hist.length<2)return;
+    if(!I.f||I.hist.length<2||I.status!=='ok')return;
+    if(!(G.last&&Number.isFinite(G.last.acc)&&G.last.acc<=C.gpsCalMaxAcc))return;
     const F=G.fh.filter(f=>f[0]>=t-12000);
     if(F.length<8)return;
     let vmin=Infinity,vmax=-Infinity;F.forEach(f=>{vmin=Math.min(vmin,f[1]);vmax=Math.max(vmax,f[1]);});
@@ -7626,6 +7693,46 @@ const Synth={
     if(G.latLogged===undefined||Math.abs(G.latMs-G.latLogged)>=100){G.latLogged=G.latMs;this._ev('GPS_LATENCY',t,G.latMs,'ms learned GNSS speed delay');}
   },
 
+  /* Speed estimator (field 25/09: the blue line jumped at every 1 Hz fix).
+     x = speed, b = acceleration (GPS-only mode). Between fixes x moves with
+     the IMU acceleration (or b). A new fix is brought to "now" (IMU integral
+     from fix time − learned GNSS delay) and blended in: x += α·(z − x).
+     GPS-only: an α-β tracker, b learns from the residual. Large disagreement
+     (> 3 m/s, e.g. after a dropout) snaps. Standstill → exactly 0. Idempotent
+     for repeated calls at the same instant. Returns null when there is no
+     GPS speed (nothing is invented while GPS is lost). */
+  _estimate(t,vFix,age,imuOk){
+    const r=this.run,G=r.gnss.last,I=r.imu,C=SYNTH_CFG;
+    const E=r.est||(r.est={x:null,b:0,bias:0,t:null,fixT:null,lastFixT:null});
+    if(vFix===null||!G){E.x=null;E.b=0;E.t=t;return null;}
+    const dt=E.t===null?0:Math.min(0.5,Math.max(0,(t-E.t)/1000));E.t=t;
+    const horizon=age<=C.extrapMaxMs+(imuOk?r.gnss.latMs:0);
+    // IMU input with its slowly varying offset removed (mount tilt drift, road
+    // grade, sensor bias — field 25/09: 0.8 m/s² drift in 5 min)
+    const aImu=imuOk?I.filt-E.bias:null;
+    if(E.x!==null&&dt>0&&horizon){
+      E.x=Math.max(0,E.x+(imuOk?aImu:E.b)*dt);
+      if(!imuOk&&age>C.extrapMaxMs)E.b*=Math.exp(-dt/1);    // fade the trend only when fixes stop coming
+    }
+    // pending fix correction is applied smoothly (no visible step)
+    if(E.x!==null&&dt>0&&E.pend){const k=1-Math.exp(-dt/C.estBlendS);E.x=Math.max(0,E.x+E.pend*k);E.pend*=1-k;}
+    if(G.t!==E.fixT){
+      const gap=E.lastFixT===null?Infinity:G.t-E.lastFixT,fixDt=Math.max(0.5,Math.min(3,gap/1000));
+      const L=r.gnss.latMs;
+      const z=imuOk?Math.max(0,vFix+this._imuInt(I,G.t-L,t)-E.bias*(t-(G.t-L))/1000):Math.max(0,vFix+E.b*age/1000);
+      if(E.x===null||gap>C.gpsStaleMs){E.x=z;E.pend=0;E.b=imuOk?0:Math.max(-2.5,Math.min(2.5,r.gnss.aSm??0));}  // first fix / after a gap only
+      else{
+        const res=z-E.x-(E.pend||0),big=Math.abs(res)>C.estSnapMs;
+        E.pend=(E.pend||0)+(big?0.8:(imuOk?C.estAlphaImu:C.estAlphaGps))*res;    // blended in over ~0.4 s, never a snap while driving
+        if(imuOk)E.bias=Math.max(-1.5,Math.min(1.5,E.bias-C.estBiasGain*res/fixDt));
+        else E.b=Math.max(-2.5,Math.min(2.5,E.b+C.estBetaGps*res/fixDt));
+      }
+      if(vFix===0&&E.x+(E.pend||0)<0.6){E.x=0;E.b=0;E.pend=0;}   // parked: exactly zero
+      E.fixT=G.t;E.lastFixT=G.t;
+    }
+    return {v:E.x,a:imuOk?aImu:E.b};
+  },
+
   _actual(t){
     const r=this.run,G=r.gnss.last,I=r.imu,C=SYNTH_CFG,flags=[];
     let v=null,age=null,a=null,aSrc='';
@@ -7635,11 +7742,11 @@ const Synth={
       if(G.acc!==null&&G.acc>C.gpsWeakAcc)flags.push('GPS_WEAK');
     }else flags.push('GPS_LOST');
     const imuFresh=I.lt!==null&&t-I.lt<=C.imuStaleMs,imuOk=imuFresh&&I.status==='ok';
-    if(imuOk){a=I.filt;aSrc='IMU';if(v!==null&&age<=C.extrapMaxMs)v=Math.max(0,v+I.intFix);}
-    else if(r.gnss.aSm!==null&&age!==null&&age<=C.gpsStaleMs){a=r.gnss.aSm;aSrc='GPS';
-      // between 1 Hz fixes, carry the speed forward with the GPS-derived
-      // acceleration (≤ extrapMaxMs); the raw fix stays in GPS_Speed_kmh
-      if(v!==null&&age<=C.extrapMaxMs)v=Math.max(0,v+a*(age+r.gnss.latMs)/1000);}
+    // speed/acceleration shown to the driver and logged as "Actual": a
+    // continuous estimate that blends each GPS fix in (never snaps to it).
+    const est=this._estimate(t,v,age,imuOk);
+    if(est){v=est.v;a=est.a;aSrc=imuOk?'IMU':'GPS';}
+    else if(v===null){a=null;}
     if(r.gnss.flagsLast&&r.gnss.flagsT>=t-1500)r.gnss.flagsLast.forEach(f=>{if(!flags.includes(f))flags.push(f);});
     if(I.status==='suspect')flags.push('IMU_SUSPECT');else if(I.status!=='ok')flags.push('IMU_CAL');
     if(r.meta.sim)flags.push('SIM');
@@ -7868,6 +7975,9 @@ const Synth={
     r.summary=this.summarize(r);
     if(reason==='COMPLETE')this._say('voice.done',null,true);
     if(!r.meta.sim&&r.gnss.latN>=5){this.prefs.gpsLatMs=r.gnss.latMs;this._savePrefs();}
+    {const I=r.imu;
+     if(!r.meta.sim&&I.f&&I.g&&I.status==='ok'&&(I.restored||(I.mdl&&I.mdl.n>=8))){
+       const gm=Math.hypot(...I.g)||9.81;this.prefs.imuModel={w:I.w.slice(),c:I.c,g:I.g.map(q=>q/gm),t:Math.round(t)};this._savePrefs();}}
     const fl=this._flush(true);
     // a real test is saved to Downloads straight away (can be turned off)
     if(this.prefs.autosave!==false&&!r.meta.sim)Promise.resolve(fl).then(()=>this.exportRun(r.id)).catch(()=>{});
@@ -8304,9 +8414,9 @@ Object.assign(Synth,{
     else{imu=(I.f?synT('s.ok'):synT('s.ok')+' · forward axis calibrates on first acceleration');icls='ok';}
     const st=this._store||{},free=st.free?(st.free/1e9).toFixed(1)+' GB '+synT('s.storage'):'';
     const logging=st.ok?('IndexedDB · '+free):synT('s.noStore');
-    const m=r.meta,ready=!!G&&!a.flags.includes('GPS_LOST');
+    const m=r.meta,ready=!!G&&!a.flags.includes('GPS_LOST')&&G.v!==null&&Number.isFinite(G.acc)&&G.acc<=SYNTH_CFG.gpsReadyAcc;
     const row=(k,v,c)=>`<div class="syn-prow"><span class="syn-pdot ${c}"></span><span class="syn-pk">${synT(k)}</span><span class="syn-pv">${synEsc(v)}</span></div>`;
-    const key=[gps,imu,logging,ready,_synLang,r.guideCfg.tolV1,r.guideCfg.tolA1].join('|');
+    const key=[gps,imu,logging,ready,_synLang,r.guideCfg.tolV1,r.guideCfg.tolA1,G&&Math.round(G.acc||0)].join('|');
     if(box._key===key)return;box._key=key;
     box.innerHTML=`<div class="syn-precard">
       <div class="syn-pretop"><h2>${synT('p.title')}</h2><button class="btn" onclick="Synth.preCancel()">${synT('p.cancel')}</button></div>
@@ -8332,7 +8442,7 @@ Object.assign(Synth,{
           ${row('p.bands','± '+r.guideCfg.tolV1+' km/h · ± '+r.guideCfg.tolA1+' m/s²','ok')}
         </div>
       </div>
-      <button class="syn-startbtn" onclick="Synth.preStart()" ${ready?'':'disabled'}>${ready?synT('p.start'):synT('p.waitGps')}</button>
+      <button class="syn-startbtn" onclick="Synth.preStart()" ${ready?'':'disabled'}>${ready?synT('p.start'):synT('p.waitGps')+(G&&Number.isFinite(G.acc)?' (± '+Math.round(G.acc)+' m)':'')}</button>
       ${ready?'':`<button class="btn syn-anyway" onclick="Synth.preStart()">${synT('p.startAnyway')}</button>`}
     </div>`;
   },
