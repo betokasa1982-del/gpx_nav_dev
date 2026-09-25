@@ -1,4 +1,4 @@
-# SYNTH v2 — Drive-cycle execution, driver guidance and logging (v64)
+# SYNTH v2 — Drive-cycle execution, driver guidance and logging (v65)
 
 Mode inside GPX Navigator DEV (rail tab **SYNTH**) for repeatable multi-vehicle
 drive-cycle tests — e.g. energy comparison of buses on a test track. Built as a
@@ -13,9 +13,15 @@ need a native Android app are listed under **Not covered**.
    language, cycle summary → **START TEST** → 5-4-3-2-1 → reference starts.
 4. **Drive screen** — current / reference / error, one large command, actual vs
    target acceleration, next phase with countdown, 5 s history + 10 s ahead graph.
-   Only controls: **⚑ SYNC** and **■ STOP** (press and hold 1 s to abort).
+   Only controls: **⚑ SYNC** and **■ STOP**. STOP is one tap → *END THE TEST?*
+   with **▶ CONTINUE** / **■ END TEST** (the test keeps running and logging
+   while the question is open; it closes by itself after 8 s).
 5. **Results** — %-in-tolerance, RMSE, max errors (speed and acceleration),
-   reference-vs-actual plots, per-segment verdicts, export.
+   reference-vs-actual plots, per-segment verdicts. **💾 SAVE TO TABLET** writes
+   one zip to the tablet's **Downloads** folder (no share sheet, nothing leaves
+   the tablet). A real test is saved there automatically when it ends (Test
+   setup → "Save to Downloads when a test ends"). **Share…** is separate.
+   **💾 Save all runs** writes every run on the tablet into one zip, a folder per run.
 6. **Comparison** — tick two or more runs; same-cycle / sim-mix checks.
 
 ## Cycle model
@@ -52,7 +58,11 @@ start. Decimal comma accepted.
 ## Driver guidance (spec §14–17)
 `e_v = v_ref − v_actual`, `e_a = a_ref − a_actual` (positive = too slow / too
 little acceleration). Each error is classified 0 / ±1 / ±2 against tolerances
-(defaults: speed 1 / 2 km/h, acceleration 0.10 / 0.20 m/s²; configurable).
+(defaults: speed 1 / 2 km/h, acceleration 0.10 / 0.20 m/s²). Test setup has a
+**Speed band** (± 0.5–5 km/h) and an **Acceleration band** (± 0.05–0.5 m/s²)
+selector; the large-correction threshold follows at 2 × band. The band drives
+the green area on the drive graph, the commands, % in tolerance and the verdict,
+and is stored with each run (shown on the pre-test screen and in results).
 - **Hysteresis**: a level is entered above its threshold and left only below
   threshold × 0.75 (0.20 → 0.15 m/s²). Direction flips start fresh.
 - **Stable period**: a new command must persist 400 ms before it is shown.
@@ -94,8 +104,17 @@ acceleration. The forward axis is found automatically by correlating the
 horizontal IMU vector with GPS acceleration during the first accelerations
 (any mounting yaw). Longitudinal acceleration filtered with a first-order low
 pass, τ = 0.3 s (≈ 0.3 s delay). Checked continuously against GPS acceleration;
-if they disagree (RMS > 0.35 m/s²) GPS acceleration is used. Between 1 Hz fixes
-speed is carried forward with the IMU (or GPS) acceleration for ≤ 1.5 s.
+if they disagree (RMS > 0.35 m/s² over ~3 s windows) GPS acceleration is used.
+Parked-levelling uses the averaged residual vector (sensor noise cancels).
+
+**GNSS delay compensation.** A phone's Doppler speed describes the vehicle
+~0.2–1 s *before* its timestamp (receiver filtering). The app learns this delay
+by fitting GPS speed to the IMU speed integral (scale, offset and drift fitted
+away, so only the timing of speed changes counts) and shows
+`v = v_gps + ∫ a_imu dt` from (fix time − delay) to now. The learned value is
+logged (`GPS_LATENCY` event, RAW settings) and kept on the tablet as the start
+value for the next test. Without IMU, speed is carried forward with GPS
+acceleration only (no delay removal). No internet is needed for any of this.
 
 Phone-IMU limits: road grade reads as acceleration (g·sinθ ≈ 0.1 m/s² per 1 %
 grade — re-levelled at every stop); mounting must be rigid; vibration raises
@@ -169,7 +188,7 @@ names, log column, CAN flag bit 7); the comparison warns when sim and real runs
 are mixed.
 
 ## Verification
-`node runner.js` → **1239 passed / 0 failed** (223 in "Synthetic cycle v2").
+`node runner.js` → **1277 passed / 0 failed** (246 in "Synthetic cycle v2", 16 async zip/save checks).
 
 | Test | Spec | What | Status |
 |---|---|---|---|
@@ -194,7 +213,11 @@ are mixed.
 | Export validation | §30 | browser-made BLF/ASC read by python-can 4.6, decoded by cantools; CAN = CSV within 0.005 km/h | PASS |
 | SYN-I18N-1 | §3, §32 | sv/en complete (196 strings), spec wording, no "Ramp" | PASS |
 | SYN-ISO-1 | — | single GPS watch, navigation isolation | PASS |
-| SYN-SAFE-1 | §35 | configuration locked, hold-to-abort | PASS |
+| SYN-SAFE-1 | §35 | configuration locked; STOP = tap + confirm, CONTINUE keeps running | PASS |
+| SYN-SAVE-1 | field 24/09 | save goes to Downloads, no share sheet; zip stored/deflated round trip; Python `zipfile` OK | PASS |
+| SYN-BAND-1 | field 24/09 | ± 4 km/h band, large = 2 × band, stored with run | PASS |
+| SYN-LAG-1 | field 24/09 | GNSS delay 0/300/600/1000 ms learned within 150 ms; displayed lag after learning 0/100/100/200 ms; noisy IMU used 89 % | PASS |
+| Browser save | field 24/09 | Chromium: one .zip download, share not called; contents pass `validate_drivetest.py` | PASS |
 | UI walk-through | §10–13 | headless Chromium 1280×800 and 800×1280, sv + en | PASS |
 | Persistence | §33 | results reopened from IndexedDB after reload | PASS |
 | On-bus test, Galaxy Tab S10 FE | — | real GNSS/IMU, audio, wake lock, long run | NOT EXECUTED |

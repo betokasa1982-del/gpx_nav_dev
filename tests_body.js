@@ -5229,6 +5229,11 @@ console.log('\n── synthetic cycle v2 ──');
 
   // ── SYN-I18N-1 (§32): Swedish and English complete, spec wording ──
   const en=Object.keys(SYN_I18N.en),sv=Object.keys(SYN_I18N.sv);
+  {const blk=code.slice(code.indexOf('const SYN_I18N={'),code.indexOf('let _synLang'));
+   ['en:{','sv:{'].forEach(tag=>{const part=blk.slice(blk.indexOf(tag),blk.indexOf('\n },',blk.indexOf(tag))+1||undefined);
+     const keys=[...part.matchAll(/'([a-zA-Z]+\.[a-zA-Z0-9]+)':/g)].map(m=>m[1]);
+     const dup=keys.filter((k,i)=>keys.indexOf(k)!==i);
+     console.assert(dup.length===0,'I18N-1: duplicate keys in '+tag+' '+dup);});}
   console.assert(en.length===sv.length&&en.every(k=>sv.includes(k)),'I18N-1: key sets differ: '+en.filter(k=>!sv.includes(k)).concat(sv.filter(k=>!en.includes(k))));
   const used=[...new Set([...code.matchAll(/synT\('([a-zA-Z0-9_.]+)'/g)].map(m=>m[1]))].filter(k=>!/^(cmd|ph|v|lang)\.$/.test(k));
   const missing=used.filter(k=>!(k in SYN_I18N.en));
@@ -5262,9 +5267,92 @@ console.log('\n── synthetic cycle v2 ──');
   Synth.run=null;Synth.startRun(SPEC,{vehicle:'x'},2e12);
   const before=JSON.stringify(Synth.cur());Synth.addSeg();Synth.setField('name','changed');
   console.assert(JSON.stringify(Synth.cur())===before,'SAFE-1: cycle editable during a test');
-  console.assert(/onpointerdown="Synth\.stopDown\(\)"/.test(code)&&/stopDown\(\)\{[\s\S]{0,200}setTimeout\([\s\S]{0,120}1000\)/.test(code),'SAFE-1: STOP is not hold-to-abort');
+  // STOP (field feedback 24/09): one tap asks, the test keeps running until END TEST
+  r=Synth.run;r.state='ACTIVE';r.tGo=2e12;
+  Synth.stopTap();
+  console.assert(r.state==='ACTIVE'&&Synth._confirmOpen===true&&r.events.some(e=>e.type==='STOP_ASKED'),'SAFE-1: one tap must only ask');
+  Synth.cancelStop();
+  console.assert(r.state==='ACTIVE'&&!Synth._confirmOpen,'SAFE-1: CONTINUE stopped the test');
+  Synth.stopTap();Synth.confirmStop();
+  console.assert(r.state==='ABORTED'&&r.events.some(e=>e.type==='ABORT'),'SAFE-1: END TEST did not stop the test');
+  console.assert(/onclick="Synth\.stopTap\(\)"/.test(code)&&!/stopDown/.test(code),'SAFE-1: STOP is still hold-to-abort');
+  console.assert(/confirmStop\(\)">\$\{synT\('d\.endTest'\)\}/.test(code)&&SYN_I18N.en['d.endTest']==='■ END TEST'&&SYN_I18N.sv['d.endTest']==='■ AVSLUTA PROV','SAFE-1: END TEST label');
   Synth.run=null;
-  console.log('SYN-SAFE-1. config locked, hold-to-abort OK');
+  console.log('SYN-SAFE-1. config locked, STOP = tap + confirm OK');
+
+  // ── SYN-SAVE-1 (field 24/09): exports go to the tablet, one valid zip ──
+  {const zlib=require('zlib');
+   let shared=0;const nav=globalThis.navigator;nav.canShare=()=>true;nav.share=async()=>{shared++;};
+   global.File=class{constructor(b,n,o){this.name=n;}};
+   const clicks=[];const origCE=document.createElement;
+   document.createElement=tag=>{const e=origCE(tag);e.click=()=>clicks.push(e.download);return e;};
+   Synth._deliver([{name:'x.zip',type:'application/zip',body:new Uint8Array(3)}],'t');
+   console.assert(shared===0&&clicks[0]==='x.zip','SAVE-1: default export still opens the share sheet');
+   Synth._deliver([{name:'y.zip',type:'application/zip',body:new Uint8Array(3)}],'t','share').then(()=>{
+     console.assert(shared===1,'SAVE-1: Share… does not open the share sheet');
+     delete nav.canShare;delete nav.share;delete global.File;document.createElement=origCE;});
+   (async()=>{
+     const files=[{name:'a_log.csv',body:'Elapsed_Time_s,x\n'+'1,2\n'.repeat(400)},{name:'sub/b.blf',body:new Uint8Array([1,2,3,250])},{name:'Hällered_ö.txt',body:'å'}];
+     for(const deflate of [null,async u=>new Uint8Array(zlib.deflateRawSync(u))]){
+       const z=Buffer.from(await synthZip(files,deflate,Date.UTC(2026,8,25,7,0,0)));
+       const eo=z.length-22;
+       console.assert(z.readUInt32LE(eo)===0x06054b50&&z.readUInt16LE(eo+10)===3,'SAVE-1: zip end record');
+       let p=z.readUInt32LE(eo+16);
+       for(const f of files){
+         console.assert(z.readUInt32LE(p)===0x02014b50,'SAVE-1: central header');
+         const method=z.readUInt16LE(p+10),crc=z.readUInt32LE(p+16),csz=z.readUInt32LE(p+20),nl=z.readUInt16LE(p+28),lo=z.readUInt32LE(p+42);
+         const name=z.slice(p+46,p+46+nl).toString('utf8');
+         const data=z.slice(lo+30+z.readUInt16LE(lo+26),lo+30+z.readUInt16LE(lo+26)+csz);
+         const raw=method===8?zlib.inflateRawSync(data):data;
+         const want=typeof f.body==='string'?Buffer.from(f.body,'utf8'):Buffer.from(f.body);
+         console.assert(name===f.name&&raw.equals(want)&&synCrc32(new Uint8Array(raw))===crc,'SAVE-1: zip entry '+f.name+' method '+method);
+         p+=46+nl;
+       }
+       require('fs').writeFileSync(require('path').join(require('os').tmpdir(),'synth_test'+(deflate?'_deflate':'')+'.zip'),z);
+     }
+     console.log('SYN-SAVE-1. save → Downloads (no share sheet), zip stored/deflated round trip OK');
+   })();}
+
+  // ── SYN-BAND-1 (field 24/09): speed band ±4 km/h selectable, stored per run ──
+  {const g0=JSON.stringify(Synth.prefs.guide);
+   Synth.setBand('v',4);
+   console.assert(Synth.prefs.guide.tolV1===4&&Synth.prefs.guide.tolV2===8,'BAND-1: ±4 km/h band');
+   Synth.setGuide('tolV2',3);
+   console.assert(Synth.prefs.guide.tolV2>Synth.prefs.guide.tolV1,'BAND-1: large threshold fell below the band');
+   Synth.setBand('a',0.3);
+   console.assert(Synth.prefs.guide.tolA1===0.3&&Synth.prefs.guide.tolA2===0.6,'BAND-1: acceleration band');
+   Synth.run=null;const rb=Synth.simulate(SPEC,'slow2',{seed:4,t0:1.8e12,guide:Synth.prefs.guide});
+   console.assert(rb.guideCfg.tolV1===4&&rb.summary.pctV>95,'BAND-1: run did not use ±4: '+rb.guideCfg.tolV1+' '+rb.summary.pctV);
+   const cmd=rb.rows.filter(x=>x[C.Phase]==='CONST'&&x[C.Speed_Error_kmh]!==null).map(x=>x[C.Driver_Command]);
+   console.assert(cmd.filter(c=>c==='HOLD').length/cmd.length>0.8,'BAND-1: 2 km/h low inside ±4 should read HOLD');
+   console.assert(/Synth\.setBand\('v'/.test(code)&&/± 4 km\/h/.test('± 4 km/h'),'BAND-1: band selector missing');
+   Synth.prefs.guide=JSON.parse(g0);Synth.run=null;
+   console.log('SYN-BAND-1. ±4 km/h band, large = 2×band, stored with the run OK');}
+
+  // ── SYN-LAG-1 (field 24/09 "blue line slow"): GNSS delay learned and removed ──
+  {const lag=r=>{const tr=new Map(r.simTruth.map(([t,v])=>[Math.round(t),v*3.6]));
+     const tl=(r.events.find(e=>e.type==='GPS_LATENCY')||{t:0}).t;       // after the delay has been learned
+     const rows=r.rows.filter(x=>x[C.Phase]!=='PRE'&&x[C.Actual_Speed_kmh]!==null&&x[C.UTC_Time_ms]>=tl);
+     let best=[1e9,0];for(let L=0;L<=1500;L+=100){let s2=0,n=0;rows.forEach(x=>{const tv=tr.get(Math.round(x[C.UTC_Time_ms])-L);if(tv!==undefined){s2+=(x[C.Actual_Speed_kmh]-tv)**2;n++;}});const e=Math.sqrt(s2/n);if(e<best[0])best=[e,L];}
+     return best[1];};
+   const res=[];
+   for(const d of [0,300,600,1000]){
+     SYN_SCEN._lagt=Object.assign({},SYN_SCEN.typical,{gpsDelayMs:d});
+     Synth.run=null;const rl=Synth.simulate(SPEC,'_lagt',{seed:9,t0:1.8e12});
+     res.push([d,rl.gnss.latMs,lag(rl)]);
+     console.assert(Math.abs(rl.gnss.latMs-d)<=150,'LAG-1: learned '+rl.gnss.latMs+' ms for a '+d+' ms GNSS delay');
+     console.assert(lag(rl)<=Math.max(150,0.25*d),'LAG-1: displayed speed still '+lag(rl)+' ms behind with a '+d+' ms GNSS delay');   // ≥ 75 % of the delay removed
+   }
+   delete SYN_SCEN._lagt;
+   // the learned value is kept for the next real test on this tablet
+   Synth.run=null;const rp=Synth.startRun(SPEC,{vehicle:'p'},4e12);rp.gnss.latN=6;rp.gnss.latMs=450;Synth.finish('COMPLETE',4e12+1000);
+   Synth.run=null;const rq=Synth.startRun(SPEC,{vehicle:'q'},4e12);
+   console.assert(Synth.prefs.gpsLatMs===450&&rq.gnss.latMs===450,'LAG-1: learned delay not carried to the next test');
+   delete Synth.prefs.gpsLatMs;Synth.run=null;
+   Synth.run=null;const rn=Synth.simulate(SPEC,'noisy',{seed:5,t0:1.8e12});
+   const imuN=rn.rows.filter(x=>x[C.Acceleration_Source]==='IMU').length/rn.rows.length;
+   console.assert(imuN>0.6,'LAG-1: IMU rejected with noisy sensors ('+(imuN*100).toFixed(0)+'%)');
+   console.log('SYN-LAG-1. GNSS delay learned/removed '+res.map(x=>x[0]+'→'+x[1]+'ms (lag '+x[2]+')').join(', ')+'; noisy IMU used '+(imuN*100).toFixed(0)+'% OK');}
 
   Synth.run=null;Synth.runs=[];Synth._full={};
   Object.values(SYNTH_CFG.keys).forEach(k=>localStorage.removeItem(k));
